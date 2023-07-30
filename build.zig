@@ -15,9 +15,9 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const clap = b.dependency("clap", .{ .target = target, .optimize = optimize });
     const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
     const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
-    // const ws = b.addModule("ws", .{ .source_file = .{ .path = "../ws/src/main.zig" }},);
     const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
 
     const disc = b.addModule
@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.pie = true;
     exe.addModule("discord_ws_conn", disc);
+    exe.addModule("clap", clap.module("clap"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
