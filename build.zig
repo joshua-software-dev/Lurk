@@ -47,6 +47,16 @@ pub fn build(b: *std.Build) void {
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
     b.installArtifact(exe);
+    b.installFile("lurk.service", "lib/systemd/user/lurk.service");
+    b.installFile("LICENSE", "share/licenses/lurk/LICENSE");
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
