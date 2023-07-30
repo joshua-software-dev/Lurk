@@ -1,0 +1,22 @@
+.{
+    .name = "lurk",
+    .version = "1.0.0",
+    .dependencies =
+    .{
+        .uuid =
+        .{
+            .hash = "1220b32a616236fd26f0e4f063f3f11f5c5b83943d1fd71c367cf0bdbebedbf42385",
+            .url = "https://github.com/r4gus/uuid-zig/archive/945510cc585daaad62c83f485f80505480cbc9be.tar.gz",
+        },
+        .ws =
+        .{
+            .hash = "1220c6ec2dc7d6c4e00df5c12af36028c1829837c177d1f6f113283205141c07e44f",
+            .url = "https://github.com/joshua-software-dev/ws/archive/13b332947c49510da6176ece39805f3063c94191.tar.gz",
+        },
+        .ziglyph =
+        .{
+            .hash = "12203f350e5cd707acfc46980614c928e90b41f86cf2cbc926888293e6f5b63ad9f1",
+            .url = "https://github.com/jecolon/ziglyph/archive/1201bf393a9c8ae4e1564d01e4e4d9377e2c89de.tar.gz",
+        },
+    },
+}
