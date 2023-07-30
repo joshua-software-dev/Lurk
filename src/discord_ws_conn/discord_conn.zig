@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const msgt = @import("message_types.zig");
@@ -268,7 +269,14 @@ pub const DiscordWsConn = struct
 
     pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
     {
-        return try self.authorize_stage_2_subprocess(auth_code);
+        if (builtin.mode == .Debug)
+        {
+            return try self.authorize_stage_2_subprocess(auth_code);
+        }
+        else
+        {
+            return try self.authorize_stage_2_native(auth_code);
+        }
     }
 
     pub fn subscribe(self: *Self, event: msgt.Event, channel: ?state.DiscordChannel) !void
