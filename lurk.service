@@ -1,5 +1,6 @@
 [Unit]
 Description=Daemon for lurk, a WebSocket client for Discord's "Stream Deck" API written in Zig
+ConditionUser=!root
 
 [Service]
 Type=simple
@@ -7,3 +8,6 @@ Restart=always
 RestartSec=3
 ExecStartPre=/bin/bash -c 'until pids=$(pidof Discord); do sleep 1; done'
 ExecStart=/usr/bin/lurk
+
+[Install]
+WantedBy=default.target
