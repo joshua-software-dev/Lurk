@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    exe.pie = true;
     exe.addModule("discord_ws_conn", disc);
 
     // This declares intent for the executable to be installed into the

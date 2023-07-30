@@ -1,0 +1,13 @@
+--architecture x86_64
+--chdir "zig-out"
+--depends curl
+--description "A WebSocket client that interfaces with Discord's `Stream Deck` API for simple Discord info output written in Zig!"
+--license MIT
+--maintainer "joshua.software.dev <joshua.software.dev@gmail.com>"
+--name lurk
+--url "https://github.com/joshua-software-dev/Lurk"
+-s dir
+
+bin=/usr/
+lib=/usr/
+share=/usr/
