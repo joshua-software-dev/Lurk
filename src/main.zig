@@ -30,17 +30,8 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     const allocator = gpa.allocator();
 
     var conn: disc.DiscordWsConn = undefined;
-    const connUri = conn.init(allocator) catch |err|
-    {
-        if (err == error.ConnectionRefused)
-        {
-            @panic("Connection refused");
-        }
-
-        return err;
-    };
-
-    std.log.scoped(.WS).info("Initial connection to {+/} succeeded.", .{ connUri });
+    const connUri = try conn.init(allocator);
+    std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
 
     while (true)
     {

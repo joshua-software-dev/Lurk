@@ -78,6 +78,11 @@ pub const DiscordWsConn = struct
             )
             catch |err|
             {
+                if (err == error.ConnectionRefused)
+                {
+                    std.log.scoped(.WS).warn("Connection Failed: {+/}", .{ localUri });
+                }
+
                 if (err == error.ConnectionRefused and current_port < PORT_RANGE[PORT_RANGE.len - 1]) continue;
                 return err;
             };
