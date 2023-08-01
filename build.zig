@@ -16,6 +16,15 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const clap = b.dependency("clap", .{ .target = target, .optimize = optimize });
+    // const disc = b.anonymousDependency
+    // (
+    //     "discord_ws_conn",
+    //     @import("discord_ws_conn/build.zig"),
+    //     .{ .target = target, .optimize = optimize }
+    // );
+    // Eventually, the below section can be replaced with the above, but for
+    // now the package manager doesn't manage transient dependencies at all.
+    // ===BEGIN SECTION===
     const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
     const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
     const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
@@ -24,7 +33,7 @@ pub fn build(b: *std.Build) void {
     (
         "discord_ws_conn",
         .{
-            .source_file = .{ .path = "src/discord_ws_conn/main.zig" },
+            .source_file = .{ .path = "discord_ws_conn/src/main.zig" },
             .dependencies = &.{
                 .{ .name = "uuid", .module = uuid.module("uuid") },
                 .{ .name = "ws", .module = ws.module("ws") },
@@ -32,16 +41,21 @@ pub fn build(b: *std.Build) void {
             }
         },
     );
+    // ====END SECTION====
 
-    const exe = b.addExecutable(.{
-        .name = "lurk",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    const exe = b.addExecutable
+    (
+        .{
+            .name = "lurk",
+            // In this case the main source file is merely a path, however, in more
+            // complicated build scripts, this could be a generated file.
+            .root_source_file = .{ .path = "src/main.zig" },
+            .target = target,
+            .optimize = optimize,
+        }
+    );
     exe.pie = true;
+    // exe.addModule("discord_ws_conn", disc.module("discord_ws_conn"));
     exe.addModule("discord_ws_conn", disc);
     exe.addModule("clap", clap.module("clap"));
 
