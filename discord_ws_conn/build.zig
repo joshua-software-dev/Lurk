@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const iguanaTLS = b.dependency("iguanaTLS", .{ .target = target, .optimize = optimize });
     const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
     const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
     const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
@@ -25,6 +26,7 @@ pub fn build(b: *std.Build) void {
         .{
             .source_file = .{ .path = "src/discord_ws_conn/main.zig" },
             .dependencies = &.{
+                .{ .name = "iguanaTLS", .module = iguanaTLS.module("iguanaTLS") },
                 .{ .name = "uuid", .module = uuid.module("uuid") },
                 .{ .name = "ws", .module = ws.module("ws") },
                 .{ .name = "ziglyph", .module = ziglyph.module("ziglyph") },

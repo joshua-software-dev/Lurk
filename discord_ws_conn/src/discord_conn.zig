@@ -4,6 +4,7 @@ const std = @import("std");
 const msgt = @import("message_types.zig");
 const state = @import("discord_state.zig");
 
+const iguanaTLS = @import("iguanaTLS");
 const uuid = @import("uuid");
 const ws = @import("ws");
 
@@ -260,23 +261,109 @@ pub const DiscordWsConn = struct
         try self.authenticate();
     }
 
-    pub fn authorize_stage_2_libcurl(self: *Self, auth_code: []const u8) !void
-    {
-        _ = auth_code;
-        _ = self;
-        return error.NotImplemented;
-    }
-
+    // A less jank, but still jank solution to the std.http client not working
+    // correctly. Its a damn good thing my use case is so simple that I only
+    // need such a small subset of an http client.
     pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
     {
-        if (builtin.mode == .Debug)
+        var responseBodyBuffer = try std.BoundedArray(u8, JSON_BUFFER_SIZE).init(0);
+
         {
-            return try self.authorize_stage_2_subprocess(auth_code);
+            const sock = try std.net.tcpConnectToHost(self.fba.allocator(), "streamkit.discord.com", 443);
+            defer sock.close();
+
+            var client = try iguanaTLS.client_connect
+            (
+                .{
+                    .reader = sock.reader(),
+                    .writer = sock.writer(),
+                    .cert_verifier = .none,
+                    .temp_allocator = self.fba.allocator(),
+                    .ciphersuites = iguanaTLS.ciphersuites.all,
+                    .protocols = &[_][]const u8{"http/1.1"},
+                    .rand = std.crypto.random
+                },
+                "streamkit.discord.com"
+            );
+            defer client.close_notify() catch {};
+
+            {
+                var jsonBuf: [JSON_BUFFER_SIZE]u8 = undefined;
+                var jsonWriteStream = std.io.fixedBufferStream(&jsonBuf);
+
+                try std.json.stringify
+                (
+                    .{ .code = auth_code },
+                    .{},
+                    jsonWriteStream.writer()
+                );
+                const jsonBody = jsonWriteStream.getWritten();
+
+                try client.writer().print
+                (
+                    "POST {s} HTTP/1.1\r\n" ++
+                    "Host: {s}\r\n" ++
+                    "Accept: */*\r\n" ++
+                    "Content-Type: application/json\r\n" ++
+                    "Content-Length: {d}\r\n\r\n" ++
+                    "{s}",
+                    .{
+                        HTTP_API_URI.path,
+                        HTTP_API_URI.host.?,
+                        jsonBody.len,
+                        jsonBody
+                    }
+                );
+            }
+
+            {
+                var headerRespBuf: [JSON_BUFFER_SIZE]u8 = undefined;
+                var stream = std.io.fixedBufferStream(&headerRespBuf);
+                const writer = stream.writer();
+
+                try client.reader().streamUntilDelimiter(writer, '\n', stream.buffer.len);
+                const header = stream.getWritten();
+                try std.testing.expectEqualStrings("HTTP/1.1 200 OK", std.mem.trim(u8, header, &std.ascii.whitespace));
+            }
+
+            // Skip the rest of the headers except for Content-Length
+            var content_length: ?usize = null;
+            while (true)
+            {
+                var headerReadBuf: [JSON_BUFFER_SIZE]u8 = undefined;
+                var stream = std.io.fixedBufferStream(&headerReadBuf);
+                const writer = stream.writer();
+
+                try client.reader().streamUntilDelimiter(writer, '\n', stream.buffer.len);
+                const header = stream.getWritten();
+
+                const hdr_contents = std.mem.trim(u8, header, &std.ascii.whitespace);
+                if (hdr_contents.len == 0) break;
+
+                if (std.mem.startsWith(u8, hdr_contents, "Content-Length: "))
+                {
+                    content_length = try std.fmt.parseUnsigned(usize, hdr_contents[16..], 10);
+                }
+            }
+
+            try std.testing.expect(content_length != null);
+
+            _ = try client.reader().readAtLeast(&responseBodyBuffer.buffer, content_length.?);
+            try responseBodyBuffer.resize(content_length.?);
         }
-        else
-        {
-            return try self.authorize_stage_2_native(auth_code);
-        }
+
+        const tokenHolder = try std.json.parseFromSlice
+        (
+            msgt.AccessTokenHolder,
+            self.fba.allocator(),
+            responseBodyBuffer.constSlice(),
+            .{}
+        );
+        defer tokenHolder.deinit();
+
+        try access_token.resize(tokenHolder.value.access_token.len);
+        try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
+        try self.authenticate();
     }
 
     pub fn subscribe(self: *Self, event: msgt.Event, channel: ?state.DiscordChannel) !void
