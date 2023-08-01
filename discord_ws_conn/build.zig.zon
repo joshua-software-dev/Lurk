@@ -3,11 +3,6 @@
     .version = "1.0.0",
     .dependencies =
     .{
-        .iguanaTLS =
-        .{
-            .hash = "1220da25f35c5174187293f94bea72ed6905a67f02029f3c23c2f2133edfce3dc315",
-            .url = "https://github.com/joshua-software-dev/iguanaTLS/archive/c4e6140b60f0d2266fb7a6a343ba8aabc89c59ad.tar.gz",
-        },
         .uuid =
         .{
             .hash = "1220b32a616236fd26f0e4f063f3f11f5c5b83943d1fd71c367cf0bdbebedbf42385",

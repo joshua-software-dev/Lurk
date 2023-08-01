@@ -25,7 +25,6 @@ pub fn build(b: *std.Build) void {
     // // Eventually, the below section can be replaced with the above, but for
     // // now the package manager doesn't manage transient dependencies at all.
     // ===BEGIN SECTION===
-    const iguanaTLS = b.dependency("iguanaTLS", .{ .target = target, .optimize = optimize });
     const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
     const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
     const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
@@ -36,7 +35,6 @@ pub fn build(b: *std.Build) void {
         .{
             .source_file = .{ .path = "discord_ws_conn/src/main.zig" },
             .dependencies = &.{
-                .{ .name = "iguanaTLS", .module = iguanaTLS.module("iguanaTLS") },
                 .{ .name = "uuid", .module = uuid.module("uuid") },
                 .{ .name = "ws", .module = ws.module("ws") },
                 .{ .name = "ziglyph", .module = ziglyph.module("ziglyph") },

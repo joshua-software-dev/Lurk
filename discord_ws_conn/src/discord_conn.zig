@@ -4,7 +4,6 @@ const std = @import("std");
 const msgt = @import("message_types.zig");
 const state = @import("discord_state.zig");
 
-const iguanaTLS = @import("iguanaTLS");
 const uuid = @import("uuid");
 const ws = @import("ws");
 
@@ -145,224 +144,57 @@ pub const DiscordWsConn = struct
         );
     }
 
-    // Someday, I'll flick a switch and this will just work, but for now some
-    // memory leak when reading system certs taints the General Purpose
-    // Allocator somehow, and completely corrupts the memory in the ws client
-    pub fn authorize_stage_2_native(self: *Self, auth_code: []const u8) !void
-    {
-        var localBuf: [1024*1024]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&localBuf);
-        var allocator = fba.allocator();
-
-        var client = std.http.Client{ .allocator = allocator };
-        defer client.deinit();
-
-        var headers = std.http.Headers { .allocator = allocator };
-        defer headers.deinit();
-        try headers.append("Content-Type", "application/json");
-
-        var req = try client.request
-        (
-            .POST,
-            HTTP_API_URI,
-            headers,
-            std.http.Client.Options { .max_redirects = 10 }
-        );
-        req.transfer_encoding = .chunked;
-        defer req.deinit();
-
-        try req.start();
-        try std.json.stringify
-        (
-            .{ .code = auth_code },
-            .{},
-            req.writer()
-        );
-        try req.finish();
-        try req.wait();
-
-        if (req.response.status != .ok)
-        {
-            return error.AuthFailed;
-        }
-
-        var reqJsonReader = std.json.reader(allocator, req.reader());
-        defer reqJsonReader.deinit();
-
-        const tokenHolder = try std.json.parseFromTokenSource
-        (
-            msgt.AccessTokenHolder,
-            allocator,
-            &reqJsonReader,
-            .{}
-        );
-        defer tokenHolder.deinit();
-
-        try access_token.resize(tokenHolder.value.access_token.len);
-        try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
-
-        fba.reset();
-
-        try self.authenticate();
-    }
-
-    // Temporary solution, hopefully to be replaced with the native zig
-    // function above. More likely, in the short term it will be replaced by
-    // libcurl bindings...
-    pub fn authorize_stage_2_subprocess(self: *Self, auth_code: []const u8) !void
-    {
-        var buf: [JSON_BUFFER_SIZE]u8 = undefined;
-        const jsonBody = try std.fmt.bufPrint(&buf, "{{\"code\":\"{s}\"}}", .{auth_code});
-
-        const result = try std.ChildProcess.exec
-        (
-            .{
-                .allocator = self.fba.allocator(),
-                .argv =
-                &.{
-                    "curl",
-                    "-X",
-                    "POST",
-                    HTTP_API_URL,
-                    "-H",
-                    "Content-Type: application/json",
-                    "-d",
-                    jsonBody
-                },
-                .cwd = null,
-                .env_map = null,
-                .max_output_bytes = JSON_BUFFER_SIZE
-            }
-        );
-        defer
-        {
-            const allocator = self.fba.allocator();
-            allocator.free(result.stderr);
-            allocator.free(result.stdout);
-        }
-
-        switch (result.term)
-        {
-            .Exited => |code| if (code != 0) return error.CommandFailed,
-            else => return error.CommandFailed,
-        }
-
-        const tokenHolder = try std.json.parseFromSlice
-        (
-            msgt.AccessTokenHolder,
-            self.fba.allocator(),
-            result.stdout,
-            .{}
-        );
-        defer tokenHolder.deinit();
-
-        try access_token.resize(tokenHolder.value.access_token.len);
-        try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
-        try self.authenticate();
-    }
-
-    // A less jank, but still jank solution to the std.http client not working
-    // correctly. Its a damn good thing my use case is so simple that I only
-    // need such a small subset of an http client.
     pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
     {
-        var responseBodyBuffer = try std.BoundedArray(u8, JSON_BUFFER_SIZE).init(0);
-
         {
-            const sock = try std.net.tcpConnectToHost(self.fba.allocator(), "streamkit.discord.com", 443);
-            defer sock.close();
+            var client = std.http.Client{ .allocator = self.fba.allocator() };
+            defer client.deinit();
 
-            var client = try iguanaTLS.client_connect
+            var headers = std.http.Headers { .allocator = self.fba.allocator() };
+            defer headers.deinit();
+            try headers.append("Content-Type", "application/json");
+
+            var req = try client.request
             (
-                .{
-                    .reader = sock.reader(),
-                    .writer = sock.writer(),
-                    .cert_verifier = .none,
-                    .temp_allocator = self.fba.allocator(),
-                    .ciphersuites = iguanaTLS.ciphersuites.all,
-                    .protocols = &[_][]const u8{"http/1.1"},
-                    .rand = std.crypto.random
-                },
-                "streamkit.discord.com"
+                .POST,
+                HTTP_API_URI,
+                headers,
+                std.http.Client.Options { .max_redirects = 10 }
             );
-            defer client.close_notify() catch {};
+            req.transfer_encoding = .chunked;
+            defer req.deinit();
 
+            try req.start();
+            try std.json.stringify
+            (
+                .{ .code = auth_code },
+                .{},
+                req.writer()
+            );
+            try req.finish();
+            try req.wait();
+
+            if (req.response.status != .ok)
             {
-                var jsonBuf: [JSON_BUFFER_SIZE]u8 = undefined;
-                var jsonWriteStream = std.io.fixedBufferStream(&jsonBuf);
-
-                try std.json.stringify
-                (
-                    .{ .code = auth_code },
-                    .{},
-                    jsonWriteStream.writer()
-                );
-                const jsonBody = jsonWriteStream.getWritten();
-
-                try client.writer().print
-                (
-                    "POST {s} HTTP/1.1\r\n" ++
-                    "Host: {s}\r\n" ++
-                    "Accept: */*\r\n" ++
-                    "Content-Type: application/json\r\n" ++
-                    "Content-Length: {d}\r\n\r\n" ++
-                    "{s}",
-                    .{
-                        HTTP_API_URI.path,
-                        HTTP_API_URI.host.?,
-                        jsonBody.len,
-                        jsonBody
-                    }
-                );
+                return error.AuthFailed;
             }
 
-            {
-                var headerRespBuf: [JSON_BUFFER_SIZE]u8 = undefined;
-                var stream = std.io.fixedBufferStream(&headerRespBuf);
-                const writer = stream.writer();
+            var reqJsonReader = std.json.reader(self.fba.allocator(), req.reader());
+            defer reqJsonReader.deinit();
 
-                try client.reader().streamUntilDelimiter(writer, '\n', stream.buffer.len);
-                const header = stream.getWritten();
-                try std.testing.expectEqualStrings("HTTP/1.1 200 OK", std.mem.trim(u8, header, &std.ascii.whitespace));
-            }
+            const tokenHolder = try std.json.parseFromTokenSource
+            (
+                msgt.AccessTokenHolder,
+                self.fba.allocator(),
+                &reqJsonReader,
+                .{}
+            );
+            defer tokenHolder.deinit();
 
-            // Skip the rest of the headers except for Content-Length
-            var content_length: ?usize = null;
-            while (true)
-            {
-                var headerReadBuf: [JSON_BUFFER_SIZE]u8 = undefined;
-                var stream = std.io.fixedBufferStream(&headerReadBuf);
-                const writer = stream.writer();
-
-                try client.reader().streamUntilDelimiter(writer, '\n', stream.buffer.len);
-                const header = stream.getWritten();
-
-                const hdr_contents = std.mem.trim(u8, header, &std.ascii.whitespace);
-                if (hdr_contents.len == 0) break;
-
-                if (std.mem.startsWith(u8, hdr_contents, "Content-Length: "))
-                {
-                    content_length = try std.fmt.parseUnsigned(usize, hdr_contents[16..], 10);
-                }
-            }
-
-            try std.testing.expect(content_length != null);
-
-            _ = try client.reader().readAtLeast(&responseBodyBuffer.buffer, content_length.?);
-            try responseBodyBuffer.resize(content_length.?);
+            try access_token.resize(tokenHolder.value.access_token.len);
+            try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
         }
 
-        const tokenHolder = try std.json.parseFromSlice
-        (
-            msgt.AccessTokenHolder,
-            self.fba.allocator(),
-            responseBodyBuffer.constSlice(),
-            .{}
-        );
-        defer tokenHolder.deinit();
-
-        try access_token.resize(tokenHolder.value.access_token.len);
-        try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
         try self.authenticate();
     }
 
