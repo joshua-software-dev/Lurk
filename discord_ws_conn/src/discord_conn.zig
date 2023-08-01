@@ -275,76 +275,6 @@ pub const DiscordWsConn = struct
         );
     }
 
-    pub fn set_channel(self: *Self, new_channel: ?state.DiscordChannel) !void
-    {
-        if
-        (
-            new_channel == null or
-            (
-                new_channel != null and
-                self.state.current_channel.*.channel_id.len > 0 and
-                (
-                    std.mem.eql
-                    (
-                        u8,
-                        self.state.current_channel.*.channel_id.slice(),
-                        new_channel.?.channel_id.slice()
-                    )
-                    and
-                    std.mem.eql
-                    (
-                        u8,
-                        self.state.current_channel.*.guild_id.slice(),
-                        new_channel.?.guild_id.slice()
-                    )
-                )
-            )
-        )
-        {
-            return;
-        }
-
-        if (self.state.current_channel.*.channel_id.len > 0)
-        {
-            try self.unsubscribe(.VOICE_STATE_CREATE, self.state.current_channel.*);
-            try self.unsubscribe(.VOICE_STATE_UPDATE, self.state.current_channel.*);
-            try self.unsubscribe(.VOICE_STATE_DELETE, self.state.current_channel.*);
-            try self.unsubscribe(.SPEAKING_START, self.state.current_channel.*);
-            try self.unsubscribe(.SPEAKING_STOP, self.state.current_channel.*);
-        }
-
-        if (new_channel != null)
-        {
-            try self.subscribe(.VOICE_STATE_CREATE, new_channel);
-            try self.subscribe(.VOICE_STATE_UPDATE, new_channel);
-            try self.subscribe(.VOICE_STATE_DELETE, new_channel);
-            try self.subscribe(.SPEAKING_START, new_channel);
-            try self.subscribe(.SPEAKING_STOP, new_channel);
-        }
-
-        try self
-            .state
-            .current_channel
-            .channel_id
-            .resize(new_channel.?.channel_id.len);
-        try self
-            .state
-            .current_channel
-            .channel_id
-            .replaceRange(0, new_channel.?.channel_id.len, new_channel.?.channel_id.slice());
-
-        try self
-            .state
-            .current_channel
-            .guild_id
-            .resize(new_channel.?.guild_id.len);
-        try self
-            .state
-            .current_channel
-            .guild_id
-            .replaceRange(0, new_channel.?.guild_id.len, new_channel.?.guild_id.slice());
-    }
-
     pub fn parse_channel_info(self: *Self, msg: []const u8) !?state.DiscordChannel
     {
         const channelMsg = std.json.parseFromSlice
@@ -512,7 +442,7 @@ pub const DiscordWsConn = struct
                         {
                             self.state.free_user_hashmap();
                         }
-                        try self.set_channel(new_channel);
+                        try self.state.set_channel(self, new_channel);
                     },
                     .VOICE_STATE_CREATE, .VOICE_STATE_UPDATE =>
                     {
@@ -684,7 +614,7 @@ pub const DiscordWsConn = struct
             .GET_SELECTED_VOICE_CHANNEL =>
             {
                 const new_channel = try self.parse_get_selected_voice_channel_dynamic(msg);
-                try self.set_channel(new_channel);
+                try self.state.set_channel(self, new_channel);
 
                 self.state.free_user_hashmap();
                 {

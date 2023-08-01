@@ -73,6 +73,72 @@ pub const DiscordState = struct
         self.all_users = std.StringArrayHashMap(DiscordUser).init(self.arena.allocator());
     }
 
+    pub fn set_channel(self: *Self, discord_conn: anytype, new_channel: ?DiscordChannel) !void
+    {
+        if
+        (
+            new_channel == null or
+            (
+                new_channel != null and
+                self.current_channel.*.channel_id.len > 0 and
+                (
+                    std.mem.eql
+                    (
+                        u8,
+                        self.current_channel.*.channel_id.slice(),
+                        new_channel.?.channel_id.slice()
+                    )
+                    and
+                    std.mem.eql
+                    (
+                        u8,
+                        self.current_channel.*.guild_id.slice(),
+                        new_channel.?.guild_id.slice()
+                    )
+                )
+            )
+        )
+        {
+            return;
+        }
+
+        if (self.current_channel.*.channel_id.len > 0)
+        {
+            try discord_conn.unsubscribe(.VOICE_STATE_CREATE, self.current_channel.*);
+            try discord_conn.unsubscribe(.VOICE_STATE_UPDATE, self.current_channel.*);
+            try discord_conn.unsubscribe(.VOICE_STATE_DELETE, self.current_channel.*);
+            try discord_conn.unsubscribe(.SPEAKING_START, self.current_channel.*);
+            try discord_conn.unsubscribe(.SPEAKING_STOP, self.current_channel.*);
+        }
+
+        if (new_channel != null)
+        {
+            try discord_conn.subscribe(.VOICE_STATE_CREATE, new_channel);
+            try discord_conn.subscribe(.VOICE_STATE_UPDATE, new_channel);
+            try discord_conn.subscribe(.VOICE_STATE_DELETE, new_channel);
+            try discord_conn.subscribe(.SPEAKING_START, new_channel);
+            try discord_conn.subscribe(.SPEAKING_STOP, new_channel);
+        }
+
+        try self
+            .current_channel
+            .channel_id
+            .resize(new_channel.?.channel_id.len);
+        try self
+            .current_channel
+            .channel_id
+            .replaceRange(0, new_channel.?.channel_id.len, new_channel.?.channel_id.slice());
+
+        try self
+            .current_channel
+            .guild_id
+            .resize(new_channel.?.guild_id.len);
+        try self
+            .current_channel
+            .guild_id
+            .replaceRange(0, new_channel.?.guild_id.len, new_channel.?.guild_id.slice());
+    }
+
     pub fn get_user_self(self: *Self) ?DiscordUser
     {
         if (self.self_user_id == null) return null;
