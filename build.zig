@@ -1,4 +1,5 @@
 const std = @import("std");
+const discws_create = @import("discord_ws_conn/create_mod.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -16,32 +17,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const clap = b.dependency("clap", .{ .target = target, .optimize = optimize });
-    // const disc = b.anonymousDependency
-    // (
-    //     "discord_ws_conn",
-    //     @import("discord_ws_conn/build.zig"),
-    //     .{ .target = target, .optimize = optimize }
-    // );
-    // // Eventually, the below section can be replaced with the above, but for
-    // // now the package manager doesn't manage transient dependencies at all.
-    // ===BEGIN SECTION===
-    const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
-    const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
-    const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
-
-    const disc = b.addModule
-    (
-        "discord_ws_conn",
-        .{
-            .source_file = .{ .path = "discord_ws_conn/src/main.zig" },
-            .dependencies = &.{
-                .{ .name = "uuid", .module = uuid.module("uuid") },
-                .{ .name = "ws", .module = ws.module("ws") },
-                .{ .name = "ziglyph", .module = ziglyph.module("ziglyph") },
-            }
-        },
-    );
-    // ====END SECTION====
+    const disc = discws_create.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize });
 
     const exe = b.addExecutable
     (
@@ -55,7 +31,6 @@ pub fn build(b: *std.Build) void {
         }
     );
     exe.pie = true;
-    // exe.addModule("discord_ws_conn", disc.module("discord_ws_conn"));
     exe.addModule("discord_ws_conn", disc);
     exe.addModule("clap", clap.module("clap"));
 

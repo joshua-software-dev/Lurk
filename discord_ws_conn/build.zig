@@ -1,4 +1,5 @@
 const std = @import("std");
+const create_mod = @import("create_mod.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -15,20 +16,10 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const uuid = b.dependency("uuid", .{ .target = target, .optimize = optimize });
-    const ws = b.dependency("ws", .{ .target = target, .optimize = optimize });
-    const ziglyph = b.dependency("ziglyph", .{ .target = target, .optimize = optimize });
-
-    _ = b.addModule
+    b.modules.put
     (
         "discord_ws_conn",
-        .{
-            .source_file = .{ .path = "src/discord_ws_conn/main.zig" },
-            .dependencies = &.{
-                .{ .name = "uuid", .module = uuid.module("uuid") },
-                .{ .name = "ws", .module = ws.module("ws") },
-                .{ .name = "ziglyph", .module = ziglyph.module("ziglyph") },
-            }
-        },
-    );
+        create_mod.create_module(b, "", .{ .target = target, .optimize = optimize })
+    )
+    catch @panic("Failed to save module.");
 }
