@@ -1,0 +1,21 @@
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name": "VK_LAYER_Lurk",
+    "type": "GLOBAL",
+    "library_path": "../zig-out/lib/libvk_layer_lurk.so",
+    "api_version": "1.0.0",
+    "implementation_version": "1",
+    "description": "Lurk as a Vulkan Layer - https://github.com/joshua-software-dev/Lurk",
+    "functions": {
+      "vkGetInstanceProcAddr": "VkLayerLurk_GetInstanceProcAddr",
+      "vkGetDeviceProcAddr": "VkLayerLurk_GetDeviceProcAddr"
+    },
+    "enable_environment": {
+      "ENABLE_LURK": "1"
+    },
+    "disable_environment": {
+      "DISABLE_LURK": "1"
+    }
+  }
+}
