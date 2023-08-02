@@ -40,7 +40,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
 
         const file = try std.fs.createFileAbsolute(outFile, .{ .lock = .exclusive });
         defer file.close();
-        try conn.state.write_users_data_to_file(file);
+        try conn.state.write_users_data_to_write_stream(file.writer());
     }
 
     conn.close();

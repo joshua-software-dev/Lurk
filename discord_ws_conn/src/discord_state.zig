@@ -230,9 +230,9 @@ pub const DiscordState = struct
         }
     }
 
-    pub fn write_users_data_to_file(self: *Self, out_file: std.fs.File) !void
+    pub fn write_users_data_to_write_stream(self: *Self, writer: anytype) !void
     {
-        try out_file.writeAll("nickname                         | muted | speaking\n");
+        try writer.print("nickname                         | muted | speaking\n", .{});
 
         var it = self.all_users.iterator();
         while (it.next()) |kv|
@@ -278,10 +278,8 @@ pub const DiscordState = struct
                 try nickname_buffer.replaceRange(0, 32, "unknown                         ");
             }
 
-            var buf: [1024]u8 = undefined;
-            const out = try std.fmt.bufPrint
+            try writer.print
             (
-                &buf,
                 "{s} | {: <5} | {}\n",
                 .{
                     nickname_buffer.constSlice(),
@@ -289,7 +287,6 @@ pub const DiscordState = struct
                     user.speaking,
                 }
             );
-            try out_file.writeAll(out);
         }
     }
 };
