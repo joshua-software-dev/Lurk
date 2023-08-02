@@ -1,16 +1,40 @@
+const builtin = @import("builtin");
 const std = @import("std");
-const vk = @import("vulkan-zig");
+
+const disc = @import("discord_ws_conn");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
+
+const vk = @import("vulkan-zig");
 
 
 ///////////////////////////////////////////////////////////////////////////////
 // Layer globals definition
+
+// Zig scoped logger set based on compile mode
+pub const std_options = struct
+{
+    pub const log_scope_levels: []const std.log.ScopeLevel =
+    &[_]std.log.ScopeLevel
+    {
+        .{
+            .scope = .WS,
+            .level = switch (builtin.mode)
+            {
+                .Debug => .debug,
+                else => .info,
+            }
+        },
+    };
+};
 
 // differentiate this layer from the c++ implementation
 const LAYER_NAME = "VK_LAYER_Lurk";
 const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
+
+// c_allocator easy access
+const c_allocator = std.heap.c_allocator;
 
 // single global lock, for simplicity
 var global_lock: std.Thread.Mutex = .{};
@@ -32,8 +56,32 @@ const CommandStats = extern struct
 // choice, however we store the actual object reference as the key rather than
 // manipulating pointers for use as keys
 var command_buffer_stats =
-    std.AutoHashMap(vk.CommandBuffer, CommandStats).init(std.heap.c_allocator);
+    std.AutoHashMap(vk.CommandBuffer, CommandStats).init(c_allocator);
 
+
+///////////////////////////////////////////////////////////////////////////////
+// Background thread
+
+var thread_running = false;
+var background_thread: std.Thread = undefined;
+
+fn run_discord_thread() !void
+{
+    var conn: disc.DiscordWsConn = undefined;
+    const connUri = try conn.init(c_allocator);
+    std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
+    const stdout = std.io.getStdOut();
+
+    while (thread_running)
+    {
+        const success = try conn.recieve_next_msg();
+        if (!success) break;
+
+        try conn.state.write_users_data_to_write_stream(stdout.writer());
+    }
+
+    conn.close();
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Layer init and shutdown
@@ -111,6 +159,8 @@ export fn VkLayerLurk_DestroyInstance
 )
 callconv(vk.vulkan_call_conv) void
 {
+    thread_running = false;
+    background_thread.detach();
     _ = instance;
     _ = p_allocator;
     {
@@ -323,12 +373,12 @@ callconv(vk.vulkan_call_conv) vk.Result
     var stats: ?CommandStats = command_buffer_stats.get(command_buffer);
     if (stats != null)
     {
-        std.debug.print
+        std.log.scoped(.WS).debug
         (
             "Command buffer 0x{x} ended with " ++
             "{} draws, " ++
             "{} instances, and " ++
-            "{} vertices\n",
+            "{} vertices",
             .{
                 @intFromPtr(&command_buffer),
                 stats.?.draw_count,
@@ -343,7 +393,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     }
     else
     {
-        std.debug.print
+        std.log.scoped(.WS).warn
         (
             "WARNING: EndCommandBuffer failed to get command buffer stats\n",
             .{}
@@ -546,6 +596,13 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
+    if (!thread_running)
+    {
+        thread_running = true;
+        background_thread = std.Thread.spawn(.{}, run_discord_thread, .{})
+        catch @panic("Background thread spawn failed");
+    }
+
     const span_name = std.mem.span(p_name);
 
     // instance chain functions we intercept

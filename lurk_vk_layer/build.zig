@@ -1,4 +1,5 @@
 const std = @import("std");
+const discws_create = @import("discord_ws_conn/create_mod.zig");
 const download_xml = @import("src/download_xml.zig");
 
 
@@ -18,6 +19,20 @@ pub fn build(b: *std.Build) void
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const disc = discws_create.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize, });
+
+    const download_file = b.step("download_xml", "Download vk.xml file");
+    download_file.makeFn = download_xml.download_xml;
+    const vkzig_dep = b.dependency
+    (
+        "vulkan_zig",
+        .{
+            .optimize = optimize,
+            .registry = @as([]const u8, b.pathFromRoot("src/vk.xml")),
+            .target = target,
+        }
+    );
+
     const lib = b.addSharedLibrary
     (
         .{
@@ -29,21 +44,61 @@ pub fn build(b: *std.Build) void
             .optimize = optimize,
         }
     );
-    lib.linkLibC();
+    lib.force_pic = true;
+    if (target.getCpuArch() == .x86)
+    {
+        lib.link_z_notext = true;
+    }
 
-    const download_file = b.step("download_xml", "Download vk.xml file");
-    download_file.makeFn = download_xml.download_xml;
     lib.step.dependOn(download_file);
+    lib.addModule("discord_ws_conn", disc);
 
-    const vkzig_dep = b.dependency
-    (
-        "vulkan_zig",
-        .{ .registry = @as([]const u8, b.pathFromRoot("src/vk.xml")) }
-    );
+    lib.linkLibC();
     lib.addModule("vulkan-zig", vkzig_dep.module("vulkan-zig"));
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
+    const install = b.addInstallArtifact(lib, .{});
+    install.dest_dir = .prefix;
+    install.dest_sub_path = b.fmt
+    (
+        "{s}/libvk_layer_lurk.so",
+        .{
+            switch (target.getCpuArch())
+            {
+                .x86 => "lib32",
+                .x86_64 => "lib64",
+                else => @panic("Unsupported CPU architecture.")
+            }
+        }
+    );
+
+    b.default_step.dependOn(&install.step);
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "manifests/package" },
+            .install_dir = .prefix,
+            .install_subdir = "share/vulkan/implicit_layer.d/"
+        }
+    );
+
+    b.installFile("../LICENSE", "share/licenses/lurk/LICENSE");
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "../third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
 }

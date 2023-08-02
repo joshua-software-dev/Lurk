@@ -3,7 +3,7 @@
   "layer" : {
     "name": "VK_LAYER_Lurk",
     "type": "GLOBAL",
-    "library_path": "../zig-out/lib/libvk_layer_lurk.so",
+    "library_path": "/usr/lib32/libvk_layer_lurk.so",
     "api_version": "1.0.0",
     "implementation_version": "1",
     "description": "Lurk as a Vulkan Layer - https://github.com/joshua-software-dev/Lurk",

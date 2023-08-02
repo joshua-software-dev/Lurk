@@ -5,6 +5,7 @@ zig-out
 zig-out/
 zig-out/*
 lurk_vk_layer/src/vk.xml
+lurk_vk_layer/src/vk.zig
 *.deb
 *.pkg.tar.zst
 *.rpm
