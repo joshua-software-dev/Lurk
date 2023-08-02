@@ -159,6 +159,7 @@ export fn VkLayerLurk_DestroyInstance
 )
 callconv(vk.vulkan_call_conv) void
 {
+    std.log.scoped(.WS).warn("Received shutdown command, attempting to close connection to discord...", .{});
     thread_running = false;
     background_thread.detach();
     _ = instance;
