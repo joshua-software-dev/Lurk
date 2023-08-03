@@ -63,14 +63,15 @@ pub fn build(b: *std.Build) void
     install.dest_dir = .prefix;
     install.dest_sub_path = b.fmt
     (
-        "{s}/libvk_layer_lurk.so",
+        "{s}/{s}",
         .{
             switch (target.getCpuArch())
             {
                 .x86 => "lib32",
                 .x86_64 => "lib64",
                 else => @panic("Unsupported CPU architecture.")
-            }
+            },
+            lib.out_filename
         }
     );
 

@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const disc = @import("discord_ws_conn");
@@ -47,7 +48,14 @@ pub fn stop_discord_conn() void
 {
     std.log.scoped(.WS).warn("Received shutdown command, attempting to close connection to discord...", .{});
     running = false;
+    if (builtin.os.tag == .windows)
+    {
+        background_thread.detach();
+    }
+    else
+    {
+        background_thread.join();
+    }
     conn.close();
-    background_thread.join();
     std.log.scoped(.WS).warn("Connection closed.", .{});
 }
