@@ -63,7 +63,6 @@ pub const DiscordState = struct
 
     pub fn deinit(self: *Self) void
     {
-        self.all_users.deinit();
         self.arena.deinit();
     }
 

@@ -96,10 +96,9 @@ pub const DiscordWsConn = struct
 
     pub fn close(self: *Self) void
     {
-        defer self.fba.reset();
-        defer self.state.deinit();
-        defer self.conn.close() catch {};
         defer self.conn.deinit(self.long_lived_allocator);
+        defer self.state.deinit();
+        defer self.fba.reset();
     }
 
     pub fn send_ws_message(self: *Self, object: anytype, options: std.json.StringifyOptions) !void
