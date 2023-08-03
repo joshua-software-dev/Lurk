@@ -14,7 +14,7 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     if (running) return;
     running = true;
 
-    const connUri = try conn.init(allocator, 1);
+    const connUri = try conn.init(allocator, 100);
     errdefer conn.close();
 
     std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
