@@ -68,19 +68,27 @@ var background_thread: std.Thread = undefined;
 fn run_discord_thread() !void
 {
     var conn: disc.DiscordWsConn = undefined;
-    const connUri = try conn.init(c_allocator);
+    const connUri = try conn.init(c_allocator, 1);
+    defer conn.close();
+    errdefer conn.close();
+
     std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
     const stdout = std.io.getStdOut();
 
     while (thread_running)
     {
-        const success = try conn.recieve_next_msg();
+        const success =
+            conn.recieve_next_msg()
+            catch |err|
+                if (err == std.net.Stream.ReadError.WouldBlock)
+                    true
+                else
+                    return err;
+
         if (!success) break;
 
         try conn.state.write_users_data_to_write_stream(stdout.writer());
     }
-
-    conn.close();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

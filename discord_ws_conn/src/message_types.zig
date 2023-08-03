@@ -105,7 +105,7 @@ pub const VoiceStateData = struct
     },
 };
 
-pub const VoiceChannelSelectChannelData = struct 
+pub const VoiceChannelSelectChannelData = struct
 {
     data: ?struct
     {
@@ -113,7 +113,7 @@ pub const VoiceChannelSelectChannelData = struct
     },
 };
 
-pub const VoiceChannelSelectGuildData = struct 
+pub const VoiceChannelSelectGuildData = struct
 {
     data: ?struct
     {
@@ -126,7 +126,7 @@ pub const VoiceUpdateUserInfoAndVoiceStateData = struct
     data: ?UserInfoAndVoiceState,
 };
 
-pub const VoiceSpeakingStartStopData = struct 
+pub const VoiceSpeakingStartStopData = struct
 {
     data: struct { user_id: []const u8, },
 };

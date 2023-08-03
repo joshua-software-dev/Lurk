@@ -17,8 +17,6 @@ const PORT = 6463;
 const PORT_RANGE = slice_from_int_range(u16, PORT, PORT + 10);
 const QUERY = "/?v=1&client_id=";
 const SCHEME = "ws://";
-const WS_READ_BUFFER_SIZE = 1024 * 64;
-const WS_WRITE_BUFFER_SIZE = 1024 * 4;
 
 const HTTP_API_URI =
     std.Uri.parse(HTTP_API_URL)
@@ -29,7 +27,6 @@ const WS_API_URI =
 const ws_logger = std.log.scoped(.WS);
 
 var access_token = std.BoundedArray(u8, 32).init(0) catch @panic("Failed to init access_token");
-var ws_read_buffer: [1024*64]u8 = undefined;
 
 inline fn slice_from_int_range(comptime T: type, comptime start: comptime_int, comptime end: comptime_int) []const T
 {
@@ -46,13 +43,13 @@ inline fn slice_from_int_range(comptime T: type, comptime start: comptime_int, c
 pub const DiscordWsConn = struct
 {
     const Self = @This();
-    conn: ws.Connection(WS_READ_BUFFER_SIZE, WS_WRITE_BUFFER_SIZE),
+    conn: ws.Connection,
     fba: std.heap.FixedBufferAllocator,
     long_lived_allocator: std.mem.Allocator,
     buffer: [2 * 1024 * 1024]u8, // 2 MiB
     state: state.DiscordState,
 
-    pub fn init(self: *Self, allocator: std.mem.Allocator) !std.Uri
+    pub fn init(self: *Self, allocator: std.mem.Allocator, timeoutMs: u32) !std.Uri
     {
         self.long_lived_allocator = allocator;
 
@@ -65,7 +62,7 @@ pub const DiscordWsConn = struct
         for (PORT_RANGE) |current_port|
         {
             localUri.port.? = current_port;
-            self.conn = ws.connectWithSpecifiedBufferSizes
+            self.conn = ws.connect
             (
                 self.long_lived_allocator,
                 localUri,
@@ -73,8 +70,6 @@ pub const DiscordWsConn = struct
                     .{"Host", std.fmt.comptimePrint("{s}:{d}", .{ HOST, PORT })},
                     .{"Origin", "https://streamkit.discord.com"}
                 },
-                WS_READ_BUFFER_SIZE,
-                WS_WRITE_BUFFER_SIZE,
             )
             catch |err|
             {
@@ -87,7 +82,10 @@ pub const DiscordWsConn = struct
                 return err;
             };
 
-            self.conn.ws_client.receiver.buffer = ws_read_buffer;
+            if (builtin.os.tag != .windows)
+            {
+                try self.conn.setReadTimeout(timeoutMs);
+            }
             break;
         }
 

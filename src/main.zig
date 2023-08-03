@@ -28,22 +28,44 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();
+    errdefer _ = gpa.detectLeaks();
 
     var conn: disc.DiscordWsConn = undefined;
-    const connUri = try conn.init(allocator);
+    const connUri = try conn.init(allocator, 100);
+    defer conn.close();
+    errdefer conn.close();
+
+    var stdout: ?std.fs.File = null;
+    if (builtin.os.tag == .windows)
+    {
+        stdout = std.io.getStdOut();
+    }
+
     std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
 
     while (true)
     {
-        const success = try conn.recieve_next_msg();
+        const success =
+            conn.recieve_next_msg()
+            catch |err|
+                if (err == std.net.Stream.ReadError.WouldBlock)
+                    true
+                else
+                    return err;
+
         if (!success) break;
 
-        const file = try std.fs.createFileAbsolute(outFile, .{ .lock = .exclusive });
-        defer file.close();
-        try conn.state.write_users_data_to_write_stream(file.writer());
+        if (builtin.os.tag == .windows)
+        {
+            try conn.state.write_users_data_to_write_stream(stdout.?.writer());
+        }
+        else
+        {
+            const file = try std.fs.createFileAbsolute(outFile, .{ .lock = .exclusive });
+            defer file.close();
+            try conn.state.write_users_data_to_write_stream(file.writer());
+        }
     }
-
-    conn.close();
 }
 
 pub fn main() !void
@@ -85,9 +107,12 @@ pub fn main() !void
         outputFile = out;
     }
 
-    // Ensure file can be created before continuing
-    const file = try std.fs.createFileAbsolute(outputFile, .{ .lock = .exclusive });
-    file.close();
+    if (builtin.os.tag != .windows)
+    {
+        // Ensure file can be created before continuing
+        const file = try std.fs.createFileAbsolute(outputFile, .{ .lock = .exclusive });
+        file.close();
+    }
 
     std.log.scoped(.WS).info("Using output file: {s}", .{ outputFile });
     try start_discord_ws_conn(outputFile);

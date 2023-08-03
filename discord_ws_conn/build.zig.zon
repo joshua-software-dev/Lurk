@@ -10,8 +10,8 @@
         },
         .ws =
         .{
-            .hash = "12203fa9957f00955162ae3ca0bdf4fbbea6f37675658fc700242e6dae314e5896dd",
-            .url = "https://github.com/joshua-software-dev/ws/archive/8920c3876e14677e24b567eb6fe4e1d98e5508ea.tar.gz",
+            .hash = "1220ba359853066405b8407471021582ad1aeabf8d3e366a9b3a0519b0eed5987d42",
+            .url = "https://github.com/joshua-software-dev/ws/archive/4cc5a3a5377ca67ffade596199dff0765c726b4c.tar.gz",
         },
         .ziglyph =
         .{
