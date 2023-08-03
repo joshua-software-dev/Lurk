@@ -379,8 +379,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     global_lock.lock();
     defer global_lock.unlock();
 
-    var stats: ?CommandStats = command_buffer_stats.get(command_buffer);
-    if (stats != null)
+    if (command_buffer_stats.get(command_buffer)) |stats|
     {
         std.log.scoped(.WS).debug
         (
@@ -390,9 +389,9 @@ callconv(vk.vulkan_call_conv) vk.Result
             "{} vertices",
             .{
                 @intFromPtr(&command_buffer),
-                stats.?.draw_count,
-                stats.?.instance_count,
-                stats.?.vert_count
+                stats.draw_count,
+                stats.instance_count,
+                stats.vert_count
             }
         );
 
@@ -430,27 +429,18 @@ callconv(vk.vulkan_call_conv) vk.Result
     // the check is removed here
     p_property_count.* = 1;
 
-    if (p_properties != null)
+    if (p_properties) |props|
     {
-        // save a non-null version of this pointer for convenience
-        var props: [*]vk.LayerProperties = @ptrCast(p_properties);
-
-        // this variable will likely not be needed in future zig releases, but
-        // @ptrCast automatically calculating the expected type seems to fail
-        // as an arg to @memcpy. Until this is fixed, a temp variable is needed
-        const temp_layer_name: *[vk.MAX_DESCRIPTION_SIZE]u8 = @ptrCast(@constCast(LAYER_NAME));
         @memcpy
         (
             &props[0].layer_name,
-            temp_layer_name
+            @as(*[vk.MAX_DESCRIPTION_SIZE]u8, @ptrCast(@constCast(LAYER_NAME)))
         );
 
-        // the same blurb from above applies for this temp variable as well
-        const temp_layer_desc: *[vk.MAX_DESCRIPTION_SIZE]u8 = @ptrCast(@constCast(LAYER_DESC));
         @memcpy
         (
             &props[0].description,
-            temp_layer_desc
+            @as(*[vk.MAX_DESCRIPTION_SIZE]u8, @ptrCast(@constCast(LAYER_DESC)))
         );
 
         props[0].implementation_version = 1;
@@ -484,7 +474,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     if
     (
         p_layer_name == null or
-        !std.mem.eql(u8, std.mem.span(p_layer_name orelse unreachable), LAYER_NAME)
+        !std.mem.eql(u8, std.mem.span(p_layer_name.?), LAYER_NAME)
     )
     {
         return vk.Result.error_layer_not_present;
@@ -512,7 +502,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     if
     (
         p_layer_name == null or
-        !std.mem.eql(u8, std.mem.span(p_layer_name orelse unreachable), LAYER_NAME)
+        !std.mem.eql(u8, std.mem.span(p_layer_name.?), LAYER_NAME)
     )
     {
         if (physical_device == vk.PhysicalDevice.null_handle)
