@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const disc = @import("discord_ws_conn");
+const disc = @import("discord_conn_holder.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
 const vk = @import("vulkan-zig");
@@ -58,38 +58,6 @@ const CommandStats = extern struct
 var command_buffer_stats =
     std.AutoHashMap(vk.CommandBuffer, CommandStats).init(c_allocator);
 
-
-///////////////////////////////////////////////////////////////////////////////
-// Background thread
-
-var thread_running = false;
-var background_thread: std.Thread = undefined;
-
-fn run_discord_thread() !void
-{
-    var conn: disc.DiscordWsConn = undefined;
-    const connUri = try conn.init(c_allocator, 1);
-    defer conn.close();
-    errdefer conn.close();
-
-    std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
-    const stdout = std.io.getStdOut();
-
-    while (thread_running)
-    {
-        const success =
-            conn.recieve_next_msg()
-            catch |err|
-                if (err == std.net.Stream.ReadError.WouldBlock)
-                    true
-                else
-                    return err;
-
-        if (!success) break;
-
-        try conn.state.write_users_data_to_write_stream(stdout.writer());
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Layer init and shutdown
@@ -167,11 +135,11 @@ export fn VkLayerLurk_DestroyInstance
 )
 callconv(vk.vulkan_call_conv) void
 {
-    std.log.scoped(.WS).warn("Received shutdown command, attempting to close connection to discord...", .{});
-    thread_running = false;
-    background_thread.detach();
     _ = instance;
     _ = p_allocator;
+
+    disc.stop_discord_conn();
+
     {
         global_lock.lock();
         defer global_lock.unlock();
@@ -595,12 +563,8 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
-    if (!thread_running)
-    {
-        thread_running = true;
-        background_thread = std.Thread.spawn(.{}, run_discord_thread, .{})
-        catch @panic("Background thread spawn failed");
-    }
+    // Internal logic makes connecting multiple times idempotent
+    disc.start_discord_conn(c_allocator) catch @panic("Failed to start discord connection.");
 
     const span_name = std.mem.span(p_name);
 
