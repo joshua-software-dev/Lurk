@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const disc = @import("discord_conn_holder.zig");
+const setup = @import("setup.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
 const vk = @import("vulkan-zig");
@@ -143,7 +144,6 @@ export fn VkLayerLurk_DestroyInstance
 )
 callconv(vk.vulkan_call_conv) void
 {
-    _ = instance;
     _ = p_allocator;
 
     disc.stop_discord_conn();
@@ -151,6 +151,7 @@ callconv(vk.vulkan_call_conv) void
     {
         global_lock.lock();
         defer global_lock.unlock();
+        setup.destroy_instance(instance, instance_dispatcher.?);
         instance_dispatcher = null;
     }
 }
@@ -214,6 +215,11 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
+    dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
+    dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
+    dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
+    dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
+    dispatch_table.DestroyRenderPass = @ptrCast(gdpa(device, "vkDestroyRenderPass"));
 
     // store layer global device dispatch table
     {
@@ -509,6 +515,48 @@ callconv(vk.vulkan_call_conv) vk.Result
     return vk.Result.success;
 }
 
+export fn VkLayerLurk_CreateSwapchainKHR
+(
+    device: vk.Device,
+    p_create_info: *const vk.SwapchainCreateInfoKHR,
+    p_allocator: ?*const vk.AllocationCallbacks,
+    p_swapchain: *vk.SwapchainKHR,
+)
+callconv(vk.vulkan_call_conv) vk.Result
+{
+    const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
+    if (result != vk.Result.success) return result;
+
+    setup.setup_swapchain(device, device_dispatcher.?, p_create_info);
+    return result;
+}
+
+export fn VkLayerLurk_DestroySwapchainKHR
+(
+    device: vk.Device,
+    swapchain: vk.SwapchainKHR,
+    p_allocator: ?*const vk.AllocationCallbacks,
+)
+callconv(vk.vulkan_call_conv) void
+{
+    device_dispatcher.?.DestroySwapchainKHR(device, swapchain, p_allocator);
+    {
+        global_lock.lock();
+        defer global_lock.unlock();
+        setup.destroy_swapchain(device, device_dispatcher.?);
+    }
+}
+
+export fn VkLayerLurk_QueuePresentKHR
+(
+    queue: vk.Queue,
+    p_present_info: *const vk.PresentInfoKHR,
+)
+callconv(vk.vulkan_call_conv) vk.Result
+{
+    return device_dispatcher.?.QueuePresentKHR(queue, p_present_info);
+}
+
 export fn VkLayerLurk_GetDeviceProcAddr
 (
     device: vk.Device,
@@ -554,6 +602,18 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     else if (std.mem.eql(u8, span_name, "vkEndCommandBuffer"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_EndCommandBuffer));
+    }
+    else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR));
+    }
+    else if (std.mem.eql(u8, span_name, "vkDestroySwapchainKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_DestroySwapchainKHR));
+    }
+    else if (std.mem.eql(u8, span_name, "vkQueuePresentKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
     }
 
     global_lock.lock();
@@ -634,6 +694,18 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     else if (std.mem.eql(u8, span_name, "vkEndCommandBuffer"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_EndCommandBuffer));
+    }
+    else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR));
+    }
+    else if (std.mem.eql(u8, span_name, "vkDestroySwapchainKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_DestroySwapchainKHR));
+    }
+    else if (std.mem.eql(u8, span_name, "vkQueuePresentKHR"))
+    {
+        return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
     }
 
     global_lock.lock();

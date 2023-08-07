@@ -3,6 +3,7 @@ const std = @import("std");
 const download_xml = @import("src/download_xml.zig");
 
 const discws_create = @import("deps/discord_ws_conn/create_mod.zig");
+const zgui = @import("deps/zgui/build.zig");
 
 
 // Although this function looks imperative, note that its job is to
@@ -21,7 +22,7 @@ pub fn build(b: *std.Build) void
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const disc = discws_create.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize, });
+    const disc = discws_create.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
 
     const download_file = b.step("download_xml", "Download vk.xml file");
     download_file.makeFn = download_xml.download_xml;
@@ -32,6 +33,16 @@ pub fn build(b: *std.Build) void
             .optimize = optimize,
             .registry = @as([]const u8, b.pathFromRoot("src/vk.xml")),
             .target = target,
+        }
+    );
+
+    const zgui_pkg = zgui.package
+    (
+        b,
+        target,
+        optimize,
+        .{
+            .options = .{ .backend = .no_backend }
         }
     );
 
@@ -57,6 +68,7 @@ pub fn build(b: *std.Build) void
 
     lib.linkLibC();
     lib.addModule("vulkan-zig", vkzig_dep.module("vulkan-zig"));
+    zgui_pkg.link(lib);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
