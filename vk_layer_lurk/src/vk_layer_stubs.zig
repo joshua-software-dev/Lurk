@@ -1,4 +1,4 @@
-const vk = @import("vulkan-zig");
+const vk = @import("vk.zig");
 
 
 pub const LayerInstanceLink = extern struct {

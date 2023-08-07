@@ -8,14 +8,14 @@
             .url = "https://github.com/r4gus/uuid-zig/archive/945510cc585daaad62c83f485f80505480cbc9be.tar.gz",
         },
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/086276bd053c2f134efa4b075a99cbe079cd270e.tar.gz",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/510c6b836b7b016572c43bd980abf4d643fdf066.tar.gz",
             // https://multiformats.io/multihash/#sha2-256-256-bits-aka-sha256
             // "1220" + sha256sum
             // run zig build with a url and fake hash to cause zig to generate
             // an error message with the expected hash, ex:
             // .url = "https://whatever.com/file.tar.gz"
             // .hash = "12200000000000000000000000000000000000000000000000000000000000000000"
-            .hash = "1220290a61f8caa0b70cf00f2cb946dfd12460103f0200de25f06080a724c04bffd0",
+            .hash = "12205fcba4cd4d81ac268810e136218ed4a2eeef49f185b23fb37a71cabcc62d5a6a",
         },
         .ws =
         .{

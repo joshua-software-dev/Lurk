@@ -6,6 +6,44 @@ const discws_create = @import("deps/discord_ws_conn/create_mod.zig");
 const zgui = @import("deps/zgui/build.zig");
 
 
+fn find_existing_or_generate_new_vulkan_bindings(b: *std.Build, lib: *std.build.Step.Compile) void
+{
+    const LOCAL_VULKAN_PATH = @as([]const u8, b.pathFromRoot("src/vk.xml"));
+    const SYSTEM_VULKAN_PATH = "/usr/share/vulkan/registry/vk.xml";
+    const OUTPUT_VULKAN_PATH = @as([]const u8, b.pathFromRoot("src/vk.zig"));
+
+    var found_generated_vk_bindings = true;
+    std.fs.accessAbsolute(OUTPUT_VULKAN_PATH, .{})
+    catch { found_generated_vk_bindings = false; };
+    if (!found_generated_vk_bindings)
+    {
+        const vk_gen = b.dependency("vulkan_zig", .{}).artifact("generator");
+        const gen_cmd = b.addRunArtifact(vk_gen);
+
+        var found_system_vulkan = true;
+        std.fs.accessAbsolute(SYSTEM_VULKAN_PATH, .{})
+        catch { found_system_vulkan = false; };
+
+        if (found_system_vulkan)
+        {
+            gen_cmd.addArg(SYSTEM_VULKAN_PATH);
+        }
+        else
+        {
+            const download_file = b.step("download_xml", "Download vk.xml file");
+            download_file.makeFn = download_xml.download_xml;
+            gen_cmd.step.dependOn(download_file);
+            gen_cmd.addArg(LOCAL_VULKAN_PATH);
+        }
+
+        const write_files = b.addWriteFiles();
+        write_files.addCopyFileToSource(gen_cmd.addOutputFileArg(OUTPUT_VULKAN_PATH), "src/vk.zig");
+
+        write_files.step.dependOn(&gen_cmd.step);
+        lib.step.dependOn(&write_files.step);
+    }
+}
+
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
@@ -23,18 +61,6 @@ pub fn build(b: *std.Build) void
     const optimize = b.standardOptimizeOption(.{});
 
     const disc = discws_create.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
-
-    const download_file = b.step("download_xml", "Download vk.xml file");
-    download_file.makeFn = download_xml.download_xml;
-    const vkzig_dep = b.dependency
-    (
-        "vulkan_zig",
-        .{
-            .optimize = optimize,
-            .registry = @as([]const u8, b.pathFromRoot("src/vk.xml")),
-            .target = target,
-        }
-    );
 
     const zgui_pkg = zgui.package
     (
@@ -63,11 +89,10 @@ pub fn build(b: *std.Build) void
         lib.link_z_notext = true;
     }
 
-    lib.step.dependOn(download_file);
     lib.addModule("discord_ws_conn", disc);
 
     lib.linkLibC();
-    lib.addModule("vulkan-zig", vkzig_dep.module("vulkan-zig"));
+    find_existing_or_generate_new_vulkan_bindings(b, lib);
     zgui_pkg.link(lib);
 
     // This declares intent for the library to be installed into the standard

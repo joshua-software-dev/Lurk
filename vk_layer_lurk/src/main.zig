@@ -5,7 +5,7 @@ const disc = @import("discord_conn_holder.zig");
 const setup = @import("setup.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
-const vk = @import("vulkan-zig");
+const vk = @import("vk.zig");
 
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const vk = @import("vulkan-zig");
+const vk = @import("vk.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const zgui = @import("zgui");
 
