@@ -4,8 +4,8 @@ zig-cache/*
 zig-out
 zig-out/
 zig-out/*
-lurk_vk_layer/src/vk.xml
-lurk_vk_layer/src/vk.zig
+vk_layer_lurk/src/vk.xml
+vk_layer_lurk/src/vk.zig
 *.deb
 *.pkg.tar.zst
 *.rpm
