@@ -1,6 +1,8 @@
 const std = @import("std");
-const discws_create = @import("discord_ws_conn/create_mod.zig");
+
 const download_xml = @import("src/download_xml.zig");
+
+const discws_create = @import("deps/discord_ws_conn/create_mod.zig");
 
 
 // Although this function looks imperative, note that its job is to

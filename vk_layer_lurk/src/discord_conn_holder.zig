@@ -18,7 +18,7 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     const connUri = try conn.init(allocator, 100);
     errdefer conn.close();
 
-    std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
+    std.log.scoped(.LAYER).info("Connection Success: {+/}", .{ connUri });
     stdout = std.io.getStdOut();
 
     background_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
@@ -46,7 +46,7 @@ pub fn handle_message_thread() !void
 
 pub fn stop_discord_conn() void
 {
-    std.log.scoped(.WS).warn("Received shutdown command, attempting to close connection to discord...", .{});
+    std.log.scoped(.LAYER).warn("Received shutdown command, attempting to close connection to discord...", .{});
     running = false;
     if (builtin.os.tag == .windows)
     {
@@ -57,5 +57,5 @@ pub fn stop_discord_conn() void
         background_thread.join();
     }
     conn.close();
-    std.log.scoped(.WS).warn("Connection closed.", .{});
+    std.log.scoped(.LAYER).warn("Connection closed.", .{});
 }

@@ -17,6 +17,14 @@ pub const std_options = struct
     &[_]std.log.ScopeLevel
     {
         .{
+            .scope = .LAYER,
+            .level = switch (builtin.mode)
+            {
+                .Debug => .debug,
+                else => .info,
+            }
+        },
+        .{
             .scope = .WS,
             .level = switch (builtin.mode)
             {
@@ -349,7 +357,7 @@ callconv(vk.vulkan_call_conv) vk.Result
 
     if (command_buffer_stats.get(command_buffer)) |stats|
     {
-        std.log.scoped(.WS).debug
+        std.log.scoped(.LAYER).debug
         (
             "Command buffer 0x{x} ended with " ++
             "{} draws, " ++
@@ -369,7 +377,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     }
     else
     {
-        std.log.scoped(.WS).warn
+        std.log.scoped(.LAYER).warn
         (
             "WARNING: EndCommandBuffer failed to get command buffer stats\n",
             .{}
