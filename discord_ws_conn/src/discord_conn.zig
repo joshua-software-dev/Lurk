@@ -419,7 +419,8 @@ pub const DiscordWsConn = struct
                             );
                             defer dataMsg.deinit();
 
-                            if (dataMsg.value.data.v != EXPECTED_API_VERSION)
+                            const versionFound: u32 = @intFromFloat(dataMsg.value.data.v);
+                            if (versionFound != EXPECTED_API_VERSION)
                             {
                                 ws_logger.err
                                 (

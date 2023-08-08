@@ -55,7 +55,7 @@ pub const Message = struct
 
 pub const EventReadyData = struct
 {
-    data: struct { v: u64 },
+    data: struct { v: f64 },
 };
 
 pub const AuthCodeData = struct
@@ -85,7 +85,7 @@ const UserVoiceState = struct
 pub const UserInfoAndVoiceState = struct
 {
     nick: []const u8,
-    volume: u32,
+    volume: f64,
     user: struct
     {
         avatar: ?[]const u8,

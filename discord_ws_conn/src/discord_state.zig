@@ -201,7 +201,7 @@ pub const DiscordState = struct
             result.value_ptr.*.deafened = false;
         }
 
-        result.value_ptr.*.volume = voice_state.volume;
+        result.value_ptr.*.volume = @intFromFloat(voice_state.volume);
 
         result.value_ptr.*.nickname = try std.BoundedArray(u8, MAX_NICKNAME_LENGTH).init(0);
         try result.value_ptr.*.nickname.?.resize(voice_state.nick.len);
