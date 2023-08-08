@@ -1,16 +1,96 @@
 const std = @import("std");
 
+const embedded_shaders = @import("embedded_shaders.zig");
+
 const vk = @import("vk.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const zgui = @import("zgui");
 
 
 var current_imgui_context: ?zgui.Context = null;
-var height: ?f32 = null;
-var width: ?f32 = null;
+var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
+var font_sampler: vk.Sampler = std.mem.zeroes(vk.Sampler);
 var format: ?vk.Format = null;
+var height: ?f32 = null;
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
+var width: ?f32 = null;
 
+fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
+{
+    // Create shader modules
+    var frag_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
+    const frag_info = vk.ShaderModuleCreateInfo
+    {
+        .s_type = vk.StructureType.shader_module_create_info,
+        .code_size = embedded_shaders.overlay_frag_spv.len * @sizeOf(u32),
+        .p_code = embedded_shaders.overlay_frag_spv.ptr,
+    };
+
+    const frag_result = device_dispatcher.CreateShaderModule(device, &frag_info, null, &frag_module);
+    if (frag_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Device.CreateShaderModule | frag shader");
+    }
+
+    var vert_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
+    const vert_info = vk.ShaderModuleCreateInfo
+    {
+        .s_type = vk.StructureType.shader_module_create_info,
+        .code_size = embedded_shaders.overlay_vert_spv.len * @sizeOf(u32),
+        .p_code = embedded_shaders.overlay_vert_spv.ptr,
+    };
+
+    const vert_result = device_dispatcher.CreateShaderModule(device, &vert_info, null, &vert_module);
+    if (vert_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Device.CreateShaderModule | vert shader");
+    }
+    device_dispatcher.DestroyShaderModule(device, vert_module, null);
+
+    // Font sampler
+    const font_sampler_info = vk.SamplerCreateInfo
+    {
+        .s_type = vk.StructureType.sampler_create_info,
+        .mag_filter = vk.Filter.linear,
+        .min_filter = vk.Filter.linear,
+        .mipmap_mode = vk.SamplerMipmapMode.linear,
+        .address_mode_u = vk.SamplerAddressMode.repeat,
+        .address_mode_v = vk.SamplerAddressMode.repeat,
+        .address_mode_w = vk.SamplerAddressMode.repeat,
+        .min_lod = -1000,
+        .max_lod = 1000,
+        .max_anisotropy = 1,
+        // equivalent of zero init
+        .mip_lod_bias = 0,
+        .anisotropy_enable = 0,
+        .compare_enable = 0,
+        .compare_op = vk.CompareOp.never,
+        .border_color = vk.BorderColor.float_transparent_black,
+        .unnormalized_coordinates = 0,
+    };
+    const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, &font_sampler);
+    if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
+
+    // Descriptor pool
+    const sampler_pool_size = [1]vk.DescriptorPoolSize
+    {
+        vk.DescriptorPoolSize
+        {
+            .type = vk.DescriptorType.combined_image_sampler,
+            .descriptor_count = 1,
+        },
+    };
+    const desc_pool_info = vk.DescriptorPoolCreateInfo
+    {
+        .s_type = vk.StructureType.descriptor_pool_create_info,
+        .max_sets = 1,
+        .pool_size_count = 1,
+        .p_pool_sizes = sampler_pool_size[0..0].ptr,
+    };
+
+    const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
+    if (desc_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateDescriptorPool");
+}
 
 pub fn setup_swapchain
 (
@@ -90,6 +170,8 @@ void
 
     const result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
     if (result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateRenderPass");
+
+    setup_swapchain_data_pipeline(device, device_dispatcher);
 }
 
 pub fn destroy_swapchain(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void

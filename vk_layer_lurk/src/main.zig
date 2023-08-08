@@ -209,17 +209,21 @@ callconv(vk.vulkan_call_conv) vk.Result
     // layer
     const device = p_device.*;
     var dispatch_table: vk_layer_stubs.LayerDispatchTable = undefined;
-    dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
-    dispatch_table.DestroyDevice = @ptrCast(gdpa(device, "vkDestroyDevice"));
     dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
-    dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
-    dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
-    dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
-    dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
+    dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
+    dispatch_table.CreateSampler = @ptrCast(gdpa(device, "vkCreateSampler"));
+    dispatch_table.CreateShaderModule = @ptrCast(gdpa(device, "vkCreateShaderModule"));
+    dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
+    dispatch_table.DestroyDevice = @ptrCast(gdpa(device, "vkDestroyDevice"));
     dispatch_table.DestroyRenderPass = @ptrCast(gdpa(device, "vkDestroyRenderPass"));
+    dispatch_table.DestroyShaderModule = @ptrCast(gdpa(device, "vkDestroyShaderModule"));
+    dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
+    dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
+    dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
+    dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
 
     // store layer global device dispatch table
     {
