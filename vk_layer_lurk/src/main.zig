@@ -209,6 +209,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     // layer
     const device = p_device.*;
     var dispatch_table: vk_layer_stubs.LayerDispatchTable = undefined;
+    dispatch_table.AllocateDescriptorSets = @ptrCast(gdpa(device, "vkAllocateDescriptorSets"));
     dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));

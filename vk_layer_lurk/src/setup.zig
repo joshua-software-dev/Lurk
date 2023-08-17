@@ -10,6 +10,7 @@ const zgui = @import("zgui");
 var current_imgui_context: ?zgui.Context = null;
 var descriptor_layout: vk.DescriptorSetLayout = std.mem.zeroes(vk.DescriptorSetLayout);
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
+var descriptor_set: vk.DescriptorSet = std.mem.zeroes(vk.DescriptorSet);
 var font_sampler: vk.Sampler = std.mem.zeroes(vk.Sampler);
 var format: ?vk.Format = null;
 var height: ?f32 = null;
@@ -22,7 +23,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     var frag_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
     const frag_info = vk.ShaderModuleCreateInfo
     {
-        .s_type = vk.StructureType.shader_module_create_info,
         .code_size = embedded_shaders.overlay_frag_spv.len * @sizeOf(u32),
         .p_code = embedded_shaders.overlay_frag_spv.ptr,
     };
@@ -36,7 +36,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     var vert_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
     const vert_info = vk.ShaderModuleCreateInfo
     {
-        .s_type = vk.StructureType.shader_module_create_info,
         .code_size = embedded_shaders.overlay_vert_spv.len * @sizeOf(u32),
         .p_code = embedded_shaders.overlay_vert_spv.ptr,
     };
@@ -51,7 +50,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     // Font sampler
     const font_sampler_info = vk.SamplerCreateInfo
     {
-        .s_type = vk.StructureType.sampler_create_info,
         .mag_filter = vk.Filter.linear,
         .min_filter = vk.Filter.linear,
         .mipmap_mode = vk.SamplerMipmapMode.linear,
@@ -83,7 +81,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     };
     const desc_pool_info = vk.DescriptorPoolCreateInfo
     {
-        .s_type = vk.StructureType.descriptor_pool_create_info,
         .max_sets = 1,
         .pool_size_count = 1,
         .p_pool_sizes = sampler_pool_size[0..0].ptr,
@@ -109,7 +106,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     };
     const set_layout_info = vk.DescriptorSetLayoutCreateInfo
     {
-        .s_type = vk.StructureType.descriptor_set_layout_create_info,
         .binding_count = 1,
         .p_bindings = binding[0..0].ptr,
     };
@@ -124,6 +120,27 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     if (desc_layout_result != vk.Result.success)
     {
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
+    }
+
+    const descriptor = [1]vk.DescriptorSetLayout
+    {
+        descriptor_layout
+    };
+    const alloc_info = vk.DescriptorSetAllocateInfo
+    {
+        .descriptor_pool = descriptor_pool,
+        .descriptor_set_count = 1,
+        .p_set_layouts = descriptor[0..0].ptr,
+    };
+    var desc_set_container = [1]vk.DescriptorSet
+    {
+        descriptor_set
+    };
+
+    const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets(device, &alloc_info, &desc_set_container);
+    if (alloc_desc_set_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
     }
 }
 
