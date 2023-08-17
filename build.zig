@@ -1,5 +1,7 @@
 const std = @import("std");
-const discws_create = @import("discord_ws_conn/create_mod.zig");
+
+const discb = @import("discord_ws_conn/build.zig");
+
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -17,7 +19,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const clap = b.dependency("clap", .{ .target = target, .optimize = optimize });
-    const disc = discws_create.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize });
+    const disc = discb.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize });
 
     const exe = b.addExecutable
     (

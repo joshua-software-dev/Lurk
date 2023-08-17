@@ -1,5 +1,28 @@
 const std = @import("std");
-const create_mod = @import("create_mod.zig");
+
+
+pub fn create_module(builder: *std.Build, comptime path_to_module: []const u8, args: anytype) *std.build.Module
+{
+    const uuid = builder.dependency("uuid", args);
+    const ws = builder.dependency("ws", args);
+    const ziglyph = builder.dependency("ziglyph", args);
+
+    const source_path =
+        std.fs.path.join(builder.allocator, &.{ path_to_module, "src/main.zig" })
+        catch @panic("Failed to combine paths.");
+
+    return builder.createModule
+    (
+        .{
+            .source_file = .{ .path = source_path },
+            .dependencies = &.{
+                .{ .name = "uuid", .module = uuid.module("uuid") },
+                .{ .name = "ws", .module = ws.module("ws") },
+                .{ .name = "ziglyph", .module = ziglyph.module("ziglyph") },
+            }
+        },
+    );
+}
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -19,7 +42,7 @@ pub fn build(b: *std.Build) void {
     b.modules.put
     (
         "discord_ws_conn",
-        create_mod.create_module(b, "", .{ .target = target, .optimize = optimize })
+        create_module(b, "", .{ .target = target, .optimize = optimize })
     )
-    catch @panic("Failed to save module.");
+    catch @panic("Failed to add module 'discord_ws_conn' to builder.");
 }

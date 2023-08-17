@@ -2,7 +2,7 @@ const std = @import("std");
 
 const download_xml = @import("src/download_xml.zig");
 
-const discws_create = @import("deps/discord_ws_conn/create_mod.zig");
+const discb = @import("deps/discord_ws_conn/build.zig");
 const zgui = @import("deps/zgui/build.zig");
 
 
@@ -60,7 +60,7 @@ pub fn build(b: *std.Build) void
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const disc = discws_create.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
+    const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
 
     const zgui_pkg = zgui.package
     (
