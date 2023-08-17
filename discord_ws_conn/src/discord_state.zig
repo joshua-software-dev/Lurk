@@ -288,4 +288,42 @@ pub const DiscordState = struct
             );
         }
     }
+
+    pub fn write_users_data_to_write_stream_ascii(self: *Self, writer: anytype) !void
+    {
+        try writer.print("nickname                         | muted | speaking\n", .{});
+
+        var it = self.all_users.iterator();
+        while (it.next()) |kv|
+        {
+            const user: DiscordUser = kv.value_ptr.*;
+            var nickname_buffer = try Nickname.init(0);
+            if (user.nickname) |nick|
+            {
+                try nickname_buffer.resize(MAX_NICKNAME_LENGTH);
+
+                var currentIndex: usize = 0;
+                for (nick.constSlice()) |character|
+                {
+                    if (character < 128) // is ascii
+                    {
+                        nickname_buffer.set(currentIndex, character);
+                        currentIndex += 1;
+                    }
+                }
+
+                try nickname_buffer.resize(currentIndex);
+            }
+
+            try writer.print
+            (
+                "{s} | {: <5} | {}\n",
+                .{
+                    nickname_buffer.constSlice(),
+                    user.muted,
+                    user.speaking,
+                }
+            );
+        }
+    }
 };
