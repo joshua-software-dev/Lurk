@@ -213,6 +213,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
+    dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
     dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
     dispatch_table.CreateSampler = @ptrCast(gdpa(device, "vkCreateSampler"));
     dispatch_table.CreateShaderModule = @ptrCast(gdpa(device, "vkCreateShaderModule"));

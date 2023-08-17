@@ -8,6 +8,7 @@ const zgui = @import("zgui");
 
 
 var current_imgui_context: ?zgui.Context = null;
+var descriptor_layout: vk.DescriptorSetLayout = std.mem.zeroes(vk.DescriptorSetLayout);
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
 var font_sampler: vk.Sampler = std.mem.zeroes(vk.Sampler);
 var format: ?vk.Format = null;
@@ -90,6 +91,40 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
 
     const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
     if (desc_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateDescriptorPool");
+
+    const sampler = [1]vk.Sampler
+    {
+        font_sampler
+    };
+    const binding = [1]vk.DescriptorSetLayoutBinding
+    {
+        vk.DescriptorSetLayoutBinding
+        {
+            .descriptor_type = vk.DescriptorType.combined_image_sampler,
+            .descriptor_count = 1,
+            .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
+            .p_immutable_samplers = sampler[0..0].ptr,
+            .binding = 0,
+        }
+    };
+    const set_layout_info = vk.DescriptorSetLayoutCreateInfo
+    {
+        .s_type = vk.StructureType.descriptor_set_layout_create_info,
+        .binding_count = 1,
+        .p_bindings = binding[0..0].ptr,
+    };
+
+    const desc_layout_result = device_dispatcher.CreateDescriptorSetLayout
+    (
+        device,
+        &set_layout_info,
+        null,
+        &descriptor_layout
+    );
+    if (desc_layout_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
+    }
 }
 
 pub fn setup_swapchain
@@ -115,7 +150,7 @@ void
         vk.AttachmentDescription
         {
             .format = p_create_info.image_format,
-            .samples = vk.SampleCountFlags{ .@"1_bit" = true },
+            .samples = vk.SampleCountFlags{ .@"1_bit" = true, },
             .load_op = vk.AttachmentLoadOp.load,
             .store_op = vk.AttachmentStoreOp.store,
             .stencil_load_op = vk.AttachmentLoadOp.dont_care,
