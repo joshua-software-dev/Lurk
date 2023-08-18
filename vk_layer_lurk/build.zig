@@ -136,7 +136,7 @@ pub fn build(b: *std.Build) void
     b.installDirectory
     (
         .{
-            .source_dir = .{ .path = "../third_party" },
+            .source_dir = .{ .path = "deps/discord_ws_conn/third_party" },
             .install_dir = .prefix,
             .install_subdir = "share/licenses/lurk/third_party"
         }

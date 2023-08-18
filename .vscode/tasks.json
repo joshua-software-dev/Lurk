@@ -11,7 +11,7 @@
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}/cli_tool_lurk/"
             }
         },
 		{

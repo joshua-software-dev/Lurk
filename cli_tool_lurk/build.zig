@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const discb = @import("discord_ws_conn/build.zig");
+const discb = @import("deps/discord_ws_conn/build.zig");
 
 
 // Although this function looks imperative, note that its job is to
@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const clap = b.dependency("clap", .{ .target = target, .optimize = optimize });
-    const disc = discb.create_module(b, "discord_ws_conn/", .{ .target = target, .optimize = optimize });
+    const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize });
 
     const exe = b.addExecutable
     (
@@ -41,11 +41,19 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(exe);
     b.installFile("lurk.service", "lib/systemd/user/lurk.service");
-    b.installFile("LICENSE", "share/licenses/lurk/LICENSE");
+    b.installFile("../LICENSE", "share/licenses/lurk/LICENSE");
     b.installDirectory
     (
         .{
             .source_dir = .{ .path = "third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "deps/discord_ws_conn/third_party" },
             .install_dir = .prefix,
             .install_subdir = "share/licenses/lurk/third_party"
         }
