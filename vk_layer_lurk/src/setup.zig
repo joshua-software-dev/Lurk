@@ -86,7 +86,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         .max_sets = 1,
         .pool_size_count = 1,
-        .p_pool_sizes = sampler_pool_size[0..0].ptr,
+        .p_pool_sizes = sampler_pool_size[0..sampler_pool_size.len - 1].ptr,
     };
 
     const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
@@ -103,14 +103,14 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .descriptor_type = .combined_image_sampler,
             .descriptor_count = 1,
             .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
-            .p_immutable_samplers = sampler[0..0].ptr,
+            .p_immutable_samplers = sampler[0..sampler.len - 1].ptr,
             .binding = 0,
         },
     };
     const set_layout_info = vk.DescriptorSetLayoutCreateInfo
     {
         .binding_count = 1,
-        .p_bindings = binding[0..0].ptr,
+        .p_bindings = binding[0..binding.len - 1].ptr,
     };
 
     const desc_layout_result = device_dispatcher.CreateDescriptorSetLayout
@@ -133,7 +133,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         .descriptor_pool = descriptor_pool,
         .descriptor_set_count = 1,
-        .p_set_layouts = descriptor[0..0].ptr,
+        .p_set_layouts = descriptor[0..descriptor.len - 1].ptr,
     };
     var desc_set_container = [1]vk.DescriptorSet
     {
@@ -162,9 +162,9 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const layout_info = vk.PipelineLayoutCreateInfo
     {
         .set_layout_count = 1,
-        .p_set_layouts = desc_layout_container[0..0].ptr,
+        .p_set_layouts = desc_layout_container[0..desc_layout_container.len - 1].ptr,
         .push_constant_range_count = 1,
-        .p_push_constant_ranges = push_constants[0..0].ptr,
+        .p_push_constant_ranges = push_constants[0..push_constants.len - 1].ptr,
     };
     const create_pipeline_result = device_dispatcher.CreatePipelineLayout(device, &layout_info, null, &pipeline_layout);
     if (create_pipeline_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreatePipelineLayout");
@@ -222,7 +222,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const vertex_info = vk.PipelineVertexInputStateCreateInfo
     {
         .vertex_binding_description_count = 1,
-        .p_vertex_binding_descriptions = binding_desc[0..0].ptr,
+        .p_vertex_binding_descriptions = binding_desc[0..binding_desc.len - 1].ptr,
         .vertex_attribute_description_count = 3,
         .p_vertex_attribute_descriptions = attribute_desc[0..attribute_desc.len - 1].ptr,
     };
@@ -297,7 +297,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const blend_info = vk.PipelineColorBlendStateCreateInfo
     {
         .attachment_count = 1,
-        .p_attachments = color_attachment[0..0].ptr,
+        .p_attachments = color_attachment[0..color_attachment.len - 1].ptr,
         // 0 init equivalents
         .logic_op_enable = 0,
         .logic_op = .clear,
@@ -313,7 +313,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         // .dynamic_state_count = @truncate(dynamic_states.len),
         .dynamic_state_count = 2,
-        .p_dynamic_states = dynamic_states[0..dynamic_states.len-1].ptr,
+        .p_dynamic_states = dynamic_states[0..dynamic_states.len - 1].ptr,
     };
 
     const info = vk.GraphicsPipelineCreateInfo
@@ -349,9 +349,9 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     //     device,
     //     .null_handle,
     //     1,
-    //     info_container[0..0].ptr,
+    //     info_container[0..info_container.len - 1].ptr,
     //     null,
-    //     pipeline_container[0..0].ptr
+    //     pipeline_container[0..pipeline_container.len - 1].ptr
     // );
     // if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
 
@@ -407,7 +407,7 @@ void
         {
             .pipeline_bind_point = .graphics,
             .color_attachment_count = 1,
-            .p_color_attachments = color_attachment[0..0].ptr,
+            .p_color_attachments = color_attachment[0..color_attachment.len - 1].ptr,
         },
     };
 
@@ -428,11 +428,11 @@ void
     {
         .s_type = .render_pass_create_info,
         .attachment_count = 1,
-        .p_attachments = attachment_desc[0..0].ptr,
+        .p_attachments = attachment_desc[0..attachment_desc.len - 1].ptr,
         .subpass_count = 1,
-        .p_subpasses = subpass[0..0].ptr,
+        .p_subpasses = subpass[0..subpass.len - 1].ptr,
         .dependency_count = 1,
-        .p_dependencies = dependency[0..0].ptr,
+        .p_dependencies = dependency[0..dependency.len - 1].ptr,
     };
 
     const result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
