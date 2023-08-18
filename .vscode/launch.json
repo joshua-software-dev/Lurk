@@ -1,0 +1,65 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Launch Layer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "VK_ADD_LAYER_PATH",
+                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_ENABLE",
+                    "value": "VK_LAYER_Lurk"
+                },
+                {
+                    "name": "VK_LOADER_DEBUG",
+                    "value": "all"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build layer",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch CLI",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/zig-out/bin/lurk",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build cli",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}
