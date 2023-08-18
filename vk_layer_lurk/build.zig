@@ -6,7 +6,7 @@ const discb = @import("deps/discord_ws_conn/build.zig");
 const zgui = @import("deps/zgui/build.zig");
 
 
-fn find_existing_or_generate_new_vulkan_bindings(b: *std.Build, lib: *std.build.Step.Compile) void
+fn find_existing_or_generate_new_vulkan_bindings(b: *std.Build, lib: *std.build.Step.Compile, use_sysvk: bool) void
 {
     const LOCAL_VULKAN_PATH = @as([]const u8, b.pathFromRoot("src/vk.xml"));
     const SYSTEM_VULKAN_PATH = "/usr/share/vulkan/registry/vk.xml";
@@ -24,7 +24,7 @@ fn find_existing_or_generate_new_vulkan_bindings(b: *std.Build, lib: *std.build.
         std.fs.accessAbsolute(SYSTEM_VULKAN_PATH, .{})
         catch { found_system_vulkan = false; };
 
-        if (found_system_vulkan)
+        if (found_system_vulkan and use_sysvk)
         {
             gen_cmd.addArg(SYSTEM_VULKAN_PATH);
         }
@@ -60,8 +60,15 @@ pub fn build(b: *std.Build) void
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
+    const use_system_vulkan = b.option
+    (
+        bool,
+        "sysvk",
+        "Use /usr/share/vulkan/registry/vk.xml to generate Vulkan bindings " ++
+        "instead of downloading the latest bindings from the Vulkan SDK."
+    ) orelse false;
 
+    const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
     const zgui_pkg = zgui.package
     (
         b,
@@ -92,7 +99,7 @@ pub fn build(b: *std.Build) void
     lib.addModule("discord_ws_conn", disc);
 
     lib.linkLibC();
-    find_existing_or_generate_new_vulkan_bindings(b, lib);
+    find_existing_or_generate_new_vulkan_bindings(b, lib, use_system_vulkan);
     zgui_pkg.link(lib);
 
     // This declares intent for the library to be installed into the standard
