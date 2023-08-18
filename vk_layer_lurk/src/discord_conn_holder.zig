@@ -4,6 +4,12 @@ const std = @import("std");
 const disc = @import("discord_ws_conn");
 
 
+var debug = switch (builtin.mode)
+{
+    .Debug => true,
+    else => false,
+};
+
 var background_thread: std.Thread = undefined;
 var conn: disc.DiscordWsConn = undefined;
 var running = false;
@@ -12,6 +18,8 @@ var stdout: ?std.fs.File = null;
 
 pub fn start_discord_conn(allocator: std.mem.Allocator) !void
 {
+    if (debug) return;
+
     if (running) return;
     running = true;
 
@@ -46,6 +54,8 @@ pub fn handle_message_thread() !void
 
 pub fn stop_discord_conn() void
 {
+    if (debug) return;
+
     std.log.scoped(.LAYER).warn("Received shutdown command, attempting to close connection to discord...", .{});
     running = false;
     if (builtin.os.tag == .windows)
