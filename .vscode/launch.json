@@ -5,6 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(lldb) Launch Layer",
+            "type": "lldb",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "env": {
+                "ENABLE_LURK": "1",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_DEBUG": "all"
+            },
+            "preLaunchTask": "build layer",
+        },
+        {
             "name": "(gdb) Launch Layer",
             "type": "cppdbg",
             "request": "launch",
