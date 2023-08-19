@@ -86,7 +86,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         .max_sets = 1,
         .pool_size_count = 1,
-        .p_pool_sizes = sampler_pool_size[0..sampler_pool_size.len - 1].ptr,
+        .p_pool_sizes = &sampler_pool_size,
     };
 
     const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
@@ -103,14 +103,15 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .descriptor_type = .combined_image_sampler,
             .descriptor_count = 1,
             .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
-            .p_immutable_samplers = sampler[0..sampler.len - 1].ptr,
+            .p_immutable_samplers = &sampler,
+            // 0 init equivalents
             .binding = 0,
         },
     };
     const set_layout_info = vk.DescriptorSetLayoutCreateInfo
     {
         .binding_count = 1,
-        .p_bindings = binding[0..binding.len - 1].ptr,
+        .p_bindings = &binding,
     };
 
     const desc_layout_result = device_dispatcher.CreateDescriptorSetLayout
@@ -133,7 +134,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         .descriptor_pool = descriptor_pool,
         .descriptor_set_count = 1,
-        .p_set_layouts = descriptor[0..descriptor.len - 1].ptr,
+        .p_set_layouts = &descriptor,
     };
     var desc_set_container = [1]vk.DescriptorSet
     {
@@ -162,9 +163,9 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const layout_info = vk.PipelineLayoutCreateInfo
     {
         .set_layout_count = 1,
-        .p_set_layouts = desc_layout_container[0..desc_layout_container.len - 1].ptr,
+        .p_set_layouts = &desc_layout_container,
         .push_constant_range_count = 1,
-        .p_push_constant_ranges = push_constants[0..push_constants.len - 1].ptr,
+        .p_push_constant_ranges = &push_constants,
     };
     const create_pipeline_result = device_dispatcher.CreatePipelineLayout(device, &layout_info, null, &pipeline_layout);
     if (create_pipeline_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreatePipelineLayout");
@@ -189,9 +190,10 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         vk.VertexInputBindingDescription
         {
-            .binding = 0, // moar 0 init
             .input_rate = .vertex,
             .stride = @sizeOf(zgui.DrawVert),
+            // 0 init equivalents
+            .binding = 0,
         },
     };
     const attribute_desc = [3]vk.VertexInputAttributeDescription
@@ -222,14 +224,15 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const vertex_info = vk.PipelineVertexInputStateCreateInfo
     {
         .vertex_binding_description_count = 1,
-        .p_vertex_binding_descriptions = binding_desc[0..binding_desc.len - 1].ptr,
+        .p_vertex_binding_descriptions = &binding_desc,
         .vertex_attribute_description_count = 3,
-        .p_vertex_attribute_descriptions = attribute_desc[0..attribute_desc.len - 1].ptr,
+        .p_vertex_attribute_descriptions = &attribute_desc,
     };
 
     const ia_info = vk.PipelineInputAssemblyStateCreateInfo
     {
         .topology = .triangle_list,
+        // 0 init equivalents
         .primitive_restart_enable = 0,
     };
 
@@ -242,26 +245,26 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const raster_info = vk.PipelineRasterizationStateCreateInfo
     {
         .polygon_mode = .fill,
-        .cull_mode = vk.CullModeFlags.fromInt(0),
+        .cull_mode = .{},
         .front_face = .counter_clockwise,
         .line_width = 1.0,
         // 0 init equivalents
-        .depth_bias_clamp = 0,
-        .depth_bias_constant_factor = 0,
-        .depth_bias_enable = 0,
-        .depth_bias_slope_factor = 0,
         .depth_clamp_enable = 0,
         .rasterizer_discard_enable = 0,
+        .depth_bias_enable = 0,
+        .depth_bias_constant_factor = 0,
+        .depth_bias_clamp = 0,
+        .depth_bias_slope_factor = 0,
     };
 
     const ms_info = vk.PipelineMultisampleStateCreateInfo
     {
         .rasterization_samples = vk.SampleCountFlags{ .@"1_bit" = true, },
         // 0 init equivalents
+        .sample_shading_enable = 0,
+        .min_sample_shading = 0,
         .alpha_to_coverage_enable = 0,
         .alpha_to_one_enable = 0,
-        .min_sample_shading = 0,
-        .sample_shading_enable = 0,
     };
 
     const color_attachment = [1]vk.PipelineColorBlendAttachmentState
@@ -297,7 +300,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const blend_info = vk.PipelineColorBlendStateCreateInfo
     {
         .attachment_count = 1,
-        .p_attachments = color_attachment[0..color_attachment.len - 1].ptr,
+        .p_attachments = &color_attachment,
         // 0 init equivalents
         .logic_op_enable = 0,
         .logic_op = .clear,
@@ -311,15 +314,14 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     };
     const dynamic_state = vk.PipelineDynamicStateCreateInfo
     {
-        // .dynamic_state_count = @truncate(dynamic_states.len),
-        .dynamic_state_count = 2,
-        .p_dynamic_states = dynamic_states[0..dynamic_states.len - 1].ptr,
+        .dynamic_state_count = @truncate(dynamic_states.len),
+        .p_dynamic_states = &dynamic_states,
     };
 
     const info = vk.GraphicsPipelineCreateInfo
     {
         .stage_count = 2,
-        .p_stages = stage[0..stage.len - 1].ptr,
+        .p_stages = &stage,
         .p_vertex_input_state = &vertex_info,
         .p_input_assembly_state = &ia_info,
         .p_viewport_state = &viewport_info,
@@ -407,7 +409,7 @@ void
         {
             .pipeline_bind_point = .graphics,
             .color_attachment_count = 1,
-            .p_color_attachments = color_attachment[0..color_attachment.len - 1].ptr,
+            .p_color_attachments = &color_attachment,
         },
     };
 
@@ -428,11 +430,11 @@ void
     {
         .s_type = .render_pass_create_info,
         .attachment_count = 1,
-        .p_attachments = attachment_desc[0..attachment_desc.len - 1].ptr,
+        .p_attachments = &attachment_desc,
         .subpass_count = 1,
-        .p_subpasses = subpass[0..subpass.len - 1].ptr,
+        .p_subpasses = &subpass,
         .dependency_count = 1,
-        .p_dependencies = dependency[0..dependency.len - 1].ptr,
+        .p_dependencies = &dependency,
     };
 
     const result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
