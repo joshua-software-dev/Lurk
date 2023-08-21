@@ -15,7 +15,8 @@
                 "ENABLE_LURK": "1",
                 "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
                 "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
-                "VK_LOADER_DEBUG": "all"
+                "VK_LOADER_DEBUG": "all",
+                "RADV_DEBUG": "llvm"
             },
             "preLaunchTask": "build layer",
         },
@@ -43,6 +44,10 @@
                 {
                     "name": "VK_LOADER_DEBUG",
                     "value": "all"
+                },
+                {
+                    "name": "RADV_DEBUG",
+                    "value": "gdb"
                 }
             ],
             "externalConsole": false,

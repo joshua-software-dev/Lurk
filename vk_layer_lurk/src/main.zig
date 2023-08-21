@@ -122,10 +122,11 @@ callconv(vk.vulkan_call_conv) vk.Result
     // layer
     const instance = p_instance.*;
     var dispatch_table: vk_layer_stubs.LayerInstanceDispatchTable = undefined;
-    dispatch_table.GetInstanceProcAddr = @ptrCast(gpa(instance, "vkGetInstanceProcAddr"));
     dispatch_table.DestroyInstance = @ptrCast(gpa(instance, "vkDestroyInstance"));
     dispatch_table.EnumerateDeviceExtensionProperties =
         @ptrCast(gpa(instance, "vkEnumerateDeviceExtensionProperties"));
+    dispatch_table.GetInstanceProcAddr = @ptrCast(gpa(instance, "vkGetInstanceProcAddr"));
+    dispatch_table.GetPhysicalDeviceMemoryProperties = @ptrCast(gpa(instance, "vkGetPhysicalDeviceMemoryProperties"));
 
     // store layer global instance dispatch table
     {
@@ -210,12 +211,16 @@ callconv(vk.vulkan_call_conv) vk.Result
     const device = p_device.*;
     var dispatch_table: vk_layer_stubs.LayerDispatchTable = undefined;
     dispatch_table.AllocateDescriptorSets = @ptrCast(gdpa(device, "vkAllocateDescriptorSets"));
+    dispatch_table.AllocateMemory = @ptrCast(gdpa(device, "vkAllocateMemory"));
     dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
+    dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
     dispatch_table.CreateGraphicsPipelines = @ptrCast(gdpa(device, "vkCreateGraphicsPipelines"));
+    dispatch_table.CreateImage = @ptrCast(gdpa(device, "vkCreateImage"));
+    dispatch_table.CreateImageView = @ptrCast(gdpa(device, "vkCreateImageView"));
     dispatch_table.CreatePipelineLayout = @ptrCast(gdpa(device, "vkCreatePipelineLayout"));
     dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
     dispatch_table.CreateSampler = @ptrCast(gdpa(device, "vkCreateSampler"));
@@ -227,7 +232,9 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
+    dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
+    dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
 
     // store layer global device dispatch table
     {
@@ -236,6 +243,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         device_dispatcher = dispatch_table;
     }
 
+    setup.get_physical_mem_props(physical_device, instance_dispatcher.?);
     return vk.Result.success;
 }
 

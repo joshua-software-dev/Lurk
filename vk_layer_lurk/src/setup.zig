@@ -7,18 +7,62 @@ const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const zgui = @import("zgui");
 
 
+
+var descriptor_layout_container: [1]vk.DescriptorSetLayout = [1]vk.DescriptorSetLayout
+{
+    std.mem.zeroes(vk.DescriptorSetLayout),
+};
+var descriptor_layout: *vk.DescriptorSetLayout = &descriptor_layout_container[0];
+
+var descriptor_set_container: [1]vk.DescriptorSet = [1]vk.DescriptorSet
+{
+    std.mem.zeroes(vk.DescriptorSet),
+};
+var descriptor_set: *vk.DescriptorSet = &descriptor_set_container[0];
+
+var pipeline_container: [1]vk.Pipeline = [1]vk.Pipeline
+{
+    std.mem.zeroes(vk.Pipeline),
+};
+var pipeline: *vk.Pipeline = &pipeline_container[0];
+
 var current_imgui_context: ?zgui.Context = null;
-var descriptor_layout: vk.DescriptorSetLayout = std.mem.zeroes(vk.DescriptorSetLayout);
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
-var descriptor_set: vk.DescriptorSet = std.mem.zeroes(vk.DescriptorSet);
+var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
+var font_image: vk.Image = std.mem.zeroes(vk.Image);
+var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
 var font_sampler: vk.Sampler = std.mem.zeroes(vk.Sampler);
 var format: ?vk.Format = null;
 var height: ?f32 = null;
-var pipeline: vk.Pipeline = std.mem.zeroes(vk.Pipeline);
+var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
 var width: ?f32 = null;
 
+
+fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
+{
+    _ = type_bits;
+    if (physical_mem_props) |props|
+    {
+        var i: u32 = 0;
+        while (i < props.memory_type_count) : (i += 1)
+        {
+            if
+            (
+                vk.MemoryPropertyFlags.contains(properties, props.memory_types[i].property_flags)
+                // and type_bits & (1<<i)
+            )
+            {
+                return i;
+            }
+        }
+
+        @panic("Unable to find memory type");
+    }
+
+    @panic("Physical memory properties are null!");
+}
 
 fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
 {
@@ -119,29 +163,21 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         device,
         &set_layout_info,
         null,
-        &descriptor_layout
+        descriptor_layout
     );
     if (desc_layout_result != vk.Result.success)
     {
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
     }
 
-    const descriptor = [1]vk.DescriptorSetLayout
-    {
-        descriptor_layout
-    };
     const alloc_info = vk.DescriptorSetAllocateInfo
     {
         .descriptor_pool = descriptor_pool,
         .descriptor_set_count = 1,
-        .p_set_layouts = &descriptor,
-    };
-    var desc_set_container = [1]vk.DescriptorSet
-    {
-        descriptor_set
+        .p_set_layouts = &descriptor_layout_container
     };
 
-    const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets(device, &alloc_info, &desc_set_container);
+    const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets(device, &alloc_info, &descriptor_set_container);
     if (alloc_desc_set_result != vk.Result.success)
     {
         @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
@@ -156,14 +192,10 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .size = @sizeOf(f32) * 4,
         },
     };
-    const desc_layout_container = [1]vk.DescriptorSetLayout
-    {
-        descriptor_layout
-    };
     const layout_info = vk.PipelineLayoutCreateInfo
     {
         .set_layout_count = 1,
-        .p_set_layouts = &desc_layout_container,
+        .p_set_layouts = &descriptor_layout_container,
         .push_constant_range_count = 1,
         .p_push_constant_ranges = &push_constants,
     };
@@ -282,20 +314,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         },
     };
 
-    // this is nearly `std.mem.zeroes(vk.PipelineDepthStencilStateCreateInfo)`
-    // but const inited and with the s_type actually set correctly.
-    const depth_info = vk.PipelineDepthStencilStateCreateInfo
-    {
-        .depth_test_enable = 0,
-        .depth_write_enable = 0,
-        .depth_compare_op = .never,
-        .depth_bounds_test_enable = 0,
-        .stencil_test_enable = 0,
-        .front = std.mem.zeroes(vk.StencilOpState),
-        .back = std.mem.zeroes(vk.StencilOpState),
-        .min_depth_bounds = 0.0,
-        .max_depth_bounds = 0.0,
-    };
+    const depth_info = std.mem.zeroInit(vk.PipelineDepthStencilStateCreateInfo, .{});
 
     const blend_info = vk.PipelineColorBlendStateCreateInfo
     {
@@ -318,47 +337,137 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_dynamic_states = &dynamic_states,
     };
 
-    const info = vk.GraphicsPipelineCreateInfo
-    {
-        .stage_count = 2,
-        .p_stages = &stage,
-        .p_vertex_input_state = &vertex_info,
-        .p_input_assembly_state = &ia_info,
-        .p_viewport_state = &viewport_info,
-        .p_rasterization_state = &raster_info,
-        .p_multisample_state = &ms_info,
-        .p_depth_stencil_state = &depth_info,
-        .p_color_blend_state = &blend_info,
-        .p_dynamic_state = &dynamic_state,
-        .layout = pipeline_layout,
-        .render_pass = render_pass,
-        // 0 init equivalents
-        .subpass = 0,
-        .base_pipeline_index = 0,
-    };
     const info_container = [1]vk.GraphicsPipelineCreateInfo
     {
-        info,
+        vk.GraphicsPipelineCreateInfo
+        {
+            .stage_count = 2,
+            .p_stages = &stage,
+            .p_vertex_input_state = &vertex_info,
+            .p_input_assembly_state = &ia_info,
+            .p_viewport_state = &viewport_info,
+            .p_rasterization_state = &raster_info,
+            .p_multisample_state = &ms_info,
+            .p_depth_stencil_state = &depth_info,
+            .p_color_blend_state = &blend_info,
+            .p_dynamic_state = &dynamic_state,
+            .layout = pipeline_layout,
+            .render_pass = render_pass,
+            // 0 init equivalents
+            .subpass = 0,
+            .base_pipeline_index = 0,
+        }
     };
     _ = info_container;
-    var pipeline_container = [1]vk.Pipeline
-    {
-        pipeline,
-    };
-    _ = pipeline_container;
     // const create_pl_result = device_dispatcher.CreateGraphicsPipelines
     // (
     //     device,
     //     .null_handle,
     //     1,
-    //     info_container[0..info_container.len - 1].ptr,
+    //     &info_container,
     //     null,
-    //     pipeline_container[0..pipeline_container.len - 1].ptr
+    //     &pipeline_container
     // );
     // if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
 
     _ = device_dispatcher.DestroyShaderModule(device, vert_module, null);
     _ = device_dispatcher.DestroyShaderModule(device, frag_module, null);
+
+    var h: i32 = 0;
+    var w: i32 = 0;
+    _ = zgui.io.getFontsTextDataAsRgba32(&h, &w);
+    if (h < 1 or w < 1) @panic("ImGui provided an invalid font size.");
+
+    const image_info = vk.ImageCreateInfo
+    {
+        .image_type = .@"2d",
+        .format = .r8g8b8a8_unorm,
+        .extent = .{ .depth = 1, .height = @intCast(h), .width = @intCast(w), },
+        .mip_levels = 1,
+        .array_layers = 1,
+        .samples = vk.SampleCountFlags{ .@"1_bit" = true, },
+        .tiling = .optimal,
+        .usage = vk.ImageUsageFlags{ .sampled_bit = true, .transfer_dst_bit = true, },
+        .sharing_mode = .exclusive,
+        .initial_layout = .undefined,
+    };
+    const font_image_result = device_dispatcher.CreateImage(device, &image_info, null, &font_image);
+    if (font_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImage");
+
+    var font_image_req: vk.MemoryRequirements = std.mem.zeroes(vk.MemoryRequirements);
+    device_dispatcher.GetImageMemoryRequirements(device, font_image, &font_image_req);
+
+    const image_alloc_info = vk.MemoryAllocateInfo
+    {
+        .allocation_size = font_image_req.size,
+        .memory_type_index = vk_memory_type
+        (
+            vk.MemoryPropertyFlags{ .device_local_bit = true, },
+            font_image_req.memory_type_bits
+        ),
+    };
+
+    const alloc_mem_result = device_dispatcher.AllocateMemory(device, &image_alloc_info, null, &font_mem);
+    if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
+
+    const bind_image_result = device_dispatcher.BindImageMemory(device, font_image, font_mem, 0);
+    if (bind_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindImageMemory");
+
+    const view_info = vk.ImageViewCreateInfo
+    {
+        .image = font_image,
+        .view_type = .@"2d",
+        .format = .r8g8b8a8_unorm,
+        .subresource_range = vk.ImageSubresourceRange
+        {
+            .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+            .level_count = 1,
+            .layer_count = 1,
+            // 0 init equivalents
+            .base_mip_level = 0,
+            .base_array_layer = 0,
+        },
+        // 0 init equivalent
+        .components = std.mem.zeroes(vk.ComponentMapping),
+    };
+    const create_view_result = device_dispatcher.CreateImageView(device, &view_info, null, &font_image_view);
+    if (create_view_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
+
+    const desc_image = [1]vk.DescriptorImageInfo
+    {
+        vk.DescriptorImageInfo
+        {
+            .sampler = font_sampler,
+            .image_view = font_image_view,
+            .image_layout = .shader_read_only_optimal,
+        },
+    };
+    const write_desc = [1]vk.WriteDescriptorSet
+    {
+        vk.WriteDescriptorSet
+        {
+            .dst_set = descriptor_set.*,
+            .descriptor_count = 1,
+            .descriptor_type = .combined_image_sampler,
+            .p_image_info = &desc_image,
+            // 0 init equivalents
+            .dst_binding = 0,
+            .dst_array_element = 0,
+            .p_buffer_info = &[1]vk.DescriptorBufferInfo
+            {
+                vk.DescriptorBufferInfo
+                {
+                    .offset = 0,
+                    .range = 0,
+                }
+            },
+            .p_texel_buffer_view = &[1]vk.BufferView
+            {
+                vk.BufferView.null_handle,
+            },
+        }
+    };
+    device_dispatcher.UpdateDescriptorSets(device, 1, &write_desc, 0, null);
 }
 
 pub fn setup_swapchain
@@ -454,4 +563,15 @@ pub fn destroy_instance(instance: vk.Instance, instance_dispatcher: ?vk_layer_st
     _ = instance;
     _ = instance_dispatcher;
     zgui.zguiDestroyContext(current_imgui_context);
+}
+
+pub fn get_physical_mem_props
+(
+    physical_device: vk.PhysicalDevice,
+    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable
+)
+void
+{
+    physical_mem_props = std.mem.zeroes(vk.PhysicalDeviceMemoryProperties);
+    instance_dispatcher.GetPhysicalDeviceMemoryProperties(physical_device, &physical_mem_props.?);
 }
