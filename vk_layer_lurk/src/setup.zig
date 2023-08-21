@@ -20,6 +20,12 @@ var descriptor_set_container: [1]vk.DescriptorSet = [1]vk.DescriptorSet
 };
 var descriptor_set: *vk.DescriptorSet = &descriptor_set_container[0];
 
+var font_sampler_container: [1]vk.Sampler = [1]vk.Sampler
+{
+    std.mem.zeroes(vk.Sampler)
+};
+var font_sampler: *vk.Sampler = &font_sampler_container[0];
+
 var pipeline_container: [1]vk.Pipeline = [1]vk.Pipeline
 {
     std.mem.zeroes(vk.Pipeline),
@@ -31,7 +37,6 @@ var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
 var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
 var font_image: vk.Image = std.mem.zeroes(vk.Image);
 var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
-var font_sampler: vk.Sampler = std.mem.zeroes(vk.Sampler);
 var format: ?vk.Format = null;
 var height: ?f32 = null;
 var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
@@ -67,7 +72,7 @@ fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
 fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
 {
     // Create shader modules
-    var frag_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
+    var frag_module: vk.ShaderModule = undefined;
     const frag_info = vk.ShaderModuleCreateInfo
     {
         .code_size = embedded_shaders.overlay_frag_spv.len * @sizeOf(u32),
@@ -80,7 +85,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         @panic("Vulkan function call failed: Device.CreateShaderModule | frag shader");
     }
 
-    var vert_module: vk.ShaderModule = std.mem.zeroes(vk.ShaderModule);
+    var vert_module: vk.ShaderModule = undefined;
     const vert_info = vk.ShaderModuleCreateInfo
     {
         .code_size = embedded_shaders.overlay_vert_spv.len * @sizeOf(u32),
@@ -95,26 +100,23 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     device_dispatcher.DestroyShaderModule(device, vert_module, null);
 
     // Font sampler
-    const font_sampler_info = vk.SamplerCreateInfo
-    {
-        .mag_filter = .linear,
-        .min_filter = .linear,
-        .mipmap_mode = .linear,
-        .address_mode_u = .repeat,
-        .address_mode_v = .repeat,
-        .address_mode_w = .repeat,
-        .min_lod = -1000,
-        .max_lod = 1000,
-        .max_anisotropy = 1,
-        // equivalent of zero init
-        .mip_lod_bias = 0,
-        .anisotropy_enable = 0,
-        .compare_enable = 0,
-        .compare_op = .never,
-        .border_color = .float_transparent_black,
-        .unnormalized_coordinates = 0,
-    };
-    const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, &font_sampler);
+    const font_sampler_info = std.mem.zeroInit
+    (
+        vk.SamplerCreateInfo,
+        .{
+            .mag_filter = .linear,
+            .min_filter = .linear,
+            .mipmap_mode = .linear,
+            .address_mode_u = .repeat,
+            .address_mode_v = .repeat,
+            .address_mode_w = .repeat,
+            .min_lod = -1000,
+            .max_lod = 1000,
+            .max_anisotropy = 1,
+        }
+    );
+
+    const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, font_sampler);
     if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
 
     // Descriptor pool
@@ -136,21 +138,19 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
     if (desc_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateDescriptorPool");
 
-    const sampler = [1]vk.Sampler
-    {
-        font_sampler
-    };
+    // Descriptor layout
     const binding = [1]vk.DescriptorSetLayoutBinding
     {
-        vk.DescriptorSetLayoutBinding
-        {
-            .descriptor_type = .combined_image_sampler,
-            .descriptor_count = 1,
-            .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
-            .p_immutable_samplers = &sampler,
-            // 0 init equivalents
-            .binding = 0,
-        },
+        std.mem.zeroInit
+        (
+            vk.DescriptorSetLayoutBinding,
+            .{
+                .descriptor_type = .combined_image_sampler,
+                .descriptor_count = 1,
+                .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
+                .p_immutable_samplers = &font_sampler_container,
+            }
+        ),
     };
     const set_layout_info = vk.DescriptorSetLayoutCreateInfo
     {
@@ -170,6 +170,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
     }
 
+    // Descriptor set
     const alloc_info = vk.DescriptorSetAllocateInfo
     {
         .descriptor_pool = descriptor_pool,
@@ -183,6 +184,8 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
     }
 
+    // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full
+    // 3d projection matrix
     const push_constants = [1]vk.PushConstantRange
     {
         vk.PushConstantRange
@@ -220,13 +223,14 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
 
     const binding_desc = [1]vk.VertexInputBindingDescription
     {
-        vk.VertexInputBindingDescription
-        {
-            .input_rate = .vertex,
-            .stride = @sizeOf(zgui.DrawVert),
-            // 0 init equivalents
-            .binding = 0,
-        },
+        std.mem.zeroInit
+        (
+            vk.VertexInputBindingDescription,
+            .{
+                .input_rate = .vertex,
+                .stride = @sizeOf(zgui.DrawVert),
+            }
+        ),
     };
     const attribute_desc = [3]vk.VertexInputAttributeDescription
     {
@@ -261,12 +265,13 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_vertex_attribute_descriptions = &attribute_desc,
     };
 
-    const ia_info = vk.PipelineInputAssemblyStateCreateInfo
-    {
-        .topology = .triangle_list,
-        // 0 init equivalents
-        .primitive_restart_enable = 0,
-    };
+    const ia_info = std.mem.zeroInit
+    (
+        vk.PipelineInputAssemblyStateCreateInfo,
+        .{
+            .topology = .triangle_list,
+        }
+    );
 
     const viewport_info = vk.PipelineViewportStateCreateInfo
     {
@@ -274,30 +279,24 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .scissor_count = 1,
     };
 
-    const raster_info = vk.PipelineRasterizationStateCreateInfo
-    {
-        .polygon_mode = .fill,
-        .cull_mode = .{},
-        .front_face = .counter_clockwise,
-        .line_width = 1.0,
-        // 0 init equivalents
-        .depth_clamp_enable = 0,
-        .rasterizer_discard_enable = 0,
-        .depth_bias_enable = 0,
-        .depth_bias_constant_factor = 0,
-        .depth_bias_clamp = 0,
-        .depth_bias_slope_factor = 0,
-    };
+    const raster_info = std.mem.zeroInit
+    (
+        vk.PipelineRasterizationStateCreateInfo,
+        .{
+            .polygon_mode = .fill,
+            .cull_mode = .{},
+            .front_face = .counter_clockwise,
+            .line_width = 1.0,
+        }
+    );
 
-    const ms_info = vk.PipelineMultisampleStateCreateInfo
-    {
-        .rasterization_samples = vk.SampleCountFlags{ .@"1_bit" = true, },
-        // 0 init equivalents
-        .sample_shading_enable = 0,
-        .min_sample_shading = 0,
-        .alpha_to_coverage_enable = 0,
-        .alpha_to_one_enable = 0,
-    };
+    const ms_info = std.mem.zeroInit
+    (
+        vk.PipelineMultisampleStateCreateInfo,
+        .{
+            .rasterization_samples = vk.SampleCountFlags{ .@"1_bit" = true, },
+        }
+    );
 
     const color_attachment = [1]vk.PipelineColorBlendAttachmentState
     {
@@ -310,21 +309,26 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .src_alpha_blend_factor = .one_minus_src_alpha,
             .dst_alpha_blend_factor = .zero,
             .alpha_blend_op = .add,
-            .color_write_mask = vk.ColorComponentFlags{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true, },
+            .color_write_mask = vk.ColorComponentFlags
+            {
+                .r_bit = true,
+                .g_bit = true,
+                .b_bit = true,
+                .a_bit = true,
+            },
         },
     };
 
     const depth_info = std.mem.zeroInit(vk.PipelineDepthStencilStateCreateInfo, .{});
 
-    const blend_info = vk.PipelineColorBlendStateCreateInfo
-    {
-        .attachment_count = 1,
-        .p_attachments = &color_attachment,
-        // 0 init equivalents
-        .logic_op_enable = 0,
-        .logic_op = .clear,
-        .blend_constants = std.mem.zeroes([4]f32),
-    };
+    const blend_info = std.mem.zeroInit
+    (
+        vk.PipelineColorBlendStateCreateInfo,
+        .{
+            .attachment_count = 1,
+            .p_attachments = &color_attachment,
+        }
+    );
 
     const dynamic_states = [2]vk.DynamicState
     {
@@ -339,24 +343,24 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
 
     const info_container = [1]vk.GraphicsPipelineCreateInfo
     {
-        vk.GraphicsPipelineCreateInfo
-        {
-            .stage_count = 2,
-            .p_stages = &stage,
-            .p_vertex_input_state = &vertex_info,
-            .p_input_assembly_state = &ia_info,
-            .p_viewport_state = &viewport_info,
-            .p_rasterization_state = &raster_info,
-            .p_multisample_state = &ms_info,
-            .p_depth_stencil_state = &depth_info,
-            .p_color_blend_state = &blend_info,
-            .p_dynamic_state = &dynamic_state,
-            .layout = pipeline_layout,
-            .render_pass = render_pass,
-            // 0 init equivalents
-            .subpass = 0,
-            .base_pipeline_index = 0,
-        }
+        std.mem.zeroInit
+        (
+            vk.GraphicsPipelineCreateInfo,
+            .{
+                .stage_count = 2,
+                .p_stages = &stage,
+                .p_vertex_input_state = &vertex_info,
+                .p_input_assembly_state = &ia_info,
+                .p_viewport_state = &viewport_info,
+                .p_rasterization_state = &raster_info,
+                .p_multisample_state = &ms_info,
+                .p_depth_stencil_state = &depth_info,
+                .p_color_blend_state = &blend_info,
+                .p_dynamic_state = &dynamic_state,
+                .layout = pipeline_layout,
+                .render_pass = render_pass,
+            }
+        ),
     };
     _ = info_container;
     // const create_pl_result = device_dispatcher.CreateGraphicsPipelines
@@ -378,6 +382,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     _ = zgui.io.getFontsTextDataAsRgba32(&h, &w);
     if (h < 1 or w < 1) @panic("ImGui provided an invalid font size.");
 
+    // Font image
     const image_info = vk.ImageCreateInfo
     {
         .image_type = .@"2d",
@@ -394,7 +399,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const font_image_result = device_dispatcher.CreateImage(device, &image_info, null, &font_image);
     if (font_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImage");
 
-    var font_image_req: vk.MemoryRequirements = std.mem.zeroes(vk.MemoryRequirements);
+    var font_image_req: vk.MemoryRequirements = undefined;
     device_dispatcher.GetImageMemoryRequirements(device, font_image, &font_image_req);
 
     const image_alloc_info = vk.MemoryAllocateInfo
@@ -413,59 +418,62 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     const bind_image_result = device_dispatcher.BindImageMemory(device, font_image, font_mem, 0);
     if (bind_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindImageMemory");
 
-    const view_info = vk.ImageViewCreateInfo
-    {
-        .image = font_image,
-        .view_type = .@"2d",
-        .format = .r8g8b8a8_unorm,
-        .subresource_range = vk.ImageSubresourceRange
-        {
-            .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
-            .level_count = 1,
-            .layer_count = 1,
-            // 0 init equivalents
-            .base_mip_level = 0,
-            .base_array_layer = 0,
-        },
-        // 0 init equivalent
-        .components = std.mem.zeroes(vk.ComponentMapping),
-    };
+    // Font image view
+    const view_info = std.mem.zeroInit
+    (
+        vk.ImageViewCreateInfo,
+        .{
+            .image = font_image,
+            .view_type = .@"2d",
+            .format = .r8g8b8a8_unorm,
+            .subresource_range = std.mem.zeroInit
+            (
+                vk.ImageSubresourceRange,
+                .{
+                    .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                    .level_count = 1,
+                    .layer_count = 1,
+                }
+            )
+        }
+    );
     const create_view_result = device_dispatcher.CreateImageView(device, &view_info, null, &font_image_view);
     if (create_view_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
 
+    // Descriptor set
     const desc_image = [1]vk.DescriptorImageInfo
     {
         vk.DescriptorImageInfo
         {
-            .sampler = font_sampler,
+            .sampler = font_sampler.*,
             .image_view = font_image_view,
             .image_layout = .shader_read_only_optimal,
         },
     };
     const write_desc = [1]vk.WriteDescriptorSet
     {
-        vk.WriteDescriptorSet
-        {
-            .dst_set = descriptor_set.*,
-            .descriptor_count = 1,
-            .descriptor_type = .combined_image_sampler,
-            .p_image_info = &desc_image,
-            // 0 init equivalents
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .p_buffer_info = &[1]vk.DescriptorBufferInfo
-            {
-                vk.DescriptorBufferInfo
+        std.mem.zeroInit
+        (
+            vk.WriteDescriptorSet,
+            .{
+                .dst_set = descriptor_set.*,
+                .descriptor_count = 1,
+                .descriptor_type = .combined_image_sampler,
+                .p_image_info = &desc_image,
+                .p_buffer_info = &[1]vk.DescriptorBufferInfo
                 {
-                    .offset = 0,
-                    .range = 0,
-                }
-            },
-            .p_texel_buffer_view = &[1]vk.BufferView
-            {
-                vk.BufferView.null_handle,
-            },
-        }
+                    vk.DescriptorBufferInfo
+                    {
+                        .offset = 0,
+                        .range = 0,
+                    }
+                },
+                .p_texel_buffer_view = &[1]vk.BufferView
+                {
+                    vk.BufferView.null_handle,
+                },
+            }
+        ),
     };
     device_dispatcher.UpdateDescriptorSets(device, 1, &write_desc, 0, null);
 }
@@ -488,8 +496,8 @@ void
     zgui.io.setIniFilename(null);
     zgui.io.setDisplaySize(width.?, height.?);
 
-    const attachment_desc: [1]vk.AttachmentDescription =
-    .{
+    const attachment_desc = [1]vk.AttachmentDescription
+    {
         vk.AttachmentDescription
         {
             .format = p_create_info.image_format,
@@ -503,8 +511,8 @@ void
         },
     };
 
-    const color_attachment: [1]vk.AttachmentReference =
-    .{
+    const color_attachment = [1]vk.AttachmentReference
+    {
         vk.AttachmentReference
         {
             .attachment = 0,
@@ -512,8 +520,8 @@ void
         },
     };
 
-    const subpass: [1]vk.SubpassDescription =
-    .{
+    const subpass = [1]vk.SubpassDescription
+    {
         vk.SubpassDescription
         {
             .pipeline_bind_point = .graphics,
@@ -522,15 +530,15 @@ void
         },
     };
 
-    const dependency: [1]vk.SubpassDependency =
-    .{
+    const dependency = [1]vk.SubpassDependency
+    {
         vk.SubpassDependency
         {
             .src_subpass = vk.SUBPASS_EXTERNAL,
             .dst_subpass = 0,
             .src_stage_mask = vk.PipelineStageFlags{ .color_attachment_output_bit = true, },
             .dst_stage_mask = vk.PipelineStageFlags{ .color_attachment_output_bit = true, },
-            .src_access_mask = vk.AccessFlags.fromInt(0),
+            .src_access_mask = .{},
             .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
         },
     };
