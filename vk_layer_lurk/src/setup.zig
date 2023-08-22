@@ -7,6 +7,9 @@ const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const zgui = @import("zgui");
 
 
+const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
+const ImageBacking = std.BoundedArray(vk.Image, 256);
+const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 
 var descriptor_layout_container: [1]vk.DescriptorSetLayout = [1]vk.DescriptorSetLayout
 {
@@ -32,17 +35,23 @@ var pipeline_container: [1]vk.Pipeline = [1]vk.Pipeline
 };
 var pipeline: *vk.Pipeline = &pipeline_container[0];
 
+var command_pool: vk.CommandPool = std.mem.zeroes(vk.CommandPool);
+var current_image_count: u32 = 0;
 var current_imgui_context: ?zgui.Context = null;
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
 var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
 var font_image: vk.Image = std.mem.zeroes(vk.Image);
 var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
 var format: ?vk.Format = null;
-var height: ?f32 = null;
+var framebuffers: FramebufferBacking = FramebufferBacking.init(0) catch @panic("oom");
+var height: ?u32 = null;
+var image_views: ImageViewBacking = ImageViewBacking.init(0) catch @panic("oom");
+var images: ImageBacking = ImageBacking.init(0) catch @panic("oom");
 var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
-var width: ?f32 = null;
+var swapchain: ?*vk.SwapchainKHR = null;
+var width: ?u32 = null;
 
 
 fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
@@ -482,25 +491,28 @@ pub fn setup_swapchain
 (
     device: vk.Device,
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
-    p_create_info: *const vk.SwapchainCreateInfoKHR
+    p_create_info: *const vk.SwapchainCreateInfoKHR,
+    p_swapchain: *vk.SwapchainKHR
 )
 void
 {
-    height = @floatFromInt(p_create_info.image_extent.height);
-    width = @floatFromInt(p_create_info.image_extent.width);
+    swapchain = p_swapchain;
+
+    height = p_create_info.image_extent.height;
+    width = p_create_info.image_extent.width;
     format = p_create_info.image_format;
 
     current_imgui_context = zgui.zguiCreateContext(null);
     zgui.zguiSetCurrentContext(current_imgui_context);
 
     zgui.io.setIniFilename(null);
-    zgui.io.setDisplaySize(width.?, height.?);
+    zgui.io.setDisplaySize(@floatFromInt(width.?), @floatFromInt(height.?));
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
         vk.AttachmentDescription
         {
-            .format = p_create_info.image_format,
+            .format = format.?,
             .samples = vk.SampleCountFlags{ .@"1_bit" = true, },
             .load_op = .load,
             .store_op = .store,
@@ -554,10 +566,90 @@ void
         .p_dependencies = &dependency,
     };
 
-    const result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
-    if (result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateRenderPass");
+    const create_rp_result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
+    if (create_rp_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateRenderPass");
 
     setup_swapchain_data_pipeline(device, device_dispatcher);
+
+    const get_img_result1 = device_dispatcher.GetSwapchainImagesKHR(device, swapchain.?.*, &current_image_count, null);
+    if (get_img_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR");
+
+    framebuffers.resize(current_image_count) catch @panic("Framebuffer buffer overflow");
+    image_views.resize(current_image_count) catch @panic("Image View buffer overflow");
+    images.resize(current_image_count) catch @panic("Image buffer overflow");
+
+    const get_img_result2 = device_dispatcher.GetSwapchainImagesKHR
+    (
+        device,
+        swapchain.?.*,
+        &current_image_count,
+        &images.buffer
+    );
+    if (get_img_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR");
+
+    // Image views
+    var view_info = std.mem.zeroInit
+    (
+        vk.ImageViewCreateInfo,
+        .{
+            .view_type = .@"2d",
+            .format = format.?,
+            .components = vk.ComponentMapping
+            {
+                .r = .r,
+                .g = .g,
+                .b = .b,
+                .a = .a,
+            },
+            .subresource_range = vk.ImageSubresourceRange
+            {
+                .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        }
+    );
+
+    {
+        var i: u32 = 0;
+        while (i < current_image_count) : (i += 1)
+        {
+            view_info.image = images.buffer[i];
+            const create_imgv_result = device_dispatcher.CreateImageView(device, &view_info, null, &image_views.buffer[i]);
+            if (create_imgv_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
+        }
+    }
+
+    // Framebuffers
+    var fb_info = vk.FramebufferCreateInfo
+    {
+        .render_pass = render_pass,
+        .attachment_count = 1,
+        .width = width.?,
+        .height = height.?,
+        .layers = 1,
+    };
+
+    {
+        var i: u32 = 0;
+        while (i < current_image_count) : (i += 1)
+        {
+            fb_info.p_attachments = image_views.buffer[i..i].ptr;
+            const create_fb_result = device_dispatcher.CreateFramebuffer(device, &fb_info, null, &framebuffers.buffer[i]);
+            if (create_fb_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFramebuffer");
+        }
+    }
+
+    // // Command buffer pool
+    // const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
+    // {
+    //     .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
+    //     .queue_family_index = 0, // this is wrong, but needs more of the implementation finished to be correct
+    // };
+    // const create_pool_result = device_dispatcher.CreateCommandPool(device, &cmd_buffer_pool_info, null, &command_pool);
+    // if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
 pub fn destroy_swapchain(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void

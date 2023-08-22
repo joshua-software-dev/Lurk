@@ -216,8 +216,10 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
+    dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
+    dispatch_table.CreateFramebuffer = @ptrCast(gdpa(device, "vkCreateFramebuffer"));
     dispatch_table.CreateGraphicsPipelines = @ptrCast(gdpa(device, "vkCreateGraphicsPipelines"));
     dispatch_table.CreateImage = @ptrCast(gdpa(device, "vkCreateImage"));
     dispatch_table.CreateImageView = @ptrCast(gdpa(device, "vkCreateImageView"));
@@ -233,6 +235,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
     dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
+    dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
     dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
 
@@ -543,7 +546,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
     if (result != vk.Result.success) return result;
 
-    setup.setup_swapchain(device, device_dispatcher.?, p_create_info);
+    setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
     return result;
 }
 
