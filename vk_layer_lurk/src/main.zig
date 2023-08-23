@@ -53,6 +53,7 @@ var global_lock: std.Thread.Mutex = .{};
 // instance
 var device_dispatcher: ?vk_layer_stubs.LayerDispatchTable = null;
 var instance_dispatcher: ?vk_layer_stubs.LayerInstanceDispatchTable = null;
+var layer_dispatcher: ?vk_layer_stubs.LayerInitDispatchTable = null;
 
 // actual data we're recording in this layer
 const CommandStats = extern struct
@@ -127,6 +128,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         @ptrCast(gpa(instance, "vkEnumerateDeviceExtensionProperties"));
     dispatch_table.GetInstanceProcAddr = @ptrCast(gpa(instance, "vkGetInstanceProcAddr"));
     dispatch_table.GetPhysicalDeviceMemoryProperties = @ptrCast(gpa(instance, "vkGetPhysicalDeviceMemoryProperties"));
+    dispatch_table.GetPhysicalDeviceQueueFamilyProperties = @ptrCast(gpa(instance, "vkGetPhysicalDeviceQueueFamilyProperties"));
 
     // store layer global instance dispatch table
     {
@@ -166,45 +168,13 @@ export fn VkLayerLurk_CreateDevice
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    // Ensure this is a nullable pointer (?*) to allow stepping through the
-    // chain of p_next
-    var layer_create_info: ?*vk_layer_stubs.LayerDeviceCreateInfo =
-        @ptrCast(@alignCast(@constCast(p_create_info.p_next)));
+    const local_layer_dispatcher = vk_layer_stubs.LayerInitDispatchTable.init(p_create_info);
+    const gdpa = local_layer_dispatcher.pfn_next_get_device_proc_addr;
+    const gipa = local_layer_dispatcher.pfn_next_get_instance_proc_addr;
 
-    // step through the chain of p_next until we get to the link info
-    while
-    (
-        layer_create_info != null and
-        (
-            layer_create_info.?.s_type != vk.StructureType.loader_device_create_info or
-            layer_create_info.?.function != vk_layer_stubs.LayerFunction_LAYER_LINK_INFO
-        )
-    )
-    {
-        layer_create_info = @ptrCast(@alignCast(@constCast(layer_create_info.?.p_next)));
-    }
-
-    if(layer_create_info == null)
-    {
-        // No loader instance create info
-        return vk.Result.error_initialization_failed;
-    }
-
-    // create non-null pointer variable to make further interactions with this
-    // type easier
-    var final_lci: *vk_layer_stubs.LayerDeviceCreateInfo =
-        @ptrCast(layer_create_info orelse unreachable);
-
-    var gipa = final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr;
-    var gdpa = final_lci.u.p_layer_info.pfn_next_get_device_proc_addr;
-    // move chain on for next layer
-    final_lci.u.p_layer_info = final_lci.u.p_layer_info.p_next;
-
-    const createFunc: vk.PfnCreateDevice =
-        @ptrCast(gipa(vk.Instance.null_handle, "vkCreateDevice"));
-    // the original cpp version never uses this value despite saving it, I've
-    // opted to discard it instead
-    _ = createFunc(physical_device, p_create_info, p_allocator, p_device);
+    const createFunc: vk.PfnCreateDevice = @ptrCast(gipa(vk.Instance.null_handle, "vkCreateDevice"));
+    const create_device_result = createFunc(physical_device, p_create_info, p_allocator, p_device);
+    if (create_device_result != vk.Result.success) @panic("Vulkan function call failed: vkCreateDevice");
 
     // fetch our own dispatch table for the functions we need, into the next
     // layer
@@ -219,6 +189,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
+    dispatch_table.CreateFence = @ptrCast(gdpa(device, "vkCreateFence"));
     dispatch_table.CreateFramebuffer = @ptrCast(gdpa(device, "vkCreateFramebuffer"));
     dispatch_table.CreateGraphicsPipelines = @ptrCast(gdpa(device, "vkCreateGraphicsPipelines"));
     dispatch_table.CreateImage = @ptrCast(gdpa(device, "vkCreateImage"));
@@ -234,6 +205,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
+    dispatch_table.GetDeviceQueue = @ptrCast(gdpa(device, "vkGetDeviceQueue"));
     dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
     dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
@@ -244,9 +216,19 @@ callconv(vk.vulkan_call_conv) vk.Result
         global_lock.lock();
         defer global_lock.unlock();
         device_dispatcher = dispatch_table;
+        layer_dispatcher = local_layer_dispatcher;
     }
 
     setup.get_physical_mem_props(physical_device, instance_dispatcher.?);
+    setup.device_map_queues
+    (
+        physical_device,
+        device,
+        device_dispatcher.?,
+        instance_dispatcher.?,
+        layer_dispatcher.?,
+        p_create_info,
+    );
     return vk.Result.success;
 }
 

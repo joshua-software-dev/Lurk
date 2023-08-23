@@ -7,9 +7,18 @@ const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const zgui = @import("zgui");
 
 
+const QueueData = struct
+{
+    queue_family_index: u32,
+    queue_flags: vk.QueueFlags,
+    queue: vk.Queue,
+    fence: vk.Fence,
+};
 const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 const ImageBacking = std.BoundedArray(vk.Image, 256);
 const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
+const QueueDataBacking = std.BoundedArray(QueueData, 256);
+const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
 var descriptor_layout_container: [1]vk.DescriptorSetLayout = [1]vk.DescriptorSetLayout
 {
@@ -39,11 +48,13 @@ var command_pool: vk.CommandPool = std.mem.zeroes(vk.CommandPool);
 var current_image_count: u32 = 0;
 var current_imgui_context: ?zgui.Context = null;
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
+var device_queues: QueueDataBacking = QueueDataBacking.init(0) catch @panic("oom");
 var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
 var font_image: vk.Image = std.mem.zeroes(vk.Image);
 var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
 var format: ?vk.Format = null;
 var framebuffers: FramebufferBacking = FramebufferBacking.init(0) catch @panic("oom");
+var graphic_queue: ?*QueueData = null;
 var height: ?u32 = null;
 var image_views: ImageViewBacking = ImageViewBacking.init(0) catch @panic("oom");
 var images: ImageBacking = ImageBacking.init(0) catch @panic("oom");
@@ -642,14 +653,14 @@ void
         }
     }
 
-    // // Command buffer pool
-    // const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
-    // {
-    //     .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
-    //     .queue_family_index = 0, // this is wrong, but needs more of the implementation finished to be correct
-    // };
-    // const create_pool_result = device_dispatcher.CreateCommandPool(device, &cmd_buffer_pool_info, null, &command_pool);
-    // if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
+    // Command buffer pool
+    const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
+    {
+        .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
+        .queue_family_index = (graphic_queue orelse @panic("graphics QueueData was null")).queue_family_index,
+    };
+    const create_pool_result = device_dispatcher.CreateCommandPool(device, &cmd_buffer_pool_info, null, &command_pool);
+    if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
 pub fn destroy_swapchain(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
@@ -668,10 +679,95 @@ pub fn destroy_instance(instance: vk.Instance, instance_dispatcher: ?vk_layer_st
 pub fn get_physical_mem_props
 (
     physical_device: vk.PhysicalDevice,
-    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable
+    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
 )
 void
 {
-    physical_mem_props = std.mem.zeroes(vk.PhysicalDeviceMemoryProperties);
+    physical_mem_props = undefined;
     instance_dispatcher.GetPhysicalDeviceMemoryProperties(physical_device, &physical_mem_props.?);
+}
+
+fn new_queue_data
+(
+    data: *QueueData,
+    device: vk.Device,
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+)
+void
+{
+    // Fence synchronizing access to queries on that queue.
+    const fence_info = vk.FenceCreateInfo
+    {
+        .flags = vk.FenceCreateFlags{ .signaled_bit = true, },
+    };
+    const create_fence_result = device_dispatcher.CreateFence(device, &fence_info, null, &data.fence);
+    if (create_fence_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFence");
+
+    if (vk.QueueFlags.contains(data.queue_flags, vk.QueueFlags{ .graphics_bit = true,}))
+    {
+        graphic_queue = data;
+    }
+}
+
+pub fn device_map_queues
+(
+    physical_device: vk.PhysicalDevice,
+    device: vk.Device,
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
+    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
+    p_create_info: *const vk.DeviceCreateInfo,
+)
+void
+{
+    var queue_family_props_count: u32 = 0;
+    instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
+
+    var family_props = QueueFamilyPropsBacking.init(0)
+    catch @panic("Failed to get backing buffer for QueueFamilyProperties");
+    family_props.resize(queue_family_props_count) catch @panic("QueueFamilyProperties buffer overflow");
+
+    instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties
+    (
+        physical_device,
+        &queue_family_props_count,
+        &family_props.buffer,
+    );
+
+    var device_queue_index: u32 = 0;
+    var i: u32 = 0;
+    while (i < p_create_info.queue_create_info_count) : (i += 1)
+    {
+        const queue_family_index = p_create_info.p_queue_create_infos[i].queue_family_index;
+        var j: u32 = 0;
+        while (j < p_create_info.p_queue_create_infos[i].queue_count) : ({j += 1; device_queue_index += 1;})
+        {
+            device_queues.resize(device_queue_index + 1) catch @panic("QueueDataBacking buffer overflow");
+            var data: *QueueData = &device_queues.buffer[device_queue_index];
+            data.* = std.mem.zeroInit
+            (
+                QueueData,
+                .{
+                    .queue_family_index = queue_family_index,
+                    .queue_flags = family_props.buffer[queue_family_index].queue_flags,
+                }
+            );
+
+            device_dispatcher.GetDeviceQueue
+            (
+                device,
+                queue_family_index,
+                j,
+                &data.queue
+            );
+
+            const set_dvc_loader_result = layer_dispatcher.pfn_set_device_loader_data(device, &data.queue);
+            if (set_dvc_loader_result != vk.Result.success)
+            {
+                @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
+            }
+
+            new_queue_data(data, device, device_dispatcher);
+        }
+    }
 }
