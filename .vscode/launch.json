@@ -13,12 +13,56 @@
             "cwd": "${workspaceFolder}/vk_layer_lurk/",
             "env": {
                 "ENABLE_LURK": "1",
+                "RADV_DEBUG": "llvm",
                 "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
                 "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
                 "VK_LOADER_DEBUG": "all",
-                "RADV_DEBUG": "llvm"
             },
             "preLaunchTask": "build layer",
+        },
+        {
+            "name": "(lldb|radvdebug) Launch Layer",
+            "type": "lldb",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "env": {
+                "ENABLE_LURK": "1",
+                "LD_LIBRARY_PATH": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}",
+                "RADV_DEBUG": "llvm",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_DEBUG": "all",
+            },
+            "preLaunchTask": "build layer",
+        },
+        {
+            "name": "(lldb|swiftshader) Launch Layer",
+            "type": "lldb",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "env": {
+                "ENABLE_LURK": "1",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/../swiftshader/Debug/Linux/vk_swiftshader_icd.json",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_DEBUG": "all",
+            },
+            "preLaunchTask": "build layer",
+        },
+        {
+            "name": "(llvm) Launch CLI",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/cli_tool_lurk/zig-out/bin/lurk",
+            "args": [],
+            "cwd": "${workspaceFolder}/cli_tool_lurk/",
+            "env": {},
+            "preLaunchTask": "build cli",
         },
         {
             "name": "(gdb) Launch Layer",
@@ -48,7 +92,97 @@
                 {
                     "name": "RADV_DEBUG",
                     "value": "gdb"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build layer",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
                 }
+            ]
+        },
+        {
+            "name": "(gdb|radvdebug) Launch Layer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}"
+                },
+                {
+                    "name": "RADV_DEBUG",
+                    "value": "gdb"
+                },
+                {
+                    "name": "VK_ADD_LAYER_PATH",
+                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                },
+                {
+                    "name": "VK_ICD_FILENAMES",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_ENABLE",
+                    "value": "VK_LAYER_Lurk"
+                },
+                {
+                    "name": "VK_LOADER_DEBUG",
+                    "value": "all"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build layer",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb|swiftshader) Launch Layer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/vkcube",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "VK_ADD_LAYER_PATH",
+                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                },
+                {
+                    "name": "VK_ICD_FILENAMES",
+                    "value": "${workspaceFolder}/../swiftshader/Debug/Linux/vk_swiftshader_icd.json"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_ENABLE",
+                    "value": "VK_LAYER_Lurk"
+                },
+                {
+                    "name": "VK_LOADER_DEBUG",
+                    "value": "all"
+                },
             ],
             "externalConsole": false,
             "MIMode": "gdb",
