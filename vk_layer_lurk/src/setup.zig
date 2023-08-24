@@ -67,16 +67,16 @@ var width: ?u32 = null;
 
 fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
 {
-    _ = type_bits;
     if (physical_mem_props) |props|
     {
         var i: u32 = 0;
-        while (i < props.memory_type_count) : (i += 1)
+        var supported_mem_type: u32 = 1;
+        while (i < props.memory_type_count) : ({i += 1; supported_mem_type += supported_mem_type;})
         {
             if
             (
-                vk.MemoryPropertyFlags.contains(properties, props.memory_types[i].property_flags)
-                // and type_bits & (1<<i)
+                props.memory_types[i].property_flags.contains(properties)
+                and ((type_bits & supported_mem_type) > 0)
             )
             {
                 return i;
