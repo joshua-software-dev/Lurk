@@ -117,7 +117,6 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         @panic("Vulkan function call failed: Device.CreateShaderModule | vert shader");
     }
-    device_dispatcher.DestroyShaderModule(device, vert_module, null);
 
     // Font sampler
     const font_sampler_info = std.mem.zeroInit
@@ -382,17 +381,16 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             }
         ),
     };
-    _ = info_container;
-    // const create_pl_result = device_dispatcher.CreateGraphicsPipelines
-    // (
-    //     device,
-    //     .null_handle,
-    //     1,
-    //     &info_container,
-    //     null,
-    //     &pipeline_container
-    // );
-    // if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
+    const create_pl_result = device_dispatcher.CreateGraphicsPipelines
+    (
+        device,
+        .null_handle,
+        1,
+        &info_container,
+        null,
+        &pipeline_container
+    );
+    if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
 
     _ = device_dispatcher.DestroyShaderModule(device, vert_module, null);
     _ = device_dispatcher.DestroyShaderModule(device, frag_module, null);
