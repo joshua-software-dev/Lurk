@@ -197,7 +197,12 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_set_layouts = &descriptor_layout_container
     };
 
-    const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets(device, &alloc_info, &descriptor_set_container);
+    const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets
+    (
+        device,
+        &alloc_info,
+        &descriptor_set_container
+    );
     if (alloc_desc_set_result != vk.Result.success)
     {
         @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
@@ -221,8 +226,17 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .push_constant_range_count = 1,
         .p_push_constant_ranges = &push_constants,
     };
-    const create_pipeline_result = device_dispatcher.CreatePipelineLayout(device, &layout_info, null, &pipeline_layout);
-    if (create_pipeline_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreatePipelineLayout");
+    const create_pipeline_result = device_dispatcher.CreatePipelineLayout
+    (
+        device,
+        &layout_info,
+        null,
+        &pipeline_layout
+    );
+    if (create_pipeline_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Device.CreatePipelineLayout");
+    }
 
     const stage = [2]vk.PipelineShaderStageCreateInfo
     {
@@ -626,7 +640,13 @@ void
         while (i < current_image_count) : (i += 1)
         {
             view_info.image = images.buffer[i];
-            const create_imgv_result = device_dispatcher.CreateImageView(device, &view_info, null, &image_views.buffer[i]);
+            const create_imgv_result = device_dispatcher.CreateImageView
+            (
+                device,
+                &view_info,
+                null,
+                &image_views.buffer[i]
+            );
             if (create_imgv_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
         }
     }
@@ -646,7 +666,13 @@ void
         while (i < current_image_count) : (i += 1)
         {
             fb_info.p_attachments = image_views.buffer[i..i].ptr;
-            const create_fb_result = device_dispatcher.CreateFramebuffer(device, &fb_info, null, &framebuffers.buffer[i]);
+            const create_fb_result = device_dispatcher.CreateFramebuffer
+            (
+                device,
+                &fb_info,
+                null,
+                &framebuffers.buffer[i]
+            );
             if (create_fb_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFramebuffer");
         }
     }
