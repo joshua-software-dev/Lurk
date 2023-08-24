@@ -20,38 +20,17 @@ const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 const QueueDataBacking = std.BoundedArray(QueueData, 256);
 const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
-var descriptor_layout_container: [1]vk.DescriptorSetLayout = [1]vk.DescriptorSetLayout
-{
-    std.mem.zeroes(vk.DescriptorSetLayout),
-};
-var descriptor_layout: *vk.DescriptorSetLayout = &descriptor_layout_container[0];
-
-var descriptor_set_container: [1]vk.DescriptorSet = [1]vk.DescriptorSet
-{
-    std.mem.zeroes(vk.DescriptorSet),
-};
-var descriptor_set: *vk.DescriptorSet = &descriptor_set_container[0];
-
-var font_sampler_container: [1]vk.Sampler = [1]vk.Sampler
-{
-    std.mem.zeroes(vk.Sampler)
-};
-var font_sampler: *vk.Sampler = &font_sampler_container[0];
-
-var pipeline_container: [1]vk.Pipeline = [1]vk.Pipeline
-{
-    std.mem.zeroes(vk.Pipeline),
-};
-var pipeline: *vk.Pipeline = &pipeline_container[0];
-
 var command_pool: vk.CommandPool = std.mem.zeroes(vk.CommandPool);
 var current_image_count: u32 = 0;
 var current_imgui_context: ?zgui.Context = null;
+var descriptor_layout: ?vk.DescriptorSetLayout = null;
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
+var descriptor_set: ?vk.DescriptorSet = null;
 var device_queues: QueueDataBacking = QueueDataBacking.init(0) catch @panic("oom");
 var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
 var font_image: vk.Image = std.mem.zeroes(vk.Image);
 var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
+var font_sampler: ?vk.Sampler = null;
 var format: ?vk.Format = null;
 var framebuffers: FramebufferBacking = FramebufferBacking.init(0) catch @panic("oom");
 var graphic_queue: ?*QueueData = null;
@@ -60,6 +39,7 @@ var image_views: ImageViewBacking = ImageViewBacking.init(0) catch @panic("oom")
 var images: ImageBacking = ImageBacking.init(0) catch @panic("oom");
 var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
+var pipeline: ?vk.Pipeline = null;
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
 var swapchain: ?*vk.SwapchainKHR = null;
 var width: ?u32 = null;
@@ -135,8 +115,13 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         }
     );
 
-    const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, font_sampler);
+    var font_sampler_container = [1]vk.Sampler
+    {
+        vk.Sampler.null_handle,
+    };
+    const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, &font_sampler_container[0]);
     if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
+    font_sampler = font_sampler_container[0];
 
     // Descriptor pool
     const sampler_pool_size = [1]vk.DescriptorPoolSize
@@ -177,17 +162,22 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_bindings = &binding,
     };
 
+    var descriptor_layout_container = [1]vk.DescriptorSetLayout
+    {
+        vk.DescriptorSetLayout.null_handle,
+    };
     const desc_layout_result = device_dispatcher.CreateDescriptorSetLayout
     (
         device,
         &set_layout_info,
         null,
-        descriptor_layout
+        &descriptor_layout_container[0]
     );
     if (desc_layout_result != vk.Result.success)
     {
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
     }
+    descriptor_layout = descriptor_layout_container[0];
 
     // Descriptor set
     const alloc_info = vk.DescriptorSetAllocateInfo
@@ -197,6 +187,10 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_set_layouts = &descriptor_layout_container
     };
 
+    var descriptor_set_container = [1]vk.DescriptorSet
+    {
+        vk.DescriptorSet.null_handle,
+    };
     const alloc_desc_set_result = device_dispatcher.AllocateDescriptorSets
     (
         device,
@@ -207,6 +201,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
     }
+    descriptor_set = descriptor_set_container[0];
 
     // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full
     // 3d projection matrix
@@ -395,6 +390,10 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             }
         ),
     };
+    var pipeline_container = [1]vk.Pipeline
+    {
+        vk.Pipeline.null_handle,
+    };
     const create_pl_result = device_dispatcher.CreateGraphicsPipelines
     (
         device,
@@ -405,6 +404,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         &pipeline_container
     );
     if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
+    pipeline = pipeline_container[0];
 
     _ = device_dispatcher.DestroyShaderModule(device, vert_module, null);
     _ = device_dispatcher.DestroyShaderModule(device, frag_module, null);
@@ -477,7 +477,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         vk.DescriptorImageInfo
         {
-            .sampler = font_sampler.*,
+            .sampler = font_sampler.?,
             .image_view = font_image_view,
             .image_layout = .shader_read_only_optimal,
         },
@@ -488,7 +488,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         (
             vk.WriteDescriptorSet,
             .{
-                .dst_set = descriptor_set.*,
+                .dst_set = descriptor_set.?,
                 .descriptor_count = 1,
                 .descriptor_type = .combined_image_sampler,
                 .p_image_info = &desc_image,
