@@ -37,6 +37,7 @@ var graphic_queue: ?*QueueData = null;
 var height: ?u32 = null;
 var image_views: ImageViewBacking = ImageViewBacking.init(0) catch @panic("oom");
 var images: ImageBacking = ImageBacking.init(0) catch @panic("oom");
+var persistent_device: ?vk.Device = null;
 var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
 var pipeline: ?vk.Pipeline = null;
@@ -727,7 +728,7 @@ void
     const create_fence_result = device_dispatcher.CreateFence(device, &fence_info, null, &data.fence);
     if (create_fence_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFence");
 
-    if (vk.QueueFlags.contains(data.queue_flags, vk.QueueFlags{ .graphics_bit = true,}))
+    if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true,}))
     {
         graphic_queue = data;
     }
@@ -744,6 +745,8 @@ pub fn device_map_queues
 )
 void
 {
+    persistent_device = device;
+
     var queue_family_props_count: u32 = 0;
     instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
@@ -777,15 +780,17 @@ void
                 }
             );
 
+            var original_queue: vk.Queue = undefined;
             device_dispatcher.GetDeviceQueue
             (
                 device,
                 queue_family_index,
                 j,
-                &data.queue
+                &original_queue
             );
+            data.queue = original_queue;
 
-            const set_dvc_loader_result = layer_dispatcher.pfn_set_device_loader_data(device, &data.queue);
+            const set_dvc_loader_result = layer_dispatcher.pfn_set_device_loader_data(device, &original_queue);
             if (set_dvc_loader_result != vk.Result.success)
             {
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
@@ -794,4 +799,61 @@ void
             new_queue_data(data, device, device_dispatcher);
         }
     }
+}
+
+/// The backing for this should likely be replaced with a hashmap, but the
+/// common case is that there is only 1 item in the buffer, so its somewhat
+/// moot at the moment.
+fn get_queue_data(queue: vk.Queue) QueueData
+{
+    for (device_queues.constSlice()) |it|
+    {
+        if(it.queue == queue) return it;
+    }
+
+    @panic("Lookup failed for VkQueue<->VkDevice mapping");
+}
+
+pub fn wait_before_queue_present(queue: vk.Queue, device_dispatcher: vk_layer_stubs.LayerDispatchTable) QueueData
+{
+    const queue_data = get_queue_data(queue);
+    const fence_container = [1]vk.Fence
+    {
+        queue_data.fence,
+    };
+
+    const reset_fences_result = device_dispatcher.ResetFences(persistent_device.?, 1, &fence_container);
+    if (reset_fences_result != vk.Result.success) @panic("Vulkan function call failed: Device.ResetFences");
+
+    const queue_submit_result = device_dispatcher.QueueSubmit(queue, 0, null, queue_data.fence);
+    if (queue_submit_result != vk.Result.success) @panic("Vulkan function call failed: Device.QueueSubmit");
+
+    const wait_for_fences_result = device_dispatcher.WaitForFences
+    (
+        persistent_device.?,
+        1,
+        &fence_container,
+        0,
+        std.math.maxInt(u64),
+    );
+    if (wait_for_fences_result != vk.Result.success) @panic("Vulkan function call failed: Device.WaitForFences");
+
+    return queue_data;
+}
+
+pub fn before_present
+(
+    current_swapchain: vk.SwapchainKHR,
+    queue_data: QueueData,
+    p_wait_semaphores: ?[*]const vk.Semaphore,
+    wait_semaphore_count: u32,
+    image_index: u32,
+)
+void
+{
+    _ = current_swapchain;
+    _ = queue_data;
+    _ = p_wait_semaphores;
+    _ = wait_semaphore_count;
+    _ = image_index;
 }

@@ -209,7 +209,10 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
     dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
+    dispatch_table.QueueSubmit = @ptrCast(gdpa(device, "vkQueueSubmit"));
+    dispatch_table.ResetFences = @ptrCast(gdpa(device, "vkResetFences"));
     dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
+    dispatch_table.WaitForFences = @ptrCast(gdpa(device, "vkWaitForFences"));
 
     // store layer global device dispatch table
     {
@@ -528,7 +531,12 @@ callconv(vk.vulkan_call_conv) vk.Result
     const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
     if (result != vk.Result.success) return result;
 
-    setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
+    {
+        global_lock.lock();
+        defer global_lock.unlock();
+        setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
+    }
+
     return result;
 }
 
@@ -555,6 +563,27 @@ export fn VkLayerLurk_QueuePresentKHR
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
+    {
+        global_lock.lock();
+        defer global_lock.unlock();
+        const queue_data = setup.wait_before_queue_present(queue, device_dispatcher.?);
+
+        {
+            var i: u32 = 0;
+            while (i < p_present_info.swapchain_count) : (i += 1)
+            {
+                setup.before_present
+                (
+                    p_present_info.p_swapchains[i],
+                    queue_data,
+                    p_present_info.p_wait_semaphores,
+                    p_present_info.wait_semaphore_count,
+                    p_present_info.p_image_indices[i]
+                );
+            }
+        }
+    }
+
     return device_dispatcher.?.QueuePresentKHR(queue, p_present_info);
 }
 
