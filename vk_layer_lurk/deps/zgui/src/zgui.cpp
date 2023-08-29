@@ -60,6 +60,10 @@ ZGUI_API void zguiEnd(void) {
     ImGui::End();
 }
 
+ZGUI_API void zguiEndFrame() {
+    ImGui::EndFrame();
+}
+
 ZGUI_API bool zguiBeginChild(const char* str_id, float w, float h, bool border, ImGuiWindowFlags flags) {
     return ImGui::BeginChild(str_id, { w, h }, border, flags);
 }

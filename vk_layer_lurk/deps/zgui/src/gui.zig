@@ -622,8 +622,10 @@ pub fn begin(name: [:0]const u8, args: Begin) bool {
 }
 /// `pub fn end() void`
 pub const end = zguiEnd;
+pub const endFrame = zguiEndFrame;
 extern fn zguiBegin(name: [*:0]const u8, popen: ?*bool, flags: WindowFlags) bool;
 extern fn zguiEnd() void;
+extern fn zguiEndFrame() void;
 //--------------------------------------------------------------------------------------------------
 const BeginChild = struct {
     w: f32 = 0.0,
