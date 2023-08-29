@@ -1,10 +1,10 @@
 const std = @import("std");
 
 const embedded_shaders = @import("embedded_shaders.zig");
+const imgui_holder = @import("imgui_holder.zig");
 
 const vk = @import("vk.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
-const zgui = @import("zgui");
 
 
 const QueueData = struct
@@ -22,7 +22,6 @@ const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
 var command_pool: vk.CommandPool = std.mem.zeroes(vk.CommandPool);
 var current_image_count: u32 = 0;
-var current_imgui_context: ?zgui.Context = null;
 var descriptor_layout: ?vk.DescriptorSetLayout = null;
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
 var descriptor_set: ?vk.DescriptorSet = null;
@@ -257,7 +256,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             vk.VertexInputBindingDescription,
             .{
                 .input_rate = .vertex,
-                .stride = @sizeOf(zgui.DrawVert),
+                .stride = imgui_holder.DrawVertSize,
             }
         ),
     };
@@ -268,21 +267,21 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .location = 0,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = @offsetOf(zgui.DrawVert, "pos"),
+            .offset = imgui_holder.DrawVertOffsetOfPos,
         },
         vk.VertexInputAttributeDescription
         {
             .location = 1,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = @offsetOf(zgui.DrawVert, "uv"),
+            .offset = imgui_holder.DrawVertOffsetOfUv,
         },
         vk.VertexInputAttributeDescription
         {
             .location = 2,
             .binding = binding_desc[0].binding,
             .format = .r8g8b8a8_unorm,
-            .offset = @offsetOf(zgui.DrawVert, "color"),
+            .offset = imgui_holder.DrawVertOffsetOfColor,
         },
     };
 
@@ -412,8 +411,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
 
     var h: i32 = 0;
     var w: i32 = 0;
-    _ = zgui.io.getFontsTextDataAsRgba32(&h, &w);
-    if (h < 1 or w < 1) @panic("ImGui provided an invalid font size.");
+    _ = imgui_holder.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
 
     // Font image
     const image_info = vk.ImageCreateInfo
@@ -526,11 +524,7 @@ void
     width = p_create_info.image_extent.width;
     format = p_create_info.image_format;
 
-    current_imgui_context = zgui.zguiCreateContext(null);
-    zgui.zguiSetCurrentContext(current_imgui_context);
-
-    zgui.io.setIniFilename(null);
-    zgui.io.setDisplaySize(@floatFromInt(width.?), @floatFromInt(height.?));
+    imgui_holder.setup_context(@floatFromInt(width.?), @floatFromInt(height.?));
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
@@ -698,7 +692,7 @@ pub fn destroy_instance(instance: vk.Instance, instance_dispatcher: ?vk_layer_st
 {
     _ = instance;
     _ = instance_dispatcher;
-    zgui.zguiDestroyContext(current_imgui_context);
+    _ = imgui_holder.destroy_context();
 }
 
 pub fn get_physical_mem_props
@@ -856,4 +850,9 @@ void
     _ = p_wait_semaphores;
     _ = wait_semaphore_count;
     _ = image_index;
+
+    if (current_image_count > 0)
+    {
+        imgui_holder.draw_frame();
+    }
 }
