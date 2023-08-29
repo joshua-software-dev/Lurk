@@ -4,7 +4,7 @@ const std = @import("std");
 const disc = @import("discord_ws_conn");
 
 
-var debug = switch (builtin.mode)
+const debug = switch (builtin.mode)
 {
     .Debug => true,
     else => false,
