@@ -180,12 +180,15 @@ callconv(vk.vulkan_call_conv) vk.Result
     // layer
     const device = p_device.*;
     var dispatch_table: vk_layer_stubs.LayerDispatchTable = undefined;
+    dispatch_table.AllocateCommandBuffers = @ptrCast(gdpa(device, "vkAllocateCommandBuffers"));
     dispatch_table.AllocateDescriptorSets = @ptrCast(gdpa(device, "vkAllocateDescriptorSets"));
     dispatch_table.AllocateMemory = @ptrCast(gdpa(device, "vkAllocateMemory"));
     dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
     dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
+    dispatch_table.CmdBeginRenderPass = @ptrCast(gdpa(device, "vkCmdBeginRenderPass"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
+    dispatch_table.CmdPipelineBarrier = @ptrCast(gdpa(device, "vkCmdPipelineBarrier"));
     dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
@@ -197,6 +200,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.CreatePipelineLayout = @ptrCast(gdpa(device, "vkCreatePipelineLayout"));
     dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
     dispatch_table.CreateSampler = @ptrCast(gdpa(device, "vkCreateSampler"));
+    dispatch_table.CreateSemaphore = @ptrCast(gdpa(device, "vkCreateSemaphore"));
     dispatch_table.CreateShaderModule = @ptrCast(gdpa(device, "vkCreateShaderModule"));
     dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
     dispatch_table.DestroyDevice = @ptrCast(gdpa(device, "vkDestroyDevice"));
@@ -206,10 +210,12 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
     dispatch_table.GetDeviceQueue = @ptrCast(gdpa(device, "vkGetDeviceQueue"));
+    dispatch_table.GetFenceStatus = @ptrCast(gdpa(device, "vkGetFenceStatus"));
     dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
     dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
     dispatch_table.QueueSubmit = @ptrCast(gdpa(device, "vkQueueSubmit"));
+    dispatch_table.ResetCommandBuffer = @ptrCast(gdpa(device, "vkResetCommandBuffer"));
     dispatch_table.ResetFences = @ptrCast(gdpa(device, "vkResetFences"));
     dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
     dispatch_table.WaitForFences = @ptrCast(gdpa(device, "vkWaitForFences"));
@@ -575,6 +581,9 @@ callconv(vk.vulkan_call_conv) vk.Result
                 setup.before_present
                 (
                     p_present_info.p_swapchains[i],
+                    device_dispatcher.?,
+                    instance_dispatcher.?,
+                    layer_dispatcher.?,
                     queue_data,
                     p_present_info.p_wait_semaphores,
                     p_present_info.wait_semaphore_count,

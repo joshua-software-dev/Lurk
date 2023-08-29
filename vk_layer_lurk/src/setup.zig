@@ -7,6 +7,26 @@ const vk = @import("vk.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
 
+const DrawData = struct
+{
+    command_buffer: vk.CommandBuffer,
+
+    cross_engine_semaphore: vk.Semaphore,
+
+    semaphore: vk.Semaphore,
+    fence: vk.Fence,
+
+    vertex_buffer: vk.Buffer,
+    vertex_buffer_mem: vk.DeviceMemory,
+    vertex_buffer_size: vk.DeviceSize,
+
+    index_buffer: vk.Buffer,
+    index_buffer_mem: vk.DeviceMemory,
+    index_buffer_size: vk.DeviceSize,
+};
+const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
+const ImageBacking = std.BoundedArray(vk.Image, 256);
+const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 const QueueData = struct
 {
     queue_family_index: u32,
@@ -14,9 +34,6 @@ const QueueData = struct
     queue: vk.Queue,
     fence: vk.Fence,
 };
-const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
-const ImageBacking = std.BoundedArray(vk.Image, 256);
-const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 const QueueDataBacking = std.BoundedArray(QueueData, 256);
 const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
@@ -40,6 +57,7 @@ var persistent_device: ?vk.Device = null;
 var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
 var pipeline: ?vk.Pipeline = null;
+var previous_draw_data: ?DrawData = null;
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
 var swapchain: ?*vk.SwapchainKHR = null;
 var width: ?u32 = null;
@@ -835,9 +853,189 @@ pub fn wait_before_queue_present(queue: vk.Queue, device_dispatcher: vk_layer_st
     return queue_data;
 }
 
+fn get_overlay_draw
+(
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
+)
+DrawData
+{
+    if (previous_draw_data) |draw_data|
+    {
+        const get_fence_result = device_dispatcher.GetFenceStatus(persistent_device.?, draw_data.fence);
+        if (get_fence_result == vk.Result.success)
+        {
+            const fence_container = [1]vk.Fence
+            {
+                draw_data.fence,
+            };
+            const reset_fences_result = device_dispatcher.ResetFences(persistent_device.?, 1, &fence_container);
+            if (reset_fences_result != vk.Result.success) @panic("Vulkan function call failed: Device.ResetFences");
+        }
+    }
+
+    var draw_data: DrawData = std.mem.zeroInit(DrawData, .{});
+
+    const cmd_buffer_info = vk.CommandBufferAllocateInfo
+    {
+        .command_pool = command_pool,
+        .level = .primary,
+        .command_buffer_count = 1,
+    };
+    var command_buf_container = [1]vk.CommandBuffer
+    {
+        .null_handle,
+    };
+    const alloc_cmd_buf_result = device_dispatcher.AllocateCommandBuffers
+    (
+        persistent_device.?,
+        &cmd_buffer_info,
+        &command_buf_container,
+    );
+    if (alloc_cmd_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateCommandBuffers");
+    // its important to make sure to save the address of the buffer early
+    draw_data.command_buffer = command_buf_container[0];
+
+    // because for some reason this will mutate the address you give it...
+    // but all subsequent calls need to be against the older address
+    const set_dvc_loader_result = layer_dispatcher.pfn_set_device_loader_data
+    (
+        persistent_device.?,
+        &command_buf_container[0],
+    );
+    if (set_dvc_loader_result != vk.Result.success)
+    {
+        @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
+    }
+
+    const fence_info = vk.FenceCreateInfo{};
+    const create_fence_result = device_dispatcher.CreateFence
+    (
+        persistent_device.?,
+        &fence_info,
+        null,
+        &draw_data.fence,
+    );
+    if (create_fence_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFence");
+
+    const sem_info = vk.SemaphoreCreateInfo{};
+    const create_sem_result1 = device_dispatcher.CreateSemaphore
+    (
+        persistent_device.?,
+        &sem_info,
+        null,
+        &draw_data.semaphore,
+    );
+    if (create_sem_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSemaphore");
+    const create_sem_result2 = device_dispatcher.CreateSemaphore
+    (
+        persistent_device.?,
+        &sem_info,
+        null,
+        &draw_data.cross_engine_semaphore,
+    );
+    if (create_sem_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSemaphore");
+
+    previous_draw_data = draw_data;
+    return previous_draw_data.?;
+}
+
+fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer) void
+{
+    _ = command_buffer;
+}
+
+fn render_swapchain_display
+(
+    current_swapchain: vk.SwapchainKHR,
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
+    queue_data: QueueData,
+    image_index: u32,
+)
+void
+{
+    _ = current_swapchain;
+    const imgui_draw_data = imgui_holder.get_draw_data();
+    if (imgui_draw_data.total_vtx_count < 1) return;
+
+    const draw_data = get_overlay_draw(device_dispatcher, layer_dispatcher);
+
+    // is this supposed to be ignored? Mesa does...
+    _ = device_dispatcher.ResetCommandBuffer(draw_data.command_buffer, .{});
+
+    const render_pass_info = vk.RenderPassBeginInfo
+    {
+        .render_pass = render_pass,
+        .framebuffer = framebuffers.buffer[image_index],
+        .render_area = std.mem.zeroInit
+        (
+            vk.Rect2D,
+            .{
+                .extent = vk.Extent2D
+                {
+                    .width = width.?,
+                    .height = height.?
+                }
+            },
+        ),
+    };
+
+    const buffer_begin_info = vk.CommandBufferBeginInfo{};
+    // another weird vk.Result ignored by Mesa
+    _ = device_dispatcher.BeginCommandBuffer(draw_data.command_buffer, &buffer_begin_info);
+
+    ensure_swapchain_fonts(draw_data.command_buffer);
+
+    const imb_container = [1]vk.ImageMemoryBarrier
+    {
+        vk.ImageMemoryBarrier
+        {
+            .src_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+            .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+            .old_layout = .present_src_khr,
+            .new_layout = .color_attachment_optimal,
+            .src_queue_family_index = queue_data.queue_family_index,
+            .dst_queue_family_index = graphic_queue.?.queue_family_index,
+            .image = images.buffer[image_index],
+            .subresource_range = vk.ImageSubresourceRange
+            {
+                .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        },
+    };
+    device_dispatcher.CmdPipelineBarrier
+    (
+        draw_data.command_buffer,
+        vk.PipelineStageFlags{ .all_graphics_bit = true, },
+        vk.PipelineStageFlags{ .all_graphics_bit = true, },
+        .{},
+        0,
+        null,
+        0,
+        null,
+        1,
+        &imb_container,
+    );
+
+    device_dispatcher.CmdBeginRenderPass
+    (
+        draw_data.command_buffer,
+        &render_pass_info,
+        .@"inline",
+    );
+}
+
 pub fn before_present
 (
     current_swapchain: vk.SwapchainKHR,
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
+    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
     queue_data: QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
@@ -845,14 +1043,13 @@ pub fn before_present
 )
 void
 {
-    _ = current_swapchain;
-    _ = queue_data;
+    _ = instance_dispatcher;
     _ = p_wait_semaphores;
     _ = wait_semaphore_count;
-    _ = image_index;
 
     if (current_image_count > 0)
     {
         imgui_holder.draw_frame();
+        render_swapchain_display(current_swapchain, device_dispatcher, layer_dispatcher, queue_data, image_index);
     }
 }

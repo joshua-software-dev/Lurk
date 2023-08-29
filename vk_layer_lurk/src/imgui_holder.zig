@@ -92,3 +92,8 @@ pub fn draw_frame() void
     zgui.endFrame();
     zgui.render();
 }
+
+pub fn get_draw_data() zgui.DrawData
+{
+    return zgui.getDrawData();
+}
