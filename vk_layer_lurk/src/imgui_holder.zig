@@ -19,12 +19,19 @@ pub fn setup_context(display_x_width: f32, display_y_height: f32) void
     zgui.io.setDisplaySize(display_x_width, display_y_height);
 }
 
-pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*c]const u32
+pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
 {
     const result = zgui.io.getFontsTextDataAsRgba32(x_width, y_height);
 
-    if (x_width.* < 1 or y_height.* < 1) return error.InvalidFontSize;
-    return result;
+    if (result == null) return error.InvalidTexData
+    else if (x_width.* < 1 or y_height.* < 1) return error.InvalidFontSize;
+
+    return @ptrCast(@constCast(result));
+}
+
+pub fn set_fonts_tex_ident(id: *anyopaque) void
+{
+    zgui.io.setFontsTexId(@ptrCast(id));
 }
 
 pub fn destroy_context() bool

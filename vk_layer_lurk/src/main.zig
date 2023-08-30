@@ -184,11 +184,14 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.AllocateDescriptorSets = @ptrCast(gdpa(device, "vkAllocateDescriptorSets"));
     dispatch_table.AllocateMemory = @ptrCast(gdpa(device, "vkAllocateMemory"));
     dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
+    dispatch_table.BindBufferMemory = @ptrCast(gdpa(device, "vkBindBufferMemory"));
     dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
     dispatch_table.CmdBeginRenderPass = @ptrCast(gdpa(device, "vkCmdBeginRenderPass"));
+    dispatch_table.CmdCopyBufferToImage = @ptrCast(gdpa(device, "vkCmdCopyBufferToImage"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
     dispatch_table.CmdPipelineBarrier = @ptrCast(gdpa(device, "vkCmdPipelineBarrier"));
+    dispatch_table.CreateBuffer = @ptrCast(gdpa(device, "vkCreateBuffer"));
     dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
     dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
@@ -208,15 +211,19 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.DestroyShaderModule = @ptrCast(gdpa(device, "vkDestroyShaderModule"));
     dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
+    dispatch_table.FlushMappedMemoryRanges = @ptrCast(gdpa(device, "vkFlushMappedMemoryRanges"));
+    dispatch_table.GetBufferMemoryRequirements = @ptrCast(gdpa(device, "vkGetBufferMemoryRequirements"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
     dispatch_table.GetDeviceQueue = @ptrCast(gdpa(device, "vkGetDeviceQueue"));
     dispatch_table.GetFenceStatus = @ptrCast(gdpa(device, "vkGetFenceStatus"));
     dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
     dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
+    dispatch_table.MapMemory = @ptrCast(gdpa(device, "vkMapMemory"));
     dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
     dispatch_table.QueueSubmit = @ptrCast(gdpa(device, "vkQueueSubmit"));
     dispatch_table.ResetCommandBuffer = @ptrCast(gdpa(device, "vkResetCommandBuffer"));
     dispatch_table.ResetFences = @ptrCast(gdpa(device, "vkResetFences"));
+    dispatch_table.UnmapMemory = @ptrCast(gdpa(device, "vkUnmapMemory"));
     dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
     dispatch_table.WaitForFences = @ptrCast(gdpa(device, "vkWaitForFences"));
 

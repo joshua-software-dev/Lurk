@@ -43,6 +43,7 @@ var descriptor_layout: ?vk.DescriptorSetLayout = null;
 var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
 var descriptor_set: ?vk.DescriptorSet = null;
 var device_queues: QueueDataBacking = QueueDataBacking.init(0) catch @panic("oom");
+var font_already_uploaded: bool = false;
 var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
 var font_image: vk.Image = std.mem.zeroes(vk.Image);
 var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
@@ -60,6 +61,8 @@ var pipeline: ?vk.Pipeline = null;
 var previous_draw_data: ?DrawData = null;
 var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
 var swapchain: ?*vk.SwapchainKHR = null;
+var upload_font_buffer_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
+var upload_font_buffer: vk.Buffer = std.mem.zeroes(vk.Buffer);
 var width: ?u32 = null;
 
 
@@ -940,9 +943,200 @@ DrawData
     return previous_draw_data.?;
 }
 
-fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer) void
+fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
 {
-    _ = command_buffer;
+    if (font_already_uploaded) return;
+
+    var w: i32 = 0;
+    var h: i32 = 0;
+    const pixels = imgui_holder.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
+    const upload_size: u64 = @intCast(w * h * 4);
+
+    const buffer_info = vk.BufferCreateInfo
+    {
+        .size = upload_size,
+        .usage = vk.BufferUsageFlags{ .transfer_src_bit = true, },
+        .sharing_mode = .exclusive,
+    };
+    const create_buf_result = device_dispatcher.CreateBuffer
+    (
+        persistent_device.?,
+        &buffer_info,
+        null,
+        &upload_font_buffer,
+    );
+    if (create_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateBuffer");
+
+    var upload_buffer_req: vk.MemoryRequirements = undefined;
+    device_dispatcher.GetBufferMemoryRequirements(persistent_device.?, upload_font_buffer, &upload_buffer_req);
+
+    const upload_alloc_info = vk.MemoryAllocateInfo
+    {
+        .allocation_size = upload_buffer_req.size,
+        .memory_type_index = vk_memory_type
+        (
+            vk.MemoryPropertyFlags{ .host_visible_bit = true, },
+            upload_buffer_req.memory_type_bits
+        ),
+    };
+    const alloc_mem_result = device_dispatcher.AllocateMemory
+    (
+        persistent_device.?,
+        &upload_alloc_info,
+        null,
+        &upload_font_buffer_mem
+    );
+    if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
+    const bind_buf_mem_result = device_dispatcher.BindBufferMemory
+    (
+        persistent_device.?,
+        upload_font_buffer,
+        upload_font_buffer_mem,
+        0
+    );
+    if (bind_buf_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindBufferMemory");
+
+    var map: [*]u8 = undefined;
+    const map_mem_result = device_dispatcher.MapMemory
+    (
+        persistent_device.?,
+        upload_font_buffer_mem,
+        0,
+        upload_size,
+        .{},
+        @ptrCast(&map)
+    );
+    if (map_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory");
+
+    @memcpy(map[0..upload_size], pixels[0..upload_size]);
+    const range = [1]vk.MappedMemoryRange
+    {
+        std.mem.zeroInit
+        (
+            vk.MappedMemoryRange,
+            .{
+                .memory = upload_font_buffer_mem,
+                .size = upload_size,
+            },
+        ),
+    };
+    const flush_mem_result = device_dispatcher.FlushMappedMemoryRanges(persistent_device.?, 1, &range);
+    if (flush_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
+    device_dispatcher.UnmapMemory(persistent_device.?, upload_font_buffer_mem);
+
+    const copy_barrier = [1]vk.ImageMemoryBarrier
+    {
+        std.mem.zeroInit
+        (
+            vk.ImageMemoryBarrier,
+            .{
+                .dst_access_mask = vk.AccessFlags{ .transfer_write_bit = true, },
+                .old_layout = .undefined,
+                .new_layout = .transfer_dst_optimal,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = font_image,
+                .subresource_range = std.mem.zeroInit
+                (
+                    vk.ImageSubresourceRange,
+                    .{
+                        .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                        .level_count = 1,
+                        .layer_count = 1,
+                    }
+                ),
+            },
+        ),
+    };
+    device_dispatcher.CmdPipelineBarrier
+    (
+        command_buffer,
+        vk.PipelineStageFlags{ .host_bit = true, },
+        vk.PipelineStageFlags{ .transfer_bit = true, },
+        .{},
+        0,
+        null,
+        0,
+        null,
+        1,
+        &copy_barrier,
+    );
+
+    const region = [1]vk.BufferImageCopy
+    {
+        std.mem.zeroInit
+        (
+            vk.BufferImageCopy,
+            .{
+                .image_subresource = std.mem.zeroInit
+                (
+                    vk.ImageSubresourceLayers,
+                    .{
+                        .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                        .layer_count = 1,
+                    },
+                ),
+                .image_extent = vk.Extent3D
+                {
+                    .width = @intCast(w),
+                    .height = @intCast(h),
+                    .depth = 1,
+                },
+            },
+        ),
+    };
+
+    device_dispatcher.CmdCopyBufferToImage
+    (
+        command_buffer,
+        upload_font_buffer,
+        font_image,
+        .transfer_dst_optimal,
+        1,
+        &region
+    );
+
+    const use_barrier = [1]vk.ImageMemoryBarrier
+    {
+        std.mem.zeroInit
+        (
+            vk.ImageMemoryBarrier,
+            .{
+                .src_access_mask = vk.AccessFlags{ .transfer_write_bit = true, },
+                .dst_access_mask = vk.AccessFlags{ .shader_read_bit = true, },
+                .old_layout = .transfer_dst_optimal,
+                .new_layout = .shader_read_only_optimal,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = font_image,
+                .subresource_range = std.mem.zeroInit
+                (
+                    vk.ImageSubresourceRange,
+                    .{
+                        .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                        .level_count = 1,
+                        .layer_count = 1,
+                    }
+                ),
+            },
+        ),
+    };
+    device_dispatcher.CmdPipelineBarrier
+    (
+        command_buffer,
+        vk.PipelineStageFlags{ .transfer_bit = true, },
+        vk.PipelineStageFlags{ .fragment_shader_bit = true, },
+        .{},
+        0,
+        null,
+        0,
+        null,
+        1,
+        &use_barrier,
+    );
+
+    imgui_holder.set_fonts_tex_ident(@ptrCast(&font_image));
+    font_already_uploaded = true;
 }
 
 fn render_swapchain_display
@@ -985,7 +1179,7 @@ void
     // another weird vk.Result ignored by Mesa
     _ = device_dispatcher.BeginCommandBuffer(draw_data.command_buffer, &buffer_begin_info);
 
-    ensure_swapchain_fonts(draw_data.command_buffer);
+    ensure_swapchain_fonts(draw_data.command_buffer, device_dispatcher);
 
     const imb_container = [1]vk.ImageMemoryBarrier
     {
