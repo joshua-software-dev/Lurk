@@ -2,74 +2,15 @@ const std = @import("std");
 
 const embedded_shaders = @import("embedded_shaders.zig");
 const imgui_holder = @import("imgui_holder.zig");
-
-const vk = @import("vk.zig");
+const vk_global_state = @import("vk_global_state.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
-
-const DrawData = struct
-{
-    command_buffer: vk.CommandBuffer,
-
-    cross_engine_semaphore: vk.Semaphore,
-
-    semaphore: vk.Semaphore,
-    fence: vk.Fence,
-
-    vertex_buffer: vk.Buffer,
-    vertex_buffer_mem: vk.DeviceMemory,
-    vertex_buffer_size: vk.DeviceSize,
-
-    index_buffer: vk.Buffer,
-    index_buffer_mem: vk.DeviceMemory,
-    index_buffer_size: vk.DeviceSize,
-};
-const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
-const ImageBacking = std.BoundedArray(vk.Image, 256);
-const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
-const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
-const QueueData = struct
-{
-    queue_family_index: u32,
-    queue_flags: vk.QueueFlags,
-    queue: vk.Queue,
-    fence: vk.Fence,
-};
-const QueueDataBacking = std.BoundedArray(QueueData, 256);
-const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
-
-var command_pool: vk.CommandPool = std.mem.zeroes(vk.CommandPool);
-var current_image_count: u32 = 0;
-var descriptor_layout: ?vk.DescriptorSetLayout = null;
-var descriptor_pool: vk.DescriptorPool = std.mem.zeroes(vk.DescriptorPool);
-var descriptor_set: ?vk.DescriptorSet = null;
-var device_queues: QueueDataBacking = QueueDataBacking.init(0) catch @panic("oom");
-var font_already_uploaded: bool = false;
-var font_image_view: vk.ImageView = std.mem.zeroes(vk.ImageView);
-var font_image: vk.Image = std.mem.zeroes(vk.Image);
-var font_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
-var font_sampler: ?vk.Sampler = null;
-var format: ?vk.Format = null;
-var framebuffers: FramebufferBacking = FramebufferBacking.init(0) catch @panic("oom");
-var graphic_queue: ?*QueueData = null;
-var height: ?u32 = null;
-var image_views: ImageViewBacking = ImageViewBacking.init(0) catch @panic("oom");
-var images: ImageBacking = ImageBacking.init(0) catch @panic("oom");
-var persistent_device: ?vk.Device = null;
-var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
-var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
-var pipeline: ?vk.Pipeline = null;
-var previous_draw_data: ?DrawData = null;
-var render_pass: vk.RenderPass = std.mem.zeroes(vk.RenderPass);
-var swapchain: ?*vk.SwapchainKHR = null;
-var upload_font_buffer_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
-var upload_font_buffer: vk.Buffer = std.mem.zeroes(vk.Buffer);
-var width: ?u32 = null;
+const vk = @import("vk.zig");
 
 
 fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
 {
-    if (physical_mem_props) |props|
+    if (vk_global_state.physical_mem_props) |props|
     {
         var i: u32 = 0;
         var supported_mem_type: u32 = 1;
@@ -143,7 +84,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     };
     const font_sampler_result = device_dispatcher.CreateSampler(device, &font_sampler_info, null, &font_sampler_container[0]);
     if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
-    font_sampler = font_sampler_container[0];
+    vk_global_state.font_sampler = font_sampler_container[0];
 
     // Descriptor pool
     const sampler_pool_size = [1]vk.DescriptorPoolSize
@@ -161,7 +102,13 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .p_pool_sizes = &sampler_pool_size,
     };
 
-    const desc_pool_result = device_dispatcher.CreateDescriptorPool(device, &desc_pool_info, null, &descriptor_pool);
+    const desc_pool_result = device_dispatcher.CreateDescriptorPool
+    (
+        device,
+        &desc_pool_info,
+        null,
+        &vk_global_state.descriptor_pool,
+    );
     if (desc_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateDescriptorPool");
 
     // Descriptor layout
@@ -199,14 +146,14 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
     }
-    descriptor_layout = descriptor_layout_container[0];
+    vk_global_state.descriptor_layout = descriptor_layout_container[0];
 
     // Descriptor set
     const alloc_info = vk.DescriptorSetAllocateInfo
     {
-        .descriptor_pool = descriptor_pool,
+        .descriptor_pool = vk_global_state.descriptor_pool,
         .descriptor_set_count = 1,
-        .p_set_layouts = &descriptor_layout_container
+        .p_set_layouts = &descriptor_layout_container,
     };
 
     var descriptor_set_container = [1]vk.DescriptorSet
@@ -223,7 +170,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
     }
-    descriptor_set = descriptor_set_container[0];
+    vk_global_state.descriptor_set = descriptor_set_container[0];
 
     // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full
     // 3d projection matrix
@@ -248,7 +195,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         device,
         &layout_info,
         null,
-        &pipeline_layout
+        &vk_global_state.pipeline_layout,
     );
     if (create_pipeline_result != vk.Result.success)
     {
@@ -320,7 +267,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         vk.PipelineInputAssemblyStateCreateInfo,
         .{
             .topology = .triangle_list,
-        }
+        },
     );
 
     const viewport_info = vk.PipelineViewportStateCreateInfo
@@ -337,7 +284,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             .cull_mode = .{},
             .front_face = .counter_clockwise,
             .line_width = 1.0,
-        }
+        },
     );
 
     const ms_info = std.mem.zeroInit
@@ -407,8 +354,8 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
                 .p_depth_stencil_state = &depth_info,
                 .p_color_blend_state = &blend_info,
                 .p_dynamic_state = &dynamic_state,
-                .layout = pipeline_layout,
-                .render_pass = render_pass,
+                .layout = vk_global_state.pipeline_layout,
+                .render_pass = vk_global_state.render_pass,
             }
         ),
     };
@@ -426,7 +373,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         &pipeline_container
     );
     if (create_pl_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
-    pipeline = pipeline_container[0];
+    vk_global_state.pipeline = pipeline_container[0];
 
     _ = device_dispatcher.DestroyShaderModule(device, vert_module, null);
     _ = device_dispatcher.DestroyShaderModule(device, frag_module, null);
@@ -449,11 +396,11 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
     };
-    const font_image_result = device_dispatcher.CreateImage(device, &image_info, null, &font_image);
+    const font_image_result = device_dispatcher.CreateImage(device, &image_info, null, &vk_global_state.font_image);
     if (font_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImage");
 
     var font_image_req: vk.MemoryRequirements = undefined;
-    device_dispatcher.GetImageMemoryRequirements(device, font_image, &font_image_req);
+    device_dispatcher.GetImageMemoryRequirements(device, vk_global_state.font_image, &font_image_req);
 
     const image_alloc_info = vk.MemoryAllocateInfo
     {
@@ -465,10 +412,22 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         ),
     };
 
-    const alloc_mem_result = device_dispatcher.AllocateMemory(device, &image_alloc_info, null, &font_mem);
+    const alloc_mem_result = device_dispatcher.AllocateMemory
+    (
+        device,
+        &image_alloc_info,
+        null,
+        &vk_global_state.font_mem,
+    );
     if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
 
-    const bind_image_result = device_dispatcher.BindImageMemory(device, font_image, font_mem, 0);
+    const bind_image_result = device_dispatcher.BindImageMemory
+    (
+        device,
+        vk_global_state.font_image,
+        vk_global_state.font_mem,
+        0,
+    );
     if (bind_image_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindImageMemory");
 
     // Font image view
@@ -476,7 +435,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     (
         vk.ImageViewCreateInfo,
         .{
-            .image = font_image,
+            .image = vk_global_state.font_image,
             .view_type = .@"2d",
             .format = .r8g8b8a8_unorm,
             .subresource_range = std.mem.zeroInit
@@ -490,7 +449,13 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
             )
         }
     );
-    const create_view_result = device_dispatcher.CreateImageView(device, &view_info, null, &font_image_view);
+    const create_view_result = device_dispatcher.CreateImageView
+    (
+        device,
+        &view_info,
+        null,
+        &vk_global_state.font_image_view,
+    );
     if (create_view_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
 
     // Descriptor set
@@ -498,8 +463,8 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
     {
         vk.DescriptorImageInfo
         {
-            .sampler = font_sampler.?,
-            .image_view = font_image_view,
+            .sampler = vk_global_state.font_sampler.?,
+            .image_view = vk_global_state.font_image_view,
             .image_layout = .shader_read_only_optimal,
         },
     };
@@ -509,7 +474,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_dispatcher: vk_layer_
         (
             vk.WriteDescriptorSet,
             .{
-                .dst_set = descriptor_set.?,
+                .dst_set = vk_global_state.descriptor_set.?,
                 .descriptor_count = 1,
                 .descriptor_type = .combined_image_sampler,
                 .p_image_info = &desc_image,
@@ -540,19 +505,19 @@ pub fn setup_swapchain
 )
 void
 {
-    swapchain = p_swapchain;
+    vk_global_state.swapchain = p_swapchain;
 
-    height = p_create_info.image_extent.height;
-    width = p_create_info.image_extent.width;
-    format = p_create_info.image_format;
+    vk_global_state.height = p_create_info.image_extent.height;
+    vk_global_state.width = p_create_info.image_extent.width;
+    vk_global_state.format = p_create_info.image_format;
 
-    imgui_holder.setup_context(@floatFromInt(width.?), @floatFromInt(height.?));
+    imgui_holder.setup_context(@floatFromInt(vk_global_state.width.?), @floatFromInt(vk_global_state.height.?));
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
         vk.AttachmentDescription
         {
-            .format = format.?,
+            .format = vk_global_state.format.?,
             .samples = vk.SampleCountFlags{ .@"1_bit" = true, },
             .load_op = .load,
             .store_op = .store,
@@ -606,24 +571,39 @@ void
         .p_dependencies = &dependency,
     };
 
-    const create_rp_result = device_dispatcher.CreateRenderPass(device, &render_pass_info, null, &render_pass);
+    const create_rp_result = device_dispatcher.CreateRenderPass
+    (
+        device,
+        &render_pass_info,
+        null,
+        &vk_global_state.render_pass,
+    );
     if (create_rp_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateRenderPass");
 
     setup_swapchain_data_pipeline(device, device_dispatcher);
 
-    const get_img_result1 = device_dispatcher.GetSwapchainImagesKHR(device, swapchain.?.*, &current_image_count, null);
+    const get_img_result1 = device_dispatcher.GetSwapchainImagesKHR
+    (
+        device,
+        vk_global_state.swapchain.?.*,
+        &vk_global_state.current_image_count,
+        null,
+    );
     if (get_img_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR");
 
-    framebuffers.resize(current_image_count) catch @panic("Framebuffer buffer overflow");
-    image_views.resize(current_image_count) catch @panic("Image View buffer overflow");
-    images.resize(current_image_count) catch @panic("Image buffer overflow");
+    vk_global_state.framebuffers.resize(vk_global_state.current_image_count)
+    catch @panic("Framebuffer buffer overflow");
+    vk_global_state.image_views.resize(vk_global_state.current_image_count)
+    catch @panic("Image View buffer overflow");
+    vk_global_state.images.resize(vk_global_state.current_image_count)
+    catch @panic("Image buffer overflow");
 
     const get_img_result2 = device_dispatcher.GetSwapchainImagesKHR
     (
         device,
-        swapchain.?.*,
-        &current_image_count,
-        &images.buffer
+        vk_global_state.swapchain.?.*,
+        &vk_global_state.current_image_count,
+        &vk_global_state.images.buffer,
     );
     if (get_img_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR");
 
@@ -633,7 +613,7 @@ void
         vk.ImageViewCreateInfo,
         .{
             .view_type = .@"2d",
-            .format = format.?,
+            .format = vk_global_state.format.?,
             .components = vk.ComponentMapping
             {
                 .r = .r,
@@ -654,15 +634,15 @@ void
 
     {
         var i: u32 = 0;
-        while (i < current_image_count) : (i += 1)
+        while (i < vk_global_state.current_image_count) : (i += 1)
         {
-            view_info.image = images.buffer[i];
+            view_info.image = vk_global_state.images.buffer[i];
             const create_imgv_result = device_dispatcher.CreateImageView
             (
                 device,
                 &view_info,
                 null,
-                &image_views.buffer[i]
+                &vk_global_state.image_views.buffer[i],
             );
             if (create_imgv_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
         }
@@ -671,24 +651,24 @@ void
     // Framebuffers
     var fb_info = vk.FramebufferCreateInfo
     {
-        .render_pass = render_pass,
+        .render_pass = vk_global_state.render_pass,
         .attachment_count = 1,
-        .width = width.?,
-        .height = height.?,
+        .width = vk_global_state.width.?,
+        .height = vk_global_state.height.?,
         .layers = 1,
     };
 
     {
         var i: u32 = 0;
-        while (i < current_image_count) : (i += 1)
+        while (i < vk_global_state.current_image_count) : (i += 1)
         {
-            fb_info.p_attachments = image_views.buffer[i..i].ptr;
+            fb_info.p_attachments = vk_global_state.image_views.buffer[i..i].ptr;
             const create_fb_result = device_dispatcher.CreateFramebuffer
             (
                 device,
                 &fb_info,
                 null,
-                &framebuffers.buffer[i]
+                &vk_global_state.framebuffers.buffer[i]
             );
             if (create_fb_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFramebuffer");
         }
@@ -698,16 +678,30 @@ void
     const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
     {
         .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
-        .queue_family_index = (graphic_queue orelse @panic("graphics QueueData was null")).queue_family_index,
+        .queue_family_index =
+            (
+                vk_global_state.graphic_queue orelse @panic("graphics QueueData was null")
+            ).queue_family_index,
     };
-    const create_pool_result = device_dispatcher.CreateCommandPool(device, &cmd_buffer_pool_info, null, &command_pool);
+    const create_pool_result = device_dispatcher.CreateCommandPool
+    (
+        device,
+        &cmd_buffer_pool_info,
+        null,
+        &vk_global_state.command_pool,
+    );
     if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
 pub fn destroy_swapchain(device: vk.Device, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
 {
     std.log.scoped(.LAYER).debug("Destroying render pass...", .{});
-    device_dispatcher.DestroyRenderPass(device, render_pass, null);
+    device_dispatcher.DestroyRenderPass
+    (
+        device,
+        vk_global_state.render_pass,
+        null,
+    );
 }
 
 pub fn destroy_instance(instance: vk.Instance, instance_dispatcher: ?vk_layer_stubs.LayerInstanceDispatchTable) void
@@ -724,13 +718,13 @@ pub fn get_physical_mem_props
 )
 void
 {
-    physical_mem_props = undefined;
-    instance_dispatcher.GetPhysicalDeviceMemoryProperties(physical_device, &physical_mem_props.?);
+    vk_global_state.physical_mem_props = undefined;
+    instance_dispatcher.GetPhysicalDeviceMemoryProperties(physical_device, &vk_global_state.physical_mem_props.?);
 }
 
 fn new_queue_data
 (
-    data: *QueueData,
+    data: *vk_global_state.QueueData,
     device: vk.Device,
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
 )
@@ -746,7 +740,7 @@ void
 
     if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true,}))
     {
-        graphic_queue = data;
+        vk_global_state.graphic_queue = data;
     }
 }
 
@@ -761,12 +755,12 @@ pub fn device_map_queues
 )
 void
 {
-    persistent_device = device;
+    vk_global_state.persistent_device = device;
 
     var queue_family_props_count: u32 = 0;
     instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
-    var family_props = QueueFamilyPropsBacking.init(0)
+    var family_props = vk_global_state.QueueFamilyPropsBacking.init(0)
     catch @panic("Failed to get backing buffer for QueueFamilyProperties");
     family_props.resize(queue_family_props_count) catch @panic("QueueFamilyProperties buffer overflow");
 
@@ -785,15 +779,17 @@ void
         var j: u32 = 0;
         while (j < p_create_info.p_queue_create_infos[i].queue_count) : ({j += 1; device_queue_index += 1;})
         {
-            device_queues.resize(device_queue_index + 1) catch @panic("QueueDataBacking buffer overflow");
-            var data: *QueueData = &device_queues.buffer[device_queue_index];
+            vk_global_state.device_queues.resize(device_queue_index + 1)
+            catch @panic("QueueDataBacking buffer overflow");
+
+            var data: *vk_global_state.QueueData = &vk_global_state.device_queues.buffer[device_queue_index];
             data.* = std.mem.zeroInit
             (
-                QueueData,
+                vk_global_state.QueueData,
                 .{
                     .queue_family_index = queue_family_index,
                     .queue_flags = family_props.buffer[queue_family_index].queue_flags,
-                }
+                },
             );
 
             var original_queue: vk.Queue = undefined;
@@ -802,7 +798,7 @@ void
                 device,
                 queue_family_index,
                 j,
-                &original_queue
+                &original_queue,
             );
             data.queue = original_queue;
 
@@ -820,9 +816,9 @@ void
 /// The backing for this should likely be replaced with a hashmap, but the
 /// common case is that there is only 1 item in the buffer, so its somewhat
 /// moot at the moment.
-fn get_queue_data(queue: vk.Queue) QueueData
+fn get_queue_data(queue: vk.Queue) vk_global_state.QueueData
 {
-    for (device_queues.constSlice()) |it|
+    for (vk_global_state.device_queues.constSlice()) |it|
     {
         if(it.queue == queue) return it;
     }
@@ -830,7 +826,12 @@ fn get_queue_data(queue: vk.Queue) QueueData
     @panic("Lookup failed for VkQueue<->VkDevice mapping");
 }
 
-pub fn wait_before_queue_present(queue: vk.Queue, device_dispatcher: vk_layer_stubs.LayerDispatchTable) QueueData
+pub fn wait_before_queue_present
+(
+    queue: vk.Queue,
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+)
+vk_global_state.QueueData
 {
     const queue_data = get_queue_data(queue);
     const fence_container = [1]vk.Fence
@@ -838,7 +839,12 @@ pub fn wait_before_queue_present(queue: vk.Queue, device_dispatcher: vk_layer_st
         queue_data.fence,
     };
 
-    const reset_fences_result = device_dispatcher.ResetFences(persistent_device.?, 1, &fence_container);
+    const reset_fences_result = device_dispatcher.ResetFences
+    (
+        vk_global_state.persistent_device.?,
+        1,
+        &fence_container,
+    );
     if (reset_fences_result != vk.Result.success) @panic("Vulkan function call failed: Device.ResetFences");
 
     const queue_submit_result = device_dispatcher.QueueSubmit(queue, 0, null, queue_data.fence);
@@ -846,7 +852,7 @@ pub fn wait_before_queue_present(queue: vk.Queue, device_dispatcher: vk_layer_st
 
     const wait_for_fences_result = device_dispatcher.WaitForFences
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         1,
         &fence_container,
         0,
@@ -862,27 +868,36 @@ fn get_overlay_draw
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
     layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
 )
-DrawData
+vk_global_state.DrawData
 {
-    if (previous_draw_data) |draw_data|
+    if (vk_global_state.previous_draw_data) |draw_data|
     {
-        const get_fence_result = device_dispatcher.GetFenceStatus(persistent_device.?, draw_data.fence);
+        const get_fence_result = device_dispatcher.GetFenceStatus
+        (
+            vk_global_state.persistent_device.?,
+            draw_data.fence,
+        );
         if (get_fence_result == vk.Result.success)
         {
             const fence_container = [1]vk.Fence
             {
                 draw_data.fence,
             };
-            const reset_fences_result = device_dispatcher.ResetFences(persistent_device.?, 1, &fence_container);
+            const reset_fences_result = device_dispatcher.ResetFences
+            (
+                vk_global_state.persistent_device.?,
+                1,
+                &fence_container,
+            );
             if (reset_fences_result != vk.Result.success) @panic("Vulkan function call failed: Device.ResetFences");
         }
     }
 
-    var draw_data: DrawData = std.mem.zeroInit(DrawData, .{});
+    var draw_data: vk_global_state.DrawData = std.mem.zeroInit(vk_global_state.DrawData, .{});
 
     const cmd_buffer_info = vk.CommandBufferAllocateInfo
     {
-        .command_pool = command_pool,
+        .command_pool = vk_global_state.command_pool,
         .level = .primary,
         .command_buffer_count = 1,
     };
@@ -892,7 +907,7 @@ DrawData
     };
     const alloc_cmd_buf_result = device_dispatcher.AllocateCommandBuffers
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &cmd_buffer_info,
         &command_buf_container,
     );
@@ -904,7 +919,7 @@ DrawData
     // but all subsequent calls need to be against the older address
     const set_dvc_loader_result = layer_dispatcher.pfn_set_device_loader_data
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &command_buf_container[0],
     );
     if (set_dvc_loader_result != vk.Result.success)
@@ -915,7 +930,7 @@ DrawData
     const fence_info = vk.FenceCreateInfo{};
     const create_fence_result = device_dispatcher.CreateFence
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &fence_info,
         null,
         &draw_data.fence,
@@ -925,7 +940,7 @@ DrawData
     const sem_info = vk.SemaphoreCreateInfo{};
     const create_sem_result1 = device_dispatcher.CreateSemaphore
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &sem_info,
         null,
         &draw_data.semaphore,
@@ -933,20 +948,20 @@ DrawData
     if (create_sem_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSemaphore");
     const create_sem_result2 = device_dispatcher.CreateSemaphore
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &sem_info,
         null,
         &draw_data.cross_engine_semaphore,
     );
     if (create_sem_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSemaphore");
 
-    previous_draw_data = draw_data;
-    return previous_draw_data.?;
+    vk_global_state.previous_draw_data = draw_data;
+    return vk_global_state.previous_draw_data.?;
 }
 
 fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: vk_layer_stubs.LayerDispatchTable) void
 {
-    if (font_already_uploaded) return;
+    if (vk_global_state.font_already_uploaded) return;
 
     var w: i32 = 0;
     var h: i32 = 0;
@@ -961,15 +976,20 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
     };
     const create_buf_result = device_dispatcher.CreateBuffer
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &buffer_info,
         null,
-        &upload_font_buffer,
+        &vk_global_state.upload_font_buffer,
     );
     if (create_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateBuffer");
 
     var upload_buffer_req: vk.MemoryRequirements = undefined;
-    device_dispatcher.GetBufferMemoryRequirements(persistent_device.?, upload_font_buffer, &upload_buffer_req);
+    device_dispatcher.GetBufferMemoryRequirements
+    (
+        vk_global_state.persistent_device.?,
+        vk_global_state.upload_font_buffer,
+        &upload_buffer_req,
+    );
 
     const upload_alloc_info = vk.MemoryAllocateInfo
     {
@@ -982,30 +1002,30 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
     };
     const alloc_mem_result = device_dispatcher.AllocateMemory
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         &upload_alloc_info,
         null,
-        &upload_font_buffer_mem
+        &vk_global_state.upload_font_buffer_mem,
     );
     if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
     const bind_buf_mem_result = device_dispatcher.BindBufferMemory
     (
-        persistent_device.?,
-        upload_font_buffer,
-        upload_font_buffer_mem,
-        0
+        vk_global_state.persistent_device.?,
+        vk_global_state.upload_font_buffer,
+        vk_global_state.upload_font_buffer_mem,
+        0,
     );
     if (bind_buf_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindBufferMemory");
 
     var map: [*]u8 = undefined;
     const map_mem_result = device_dispatcher.MapMemory
     (
-        persistent_device.?,
-        upload_font_buffer_mem,
+        vk_global_state.persistent_device.?,
+        vk_global_state.upload_font_buffer_mem,
         0,
         upload_size,
         .{},
-        @ptrCast(&map)
+        @ptrCast(&map),
     );
     if (map_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory");
 
@@ -1016,14 +1036,14 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
         (
             vk.MappedMemoryRange,
             .{
-                .memory = upload_font_buffer_mem,
+                .memory = vk_global_state.upload_font_buffer_mem,
                 .size = upload_size,
             },
         ),
     };
-    const flush_mem_result = device_dispatcher.FlushMappedMemoryRanges(persistent_device.?, 1, &range);
+    const flush_mem_result = device_dispatcher.FlushMappedMemoryRanges(vk_global_state.persistent_device.?, 1, &range);
     if (flush_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
-    device_dispatcher.UnmapMemory(persistent_device.?, upload_font_buffer_mem);
+    device_dispatcher.UnmapMemory(vk_global_state.persistent_device.?, vk_global_state.upload_font_buffer_mem);
 
     const copy_barrier = [1]vk.ImageMemoryBarrier
     {
@@ -1036,7 +1056,7 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
                 .new_layout = .transfer_dst_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = font_image,
+                .image = vk_global_state.font_image,
                 .subresource_range = std.mem.zeroInit
                 (
                     vk.ImageSubresourceRange,
@@ -1090,11 +1110,11 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
     device_dispatcher.CmdCopyBufferToImage
     (
         command_buffer,
-        upload_font_buffer,
-        font_image,
+        vk_global_state.upload_font_buffer,
+        vk_global_state.font_image,
         .transfer_dst_optimal,
         1,
-        &region
+        &region,
     );
 
     const use_barrier = [1]vk.ImageMemoryBarrier
@@ -1109,7 +1129,7 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
                 .new_layout = .shader_read_only_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = font_image,
+                .image = vk_global_state.font_image,
                 .subresource_range = std.mem.zeroInit
                 (
                     vk.ImageSubresourceRange,
@@ -1136,8 +1156,8 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
         &use_barrier,
     );
 
-    imgui_holder.set_fonts_tex_ident(@ptrCast(&font_image));
-    font_already_uploaded = true;
+    imgui_holder.set_fonts_tex_ident(@ptrCast(&vk_global_state.font_image));
+    vk_global_state.font_already_uploaded = true;
 }
 
 fn create_or_resize_buffer
@@ -1154,12 +1174,12 @@ void
 
     if (buffer.* != .null_handle)
     {
-        device_dispatcher.DestroyBuffer(persistent_device.?, buffer.*, null);
+        device_dispatcher.DestroyBuffer(vk_global_state.persistent_device.?, buffer.*, null);
     }
 
     if (buffer_mem.* != .null_handle)
     {
-        device_dispatcher.FreeMemory(persistent_device.?, buffer_mem.*, null);
+        device_dispatcher.FreeMemory(vk_global_state.persistent_device.?, buffer_mem.*, null);
     }
 
     const buffer_info = vk.BufferCreateInfo
@@ -1168,21 +1188,39 @@ void
         .usage = usage,
         .sharing_mode = .exclusive,
     };
-    const create_buf_result = device_dispatcher.CreateBuffer(persistent_device.?, &buffer_info, null, buffer);
+    const create_buf_result = device_dispatcher.CreateBuffer
+    (
+        vk_global_state.persistent_device.?,
+        &buffer_info,
+        null,
+        buffer,
+    );
     if (create_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateBuffer");
 
     var req: vk.MemoryRequirements = undefined;
-    device_dispatcher.GetBufferMemoryRequirements(persistent_device.?, buffer.*, &req);
+    device_dispatcher.GetBufferMemoryRequirements(vk_global_state.persistent_device.?, buffer.*, &req);
 
     const alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = req.size,
         .memory_type_index = vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
     };
-    const alloc_mem_result = device_dispatcher.AllocateMemory(persistent_device.?, &alloc_info, null, buffer_mem);
+    const alloc_mem_result = device_dispatcher.AllocateMemory
+    (
+        vk_global_state.persistent_device.?,
+        &alloc_info,
+        null,
+        buffer_mem,
+    );
     if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
 
-    const bind_buf_result = device_dispatcher.BindBufferMemory(persistent_device.?, buffer.*, buffer_mem.*, 0);
+    const bind_buf_result = device_dispatcher.BindBufferMemory
+    (
+        vk_global_state.persistent_device.?,
+        buffer.*,
+        buffer_mem.*,
+        0,
+    );
     if (bind_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindBufferMemory");
 
     buffer_size.* = new_size;
@@ -1192,12 +1230,12 @@ fn render_swapchain_display
 (
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
     layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
-    queue_data: QueueData,
+    queue_data: vk_global_state.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
 )
-?DrawData
+?vk_global_state.DrawData
 {
     const imgui_draw_data = imgui_holder.get_draw_data();
     if (imgui_draw_data.total_vtx_count < 1) return null;
@@ -1210,16 +1248,16 @@ fn render_swapchain_display
 
     const render_pass_info = vk.RenderPassBeginInfo
     {
-        .render_pass = render_pass,
-        .framebuffer = framebuffers.buffer[image_index],
+        .render_pass = vk_global_state.render_pass,
+        .framebuffer = vk_global_state.framebuffers.buffer[image_index],
         .render_area = std.mem.zeroInit
         (
             vk.Rect2D,
             .{
                 .extent = vk.Extent2D
                 {
-                    .width = width.?,
-                    .height = height.?
+                    .width = vk_global_state.width.?,
+                    .height = vk_global_state.height.?
                 }
             },
         ),
@@ -1241,8 +1279,8 @@ fn render_swapchain_display
                 .old_layout = .present_src_khr,
                 .new_layout = .color_attachment_optimal,
                 .src_queue_family_index = queue_data.queue_family_index,
-                .dst_queue_family_index = graphic_queue.?.queue_family_index,
-                .image = images.get(image_index),
+                .dst_queue_family_index = vk_global_state.graphic_queue.?.queue_family_index,
+                .image = vk_global_state.images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
                 {
                     .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
@@ -1307,24 +1345,24 @@ fn render_swapchain_display
     var vertex_dst: [*]imgui_holder.DrawVert = undefined;
     const map_mem_result1 = device_dispatcher.MapMemory
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         draw_data.vertex_buffer_mem,
         0,
         vertex_size,
         .{},
-        @ptrCast(&vertex_dst)
+        @ptrCast(&vertex_dst),
     );
     if (map_mem_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory 1");
 
     var index_dst: [*]imgui_holder.DrawIdx = undefined;
     const map_mem_result2 = device_dispatcher.MapMemory
     (
-        persistent_device.?,
+        vk_global_state.persistent_device.?,
         draw_data.index_buffer_mem,
         0,
         index_size,
         .{},
-        @ptrCast(&index_dst)
+        @ptrCast(&index_dst),
     );
     if (map_mem_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory 2");
 
@@ -1346,7 +1384,7 @@ fn render_swapchain_display
             .{
                 .memory = draw_data.vertex_buffer_mem,
                 .size = vk.WHOLE_SIZE,
-            }
+            },
         ),
         std.mem.zeroInit
         (
@@ -1354,25 +1392,25 @@ fn render_swapchain_display
             .{
                 .memory = draw_data.index_buffer_mem,
                 .size = vk.WHOLE_SIZE,
-            }
+            },
         ),
     };
 
-    const flush_result = device_dispatcher.FlushMappedMemoryRanges(persistent_device.?, 2, &range);
+    const flush_result = device_dispatcher.FlushMappedMemoryRanges(vk_global_state.persistent_device.?, 2, &range);
     if (flush_result != vk.Result.success) @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
-    device_dispatcher.UnmapMemory(persistent_device.?, draw_data.vertex_buffer_mem);
-    device_dispatcher.UnmapMemory(persistent_device.?, draw_data.index_buffer_mem);
+    device_dispatcher.UnmapMemory(vk_global_state.persistent_device.?, draw_data.vertex_buffer_mem);
+    device_dispatcher.UnmapMemory(vk_global_state.persistent_device.?, draw_data.index_buffer_mem);
 
-    device_dispatcher.CmdBindPipeline(draw_data.command_buffer, .graphics, pipeline.?);
+    device_dispatcher.CmdBindPipeline(draw_data.command_buffer, .graphics, vk_global_state.pipeline.?);
     const desc_set_container = [1]vk.DescriptorSet
     {
-        descriptor_set.?,
+        vk_global_state.descriptor_set.?,
     };
     device_dispatcher.CmdBindDescriptorSets
     (
         draw_data.command_buffer,
         .graphics,
-        pipeline_layout,
+        vk_global_state.pipeline_layout,
         0,
         1,
         &desc_set_container,
@@ -1394,7 +1432,7 @@ fn render_swapchain_display
         0,
         1,
         &vertex_buffers_container,
-        &vertex_offset_container
+        &vertex_offset_container,
     );
     device_dispatcher.CmdBindIndexBuffer(draw_data.command_buffer, draw_data.index_buffer, 0, .uint16);
 
@@ -1420,7 +1458,7 @@ fn render_swapchain_display
     device_dispatcher.CmdPushConstants
     (
         draw_data.command_buffer,
-        pipeline_layout,
+        vk_global_state.pipeline_layout,
         vk.ShaderStageFlags{ .vertex_bit = true, },
         @sizeOf(f32) * 0, // can't this just be 0?
         @sizeOf(f32) * 2,
@@ -1435,7 +1473,7 @@ fn render_swapchain_display
     device_dispatcher.CmdPushConstants
     (
         draw_data.command_buffer,
-        pipeline_layout,
+        vk_global_state.pipeline_layout,
         vk.ShaderStageFlags{ .vertex_bit = true, },
         @sizeOf(f32) * 2,
         @sizeOf(f32) * 2,
@@ -1497,7 +1535,7 @@ fn render_swapchain_display
 
     device_dispatcher.CmdEndRenderPass(draw_data.command_buffer);
 
-    if (queue_data.queue_family_index != graphic_queue.?.queue_family_index)
+    if (queue_data.queue_family_index != vk_global_state.graphic_queue.?.queue_family_index)
     {
         const imb_container = [1]vk.ImageMemoryBarrier
         {
@@ -1507,9 +1545,9 @@ fn render_swapchain_display
                 .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
                 .old_layout = .present_src_khr,
                 .new_layout = .present_src_khr,
-                .src_queue_family_index = graphic_queue.?.queue_family_index,
+                .src_queue_family_index = vk_global_state.graphic_queue.?.queue_family_index,
                 .dst_queue_family_index = queue_data.queue_family_index,
-                .image = images.get(image_index),
+                .image = vk_global_state.images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
                 {
                     .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
@@ -1538,7 +1576,7 @@ fn render_swapchain_display
     // again, why does mesa ignore this?
     _ = device_dispatcher.EndCommandBuffer(draw_data.command_buffer);
 
-    if (wait_semaphore_count == 0 and queue_data.queue != graphic_queue.?.queue)
+    if (wait_semaphore_count == 0 and queue_data.queue != vk_global_state.graphic_queue.?.queue)
     {
         const stages_wait_container = [1]vk.PipelineStageFlags
         {
@@ -1586,11 +1624,17 @@ fn render_swapchain_display
         };
 
         // why u ignore, mesa?
-        _ = device_dispatcher.QueueSubmit(graphic_queue.?.queue, 1, &submit_info_container2, draw_data.fence);
+        _ = device_dispatcher.QueueSubmit
+        (
+            vk_global_state.graphic_queue.?.queue,
+            1,
+            &submit_info_container2,
+            draw_data.fence,
+        );
     }
     else
     {
-        var stages_wait_backing = PipelineStageFlagsBacking.init(0)
+        var stages_wait_backing = vk_global_state.PipelineStageFlagsBacking.init(0)
         catch @panic("Failed to get backing buffer for PipelineStageFlags");
         stages_wait_backing.resize(wait_semaphore_count) catch @panic("PipelineStageFlags buffer overflow");
 
@@ -1625,7 +1669,13 @@ fn render_swapchain_display
         };
 
         // why u ignore, mesa?
-        _ = device_dispatcher.QueueSubmit(graphic_queue.?.queue, 1, &submit_info_container, draw_data.fence);
+        _ = device_dispatcher.QueueSubmit
+        (
+            vk_global_state.graphic_queue.?.queue,
+            1,
+            &submit_info_container,
+            draw_data.fence,
+        );
     }
 
     return draw_data;
@@ -1635,14 +1685,14 @@ pub fn before_present
 (
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
     layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
-    queue_data: QueueData,
+    queue_data: vk_global_state.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
 )
-?DrawData
+?vk_global_state.DrawData
 {
-    if (current_image_count > 0)
+    if (vk_global_state.current_image_count > 0)
     {
         imgui_holder.draw_frame();
         return render_swapchain_display
