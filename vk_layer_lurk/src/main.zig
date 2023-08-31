@@ -8,9 +8,6 @@ const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const vk = @import("vk.zig");
 
 
-///////////////////////////////////////////////////////////////////////////////
-// Layer globals definition
-
 // Zig scoped logger set based on compile mode
 pub const std_options = struct
 {
@@ -36,14 +33,15 @@ pub const std_options = struct
     };
 };
 
-// differentiate this layer from the c++ implementation
+
+///////////////////////////////////////////////////////////////////////////////
+// Layer globals definition
+
+// Give this layer a unique name
 const LAYER_NAME = "VK_LAYER_Lurk";
 const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
-
-// c_allocator easy access
-const c_allocator = std.heap.c_allocator;
 
 // single global lock, for simplicity
 var global_lock: std.Thread.Mutex = .{};
@@ -54,19 +52,6 @@ var global_lock: std.Thread.Mutex = .{};
 var device_dispatcher: ?vk_layer_stubs.LayerDispatchTable = null;
 var instance_dispatcher: ?vk_layer_stubs.LayerInstanceDispatchTable = null;
 var layer_dispatcher: ?vk_layer_stubs.LayerInitDispatchTable = null;
-
-// actual data we're recording in this layer
-const CommandStats = extern struct
-{
-    draw_count: u32,
-    instance_count: u32,
-    vert_count: u32
-};
-// there are actually multiple of these, so a hash table is an acceptable
-// choice, however we store the actual object reference as the key rather than
-// manipulating pointers for use as keys
-var command_buffer_stats =
-    std.AutoHashMap(vk.CommandBuffer, CommandStats).init(c_allocator);
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -277,150 +262,97 @@ callconv(vk.vulkan_call_conv) void
 ///////////////////////////////////////////////////////////////////////////////
 // Actual layer implementation
 
-export fn VkLayerLurk_BeginCommandBuffer
+export fn VkLayerLurk_CreateSwapchainKHR
 (
-    command_buffer: vk.CommandBuffer,
-    p_begin_info: *const vk.CommandBufferBeginInfo
+    device: vk.Device,
+    p_create_info: *const vk.SwapchainCreateInfoKHR,
+    p_allocator: ?*const vk.AllocationCallbacks,
+    p_swapchain: *vk.SwapchainKHR,
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    global_lock.lock();
-    defer global_lock.unlock();
+    const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
+    if (result != vk.Result.success) return result;
 
-    var stats = CommandStats
     {
-        .draw_count = 0,
-        .instance_count = 0,
-        .vert_count = 0
-    };
-    command_buffer_stats
-        .put(command_buffer, stats)
-        catch @panic("BeginCommandBuffer stats table OOM");
+        global_lock.lock();
+        defer global_lock.unlock();
+        setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
+    }
 
-    const table =
-        device_dispatcher
-        orelse @panic("BeginCommandBuffer failed to get dispatch table");
-    return table.BeginCommandBuffer(command_buffer, p_begin_info);
+    return result;
 }
 
-export fn VkLayerLurk_CmdDraw
+export fn VkLayerLurk_DestroySwapchainKHR
 (
-    command_buffer: vk.CommandBuffer,
-    vertex_count: u32,
-    instance_count: u32,
-    first_vertex: u32,
-    first_instance: u32
+    device: vk.Device,
+    swapchain: vk.SwapchainKHR,
+    p_allocator: ?*const vk.AllocationCallbacks,
 )
 callconv(vk.vulkan_call_conv) void
 {
     global_lock.lock();
     defer global_lock.unlock();
 
-    var stats =
-        command_buffer_stats.get(command_buffer)
-        orelse @panic("CmdDraw failed to get command buffer stats");
-    stats.draw_count += 1;
-    stats.instance_count += instance_count;
-    stats.vert_count += instance_count * vertex_count;
-
-    command_buffer_stats
-        .put(command_buffer, stats)
-        catch @panic("SampleLayerZig_CmdDraw stats table OOM");
-
-    const table =
-        device_dispatcher
-        orelse @panic("CmdDraw failed to get dispatch table");
-    table.CmdDraw
-    (
-        command_buffer,
-        vertex_count,
-        instance_count,
-        first_vertex,
-        first_instance
-    );
+    device_dispatcher.?.DestroySwapchainKHR(device, swapchain, p_allocator);
+    setup.destroy_swapchain(device, device_dispatcher.?);
 }
 
-export fn VkLayerLurk_CmdDrawIndexed
+export fn VkLayerLurk_QueuePresentKHR
 (
-    command_buffer: vk.CommandBuffer,
-    index_count: u32,
-    instance_count: u32,
-    first_index: u32,
-    vertex_offset: i32,
-    first_instance: u32
-)
-callconv(vk.vulkan_call_conv) void
-{
-    global_lock.lock();
-    defer global_lock.unlock();
-
-    var stats =
-        command_buffer_stats.get(command_buffer)
-        orelse @panic("CmdDrawIndexed failed to get command buffer stats");
-    stats.draw_count += 1;
-    stats.instance_count += instance_count;
-    stats.vert_count += instance_count * index_count;
-
-    command_buffer_stats
-        .put(command_buffer, stats)
-        catch @panic("SampleLayerZig_CmdDrawIndexed stats table OOM");
-
-    const table =
-        device_dispatcher
-        orelse @panic("CmdDrawIndexed failed to get dispatch table");
-    table.CmdDrawIndexed
-    (
-        command_buffer,
-        index_count,
-        instance_count,
-        first_index,
-        vertex_offset,
-        first_instance
-    );
-}
-
-export fn VkLayerLurk_EndCommandBuffer
-(
-    command_buffer: vk.CommandBuffer
+    queue: vk.Queue,
+    p_present_info: *const vk.PresentInfoKHR,
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    global_lock.lock();
-    defer global_lock.unlock();
+    var final_result = vk.Result.success;
 
-    if (command_buffer_stats.get(command_buffer)) |stats|
     {
-        std.log.scoped(.LAYER).debug
-        (
-            "Command buffer 0x{x} ended with " ++
-            "{} draws, " ++
-            "{} instances, and " ++
-            "{} vertices",
-            .{
-                @intFromPtr(&command_buffer),
-                stats.draw_count,
-                stats.instance_count,
-                stats.vert_count
+        global_lock.lock();
+        defer global_lock.unlock();
+        const queue_data = setup.wait_before_queue_present(queue, device_dispatcher.?);
+
+        {
+            var i: u32 = 0;
+            while (i < p_present_info.swapchain_count) : (i += 1)
+            {
+                const maybe_draw_data = setup.before_present
+                (
+                    device_dispatcher.?,
+                    layer_dispatcher.?,
+                    queue_data,
+                    p_present_info.p_wait_semaphores,
+                    p_present_info.wait_semaphore_count,
+                    p_present_info.p_image_indices[i]
+                );
+
+                var present_info = p_present_info.*;
+                if (maybe_draw_data) |draw_data|
+                {
+                    const semaphore_container = [1]vk.Semaphore
+                    {
+                        draw_data.semaphore
+                    };
+                    present_info.p_wait_semaphores = &semaphore_container;
+                    present_info.wait_semaphore_count = 1;
+                }
+
+                const chain_result = device_dispatcher.?.QueuePresentKHR(queue, &present_info);
+
+                if (p_present_info.p_results) |p_results|
+                {
+                    p_results[i] = chain_result;
+                }
+
+                if (chain_result != vk.Result.success and final_result == vk.Result.success)
+                {
+                    final_result = chain_result;
+                }
             }
-        );
-
-        // Ensure this table actually removes the command buffer and doesn't
-        // endlessly accumulate entries
-        _ = command_buffer_stats.remove(command_buffer);
-    }
-    else
-    {
-        std.log.scoped(.LAYER).warn
-        (
-            "WARNING: EndCommandBuffer failed to get command buffer stats\n",
-            .{}
-        );
+        }
     }
 
-    const table =
-        device_dispatcher
-        orelse @panic("EndCommandBuffer failed to get dispatch table");
-    return table.EndCommandBuffer(command_buffer);
+    return final_result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -542,102 +474,6 @@ callconv(vk.vulkan_call_conv) vk.Result
     return vk.Result.success;
 }
 
-export fn VkLayerLurk_CreateSwapchainKHR
-(
-    device: vk.Device,
-    p_create_info: *const vk.SwapchainCreateInfoKHR,
-    p_allocator: ?*const vk.AllocationCallbacks,
-    p_swapchain: *vk.SwapchainKHR,
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
-    if (result != vk.Result.success) return result;
-
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
-    }
-
-    return result;
-}
-
-export fn VkLayerLurk_DestroySwapchainKHR
-(
-    device: vk.Device,
-    swapchain: vk.SwapchainKHR,
-    p_allocator: ?*const vk.AllocationCallbacks,
-)
-callconv(vk.vulkan_call_conv) void
-{
-    device_dispatcher.?.DestroySwapchainKHR(device, swapchain, p_allocator);
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        setup.destroy_swapchain(device, device_dispatcher.?);
-    }
-}
-
-export fn VkLayerLurk_QueuePresentKHR
-(
-    queue: vk.Queue,
-    p_present_info: *const vk.PresentInfoKHR,
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    var final_result = vk.Result.success;
-
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        const queue_data = setup.wait_before_queue_present(queue, device_dispatcher.?);
-
-        {
-            var i: u32 = 0;
-            while (i < p_present_info.swapchain_count) : (i += 1)
-            {
-                const maybe_draw_data = setup.before_present
-                (
-                    p_present_info.p_swapchains[i],
-                    device_dispatcher.?,
-                    instance_dispatcher.?,
-                    layer_dispatcher.?,
-                    queue_data,
-                    p_present_info.p_wait_semaphores,
-                    p_present_info.wait_semaphore_count,
-                    p_present_info.p_image_indices[i]
-                );
-
-                var present_info = p_present_info.*;
-                if (maybe_draw_data) |draw_data|
-                {
-                    const semaphore_container = [1]vk.Semaphore
-                    {
-                        draw_data.semaphore
-                    };
-                    present_info.p_wait_semaphores = &semaphore_container;
-                    present_info.wait_semaphore_count = 1;
-                }
-
-                const chain_result = device_dispatcher.?.QueuePresentKHR(queue, &present_info);
-
-                if (p_present_info.p_results) |p_results|
-                {
-                    p_results[i] = chain_result;
-                }
-
-                if (chain_result != vk.Result.success and final_result == vk.Result.success)
-                {
-                    final_result = chain_result;
-                }
-            }
-        }
-    }
-
-    return final_result;
-}
-
 export fn VkLayerLurk_GetDeviceProcAddr
 (
     device: vk.Device,
@@ -668,22 +504,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     {
         return @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice));
     }
-    else if (std.mem.eql(u8, span_name, "vkBeginCommandBuffer"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_BeginCommandBuffer));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCmdDraw"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CmdDraw));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCmdDrawIndexed"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CmdDrawIndexed));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEndCommandBuffer"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EndCommandBuffer));
-    }
     else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR));
@@ -713,7 +533,7 @@ export fn VkLayerLurk_GetInstanceProcAddr
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     // Internal logic makes connecting multiple times idempotent
-    disc.start_discord_conn(c_allocator) catch @panic("Failed to start discord connection.");
+    disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
 
     const span_name = std.mem.span(p_name);
 
@@ -759,22 +579,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     else if (std.mem.eql(u8, span_name, "vkDestroyDevice"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice));
-    }
-    else if (std.mem.eql(u8, span_name, "vkBeginCommandBuffer"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_BeginCommandBuffer));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCmdDraw"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CmdDraw));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCmdDrawIndexed"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CmdDrawIndexed));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEndCommandBuffer"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EndCommandBuffer));
     }
     else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
     {

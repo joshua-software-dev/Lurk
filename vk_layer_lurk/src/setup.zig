@@ -1633,9 +1633,7 @@ fn render_swapchain_display
 
 pub fn before_present
 (
-    current_swapchain: vk.SwapchainKHR,
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
-    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
     layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
     queue_data: QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
@@ -1644,9 +1642,6 @@ pub fn before_present
 )
 ?DrawData
 {
-    _ = current_swapchain;
-    _ = instance_dispatcher;
-
     if (current_image_count > 0)
     {
         imgui_holder.draw_frame();
