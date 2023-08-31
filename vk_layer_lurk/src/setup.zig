@@ -704,22 +704,21 @@ pub fn destroy_swapchain(device: vk.Device, device_dispatcher: vk_layer_stubs.La
     );
 }
 
-pub fn destroy_instance(instance: vk.Instance, instance_dispatcher: ?vk_layer_stubs.LayerInstanceDispatchTable) void
+pub fn destroy_instance(instance: vk.Instance, instance_wrapper: vk_global_state.LayerInstanceWrapper) void
 {
     _ = instance;
-    _ = instance_dispatcher;
+    _ = instance_wrapper;
     _ = imgui_holder.destroy_context();
 }
 
 pub fn get_physical_mem_props
 (
     physical_device: vk.PhysicalDevice,
-    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
+    instance_wrapper: vk_global_state.LayerInstanceWrapper,
 )
 void
 {
-    vk_global_state.physical_mem_props = undefined;
-    instance_dispatcher.GetPhysicalDeviceMemoryProperties(physical_device, &vk_global_state.physical_mem_props.?);
+    vk_global_state.physical_mem_props = instance_wrapper.getPhysicalDeviceMemoryProperties(physical_device);
 }
 
 fn new_queue_data
@@ -749,7 +748,7 @@ pub fn device_map_queues
     physical_device: vk.PhysicalDevice,
     device: vk.Device,
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
-    instance_dispatcher: vk_layer_stubs.LayerInstanceDispatchTable,
+    instance_wrapper: vk_global_state.LayerInstanceWrapper,
     layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
     p_create_info: *const vk.DeviceCreateInfo,
 )
@@ -758,17 +757,17 @@ void
     vk_global_state.persistent_device = device;
 
     var queue_family_props_count: u32 = 0;
-    instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
+    instance_wrapper.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
     var family_props = vk_global_state.QueueFamilyPropsBacking.init(0)
     catch @panic("Failed to get backing buffer for QueueFamilyProperties");
     family_props.resize(queue_family_props_count) catch @panic("QueueFamilyProperties buffer overflow");
 
-    instance_dispatcher.GetPhysicalDeviceQueueFamilyProperties
+    instance_wrapper.getPhysicalDeviceQueueFamilyProperties
     (
         physical_device,
         &queue_family_props_count,
-        &family_props.buffer,
+        family_props.slice().ptr,
     );
 
     var device_queue_index: u32 = 0;

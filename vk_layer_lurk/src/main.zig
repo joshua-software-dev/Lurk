@@ -3,7 +3,9 @@ const std = @import("std");
 
 const disc = @import("discord_conn_holder.zig");
 const setup = @import("setup.zig");
+const vk_global_state = @import("vk_global_state.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
+const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
 
 const vk = @import("vk.zig");
 
@@ -50,7 +52,6 @@ var global_lock: std.Thread.Mutex = .{};
 // A hash table isn't needed as this layer is only given one device and one
 // instance
 var device_dispatcher: ?vk_layer_stubs.LayerDispatchTable = null;
-var instance_dispatcher: ?vk_layer_stubs.LayerInstanceDispatchTable = null;
 var layer_dispatcher: ?vk_layer_stubs.LayerInitDispatchTable = null;
 
 
@@ -65,64 +66,16 @@ export fn VkLayerLurk_CreateInstance
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    // Ensure this is a nullable pointer (?*) to allow stepping through the
-    // chain of p_next
-    var layer_create_info: ?*vk_layer_stubs.LayerInstanceCreateInfo =
-        @ptrCast(@alignCast(@constCast(p_create_info.p_next)));
+    global_lock.lock();
+    defer global_lock.unlock();
 
-    // step through the chain of p_next until we get to the link info
-    while
-    (
-        layer_create_info != null and
-        (
-            layer_create_info.?.s_type != vk.StructureType.loader_instance_create_info or
-            layer_create_info.?.function != vk_layer_stubs.LayerFunction_LAYER_LINK_INFO
-        )
-    )
+    vk_setup_wrappers.create_instance_wrapper(p_create_info, p_instance);
+    if (vk_global_state.base_wrapper == null or vk_global_state.instance_wrapper == null)
     {
-        layer_create_info = @ptrCast(@alignCast(@constCast(layer_create_info.?.p_next)));
-    }
-
-    if(layer_create_info == null)
-    {
-        // No loader instance create info
         return vk.Result.error_initialization_failed;
     }
 
-    // create non-null pointer variable to make further interactions with this
-    // type easier
-    var final_lci: *vk_layer_stubs.LayerDeviceCreateInfo =
-        @ptrCast(layer_create_info orelse unreachable);
-
-    var gpa = final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr;
-    // move chain on for next layer
-    final_lci.u.p_layer_info = final_lci.u.p_layer_info.p_next;
-
-    const createFunc: vk.PfnCreateInstance =
-        @ptrCast(gpa(vk.Instance.null_handle, "vkCreateInstance"));
-    // the original cpp version never uses this value despite saving it, I've
-    // opted to discard it instead
-    _ = createFunc(p_create_info, p_allocator, p_instance);
-
-    // fetch our own dispatch table for the functions we need, into the next
-    // layer
-    const instance = p_instance.*;
-    var dispatch_table: vk_layer_stubs.LayerInstanceDispatchTable = undefined;
-    dispatch_table.DestroyInstance = @ptrCast(gpa(instance, "vkDestroyInstance"));
-    dispatch_table.EnumerateDeviceExtensionProperties =
-        @ptrCast(gpa(instance, "vkEnumerateDeviceExtensionProperties"));
-    dispatch_table.GetInstanceProcAddr = @ptrCast(gpa(instance, "vkGetInstanceProcAddr"));
-    dispatch_table.GetPhysicalDeviceMemoryProperties = @ptrCast(gpa(instance, "vkGetPhysicalDeviceMemoryProperties"));
-    dispatch_table.GetPhysicalDeviceQueueFamilyProperties = @ptrCast(gpa(instance, "vkGetPhysicalDeviceQueueFamilyProperties"));
-
-    // store layer global instance dispatch table
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        instance_dispatcher = dispatch_table;
-    }
-
-    return vk.Result.success;
+    return vk_global_state.base_wrapper.?.dispatch.vkCreateInstance(p_create_info, p_allocator, p_instance);
 }
 
 export fn VkLayerLurk_DestroyInstance
@@ -139,8 +92,8 @@ callconv(vk.vulkan_call_conv) void
     {
         global_lock.lock();
         defer global_lock.unlock();
-        setup.destroy_instance(instance, instance_dispatcher.?);
-        instance_dispatcher = null;
+        setup.destroy_instance(instance, vk_global_state.instance_wrapper.?);
+        vk_global_state.instance_wrapper = null;
     }
 }
 
@@ -230,13 +183,13 @@ callconv(vk.vulkan_call_conv) vk.Result
         layer_dispatcher = local_layer_dispatcher;
     }
 
-    setup.get_physical_mem_props(physical_device, instance_dispatcher.?);
+    setup.get_physical_mem_props(physical_device, vk_global_state.instance_wrapper.?);
     setup.device_map_queues
     (
         physical_device,
         device,
         device_dispatcher.?,
-        instance_dispatcher.?,
+        vk_global_state.instance_wrapper.?,
         layer_dispatcher.?,
         p_create_info,
     );
@@ -453,14 +406,7 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         global_lock.lock();
         defer global_lock.unlock();
-        const table =
-            instance_dispatcher
-            orelse @panic
-            (
-                "EnumerateDeviceExtensionProperties " ++
-                "failed to get dispatch table"
-            );
-        return table.EnumerateDeviceExtensionProperties
+        return vk_global_state.instance_wrapper.?.dispatch.vkEnumerateDeviceExtensionProperties
         (
             physical_device,
             p_layer_name,
@@ -595,8 +541,5 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     global_lock.lock();
     defer global_lock.unlock();
-    const table =
-        instance_dispatcher
-        orelse @panic("GetInstanceProcAddr failed to get dispatch table");
-    return @ptrCast(@alignCast(table.GetInstanceProcAddr(instance, p_name)));
+    return @ptrCast(@alignCast(vk_global_state.base_wrapper.?.getInstanceProcAddr(instance, p_name)));
 }

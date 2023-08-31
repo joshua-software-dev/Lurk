@@ -5,7 +5,7 @@ pub const LayerInstanceLink = extern struct {
     p_next: *LayerInstanceLink,
     pfn_next_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
 };
-pub const PfnSetInstanceLoaderData = *const fn (vk.Instance, ?*anyopaque) callconv(.C) vk.Result;
+pub const PfnSetInstanceLoaderData = *const fn (vk.Instance, ?*anyopaque) callconv(vk.vulkan_call_conv) vk.Result;
 const union_unnamed_1 = extern union {
     p_layer_info: *LayerInstanceLink,
     pfn_set_instance_loader_data: ?PfnSetInstanceLoaderData,
@@ -89,37 +89,6 @@ pub const LayerInitDispatchTable = struct
                 set_device_loader_data orelse @panic("PfnSetDeviceLoaderData is null"),
         };
     }
-};
-
-pub const LayerInstanceDispatchTable = extern struct {
-    GetInstanceProcAddr: vk.PfnGetInstanceProcAddr,
-    DestroyInstance: vk.PfnDestroyInstance,
-    EnumeratePhysicalDevices: vk.PfnEnumeratePhysicalDevices,
-    GetPhysicalDeviceFeatures: vk.PfnGetPhysicalDeviceFeatures,
-    GetPhysicalDeviceImageFormatProperties: vk.PfnGetPhysicalDeviceImageFormatProperties,
-    GetPhysicalDeviceFormatProperties: vk.PfnGetPhysicalDeviceFormatProperties,
-    GetPhysicalDeviceSparseImageFormatProperties: vk.PfnGetPhysicalDeviceSparseImageFormatProperties,
-    GetPhysicalDeviceProperties: vk.PfnGetPhysicalDeviceProperties,
-    GetPhysicalDeviceQueueFamilyProperties: vk.PfnGetPhysicalDeviceQueueFamilyProperties,
-    GetPhysicalDeviceMemoryProperties: vk.PfnGetPhysicalDeviceMemoryProperties,
-    EnumerateDeviceExtensionProperties: vk.PfnEnumerateDeviceExtensionProperties,
-    EnumerateDeviceLayerProperties: vk.PfnEnumerateDeviceLayerProperties,
-    DestroySurfaceKHR: vk.PfnDestroySurfaceKHR,
-    GetPhysicalDeviceSurfaceSupportKHR: vk.PfnGetPhysicalDeviceSurfaceSupportKHR,
-    GetPhysicalDeviceSurfaceCapabilitiesKHR: vk.PfnGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    GetPhysicalDeviceSurfaceFormatsKHR: vk.PfnGetPhysicalDeviceSurfaceFormatsKHR,
-    GetPhysicalDeviceSurfacePresentModesKHR: vk.PfnGetPhysicalDeviceSurfacePresentModesKHR,
-    CreateDebugReportCallbackEXT: vk.PfnCreateDebugReportCallbackEXT,
-    DestroyDebugReportCallbackEXT: vk.PfnDestroyDebugReportCallbackEXT,
-    DebugReportMessageEXT: vk.PfnDebugReportMessageEXT,
-    GetPhysicalDeviceDisplayPropertiesKHR: vk.PfnGetPhysicalDeviceDisplayPropertiesKHR,
-    GetPhysicalDeviceDisplayPlanePropertiesKHR: vk.PfnGetPhysicalDeviceDisplayPlanePropertiesKHR,
-    GetDisplayPlaneSupportedDisplaysKHR: vk.PfnGetDisplayPlaneSupportedDisplaysKHR,
-    GetDisplayModePropertiesKHR: vk.PfnGetDisplayModePropertiesKHR,
-    CreateDisplayModeKHR: vk.PfnCreateDisplayModeKHR,
-    GetDisplayPlaneCapabilitiesKHR: vk.PfnGetDisplayPlaneCapabilitiesKHR,
-    CreateDisplayPlaneSurfaceKHR: vk.PfnCreateDisplayPlaneSurfaceKHR,
-    GetPhysicalDeviceExternalImageFormatPropertiesNV: vk.PfnGetPhysicalDeviceExternalImageFormatPropertiesNV,
 };
 
 pub const LayerDispatchTable = extern struct {
