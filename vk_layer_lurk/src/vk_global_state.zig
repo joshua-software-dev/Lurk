@@ -28,6 +28,25 @@ pub const QueueData = struct
     fence: vk.Fence,
 };
 
+pub const LayerDeviceWrapper = vk.DeviceWrapper
+(
+    vk.DeviceCommandFlags
+    {
+
+    }
+);
+pub const LayerInstanceWrapper = vk.InstanceWrapper
+(
+    vk.InstanceCommandFlags
+    {
+        .destroyInstance = true,
+        .enumerateDeviceExtensionProperties = true,
+        .getInstanceProcAddr = true,
+        .getPhysicalDeviceMemoryProperties = true,
+        .getPhysicalDeviceQueueFamilyProperties = true,
+    }
+);
+
 pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 pub const ImageBacking = std.BoundedArray(vk.Image, 256);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
@@ -63,3 +82,6 @@ pub var swapchain: ?*vk.SwapchainKHR = null;
 pub var upload_font_buffer_mem: vk.DeviceMemory = std.mem.zeroes(vk.DeviceMemory);
 pub var upload_font_buffer: vk.Buffer = std.mem.zeroes(vk.Buffer);
 pub var width: ?u32 = null;
+
+pub var device_wrapper: ?LayerDeviceWrapper = null;
+pub var instance_wrapper: ?LayerInstanceWrapper = null;
