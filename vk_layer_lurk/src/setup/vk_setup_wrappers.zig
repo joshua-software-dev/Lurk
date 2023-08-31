@@ -1,5 +1,5 @@
-const vk_layer_stubs = @import("../vk_layer_stubs.zig");
-const vk_global_state = @import("../vk_global_state.zig");
+const vk_layer_stubs = @import("vk_layer_stubs.zig");
+const vk_global_state = @import("vk_global_state.zig");
 
 const vk = @import("../vk.zig");
 

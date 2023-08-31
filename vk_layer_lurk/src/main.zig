@@ -2,9 +2,9 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const disc = @import("discord_conn_holder.zig");
-const setup = @import("setup.zig");
-const vk_global_state = @import("vk_global_state.zig");
-const vk_layer_stubs = @import("vk_layer_stubs.zig");
+const setup = @import("setup/vk_setup.zig");
+const vk_global_state = @import("setup/vk_global_state.zig");
+const vk_layer_stubs = @import("setup/vk_layer_stubs.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
 
 const vk = @import("vk.zig");

@@ -1,11 +1,11 @@
 const std = @import("std");
 
-const embedded_shaders = @import("embedded_shaders.zig");
-const imgui_holder = @import("imgui_holder.zig");
+const embedded_shaders = @import("vk_embedded_shaders.zig");
+const imgui_holder = @import("../imgui_holder.zig");
 const vk_global_state = @import("vk_global_state.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 
-const vk = @import("vk.zig");
+const vk = @import("../vk.zig");
 
 
 fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32

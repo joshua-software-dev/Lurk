@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const vk = @import("vk.zig");
+const vk = @import("../vk.zig");
 
 
 pub const DrawData = struct
