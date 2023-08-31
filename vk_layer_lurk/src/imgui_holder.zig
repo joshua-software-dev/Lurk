@@ -1,10 +1,13 @@
 const zgui = @import("zgui");
 
 
-pub const DrawVertSize = @sizeOf(zgui.DrawVert);
-pub const DrawVertOffsetOfPos = @offsetOf(zgui.DrawVert, "pos");
-pub const DrawVertOffsetOfUv = @offsetOf(zgui.DrawVert, "uv");
-pub const DrawVertOffsetOfColor = @offsetOf(zgui.DrawVert, "color");
+pub const DrawIdx = zgui.DrawIdx;
+pub const DrawVert = zgui.DrawVert;
+pub const DrawIdxSize = @sizeOf(DrawIdx);
+pub const DrawVertSize = @sizeOf(DrawVert);
+pub const DrawVertOffsetOfPos = @offsetOf(DrawVert, "pos");
+pub const DrawVertOffsetOfUv = @offsetOf(DrawVert, "uv");
+pub const DrawVertOffsetOfColor = @offsetOf(DrawVert, "color");
 
 
 var current_imgui_context: ?zgui.Context = null;
@@ -34,6 +37,24 @@ pub fn set_fonts_tex_ident(id: *anyopaque) void
     zgui.io.setFontsTexId(@ptrCast(id));
 }
 
+pub fn get_draw_list_command_buffer(draw_list: zgui.DrawList) []const zgui.DrawCmd
+{
+    const length = draw_list.getCmdBufferLength();
+    return draw_list.getCmdBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+}
+
+pub fn get_draw_list_index_buffer(draw_list: zgui.DrawList) []const DrawIdx
+{
+    const length = draw_list.getIndexBufferLength();
+    return draw_list.getIndexBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+}
+
+pub fn get_draw_list_vertex_buffer(draw_list: zgui.DrawList) []const DrawVert
+{
+    const length = draw_list.getVertexBufferLength();
+    return draw_list.getVertexBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+}
+
 pub fn destroy_context() bool
 {
     if (current_imgui_context) |context|
@@ -47,7 +68,7 @@ pub fn destroy_context() bool
 
 fn draw_frame_contents() void
 {
-    zgui.showDemoWindow(null);
+    zgui.separator();
 }
 
 pub fn draw_frame() void
@@ -61,7 +82,7 @@ pub fn draw_frame() void
 
     // ImGui::Begin("Mesa overlay");
 
-    // ImGui::ShowDemoWindow();
+    // ImGui::Separator();
 
     // ImGui::End();
     // ImGui::EndFrame();
@@ -76,8 +97,8 @@ pub fn draw_frame() void
     zgui.setNextWindowSize
     (
         .{
-            .h = 100,
-            .w = 100,
+            .h = 600,
+            .w = 600,
             .cond = .always,
         },
     );
@@ -90,7 +111,8 @@ pub fn draw_frame() void
         }
     );
 
-    if (zgui.begin("Lurk", .{}))
+    var show_window = true;
+    if (zgui.begin("Lurk", .{ .popen = &show_window, }))
     {
         draw_frame_contents();
     }

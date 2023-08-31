@@ -187,10 +187,18 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.BindBufferMemory = @ptrCast(gdpa(device, "vkBindBufferMemory"));
     dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
     dispatch_table.CmdBeginRenderPass = @ptrCast(gdpa(device, "vkCmdBeginRenderPass"));
+    dispatch_table.CmdBindDescriptorSets = @ptrCast(gdpa(device, "vkCmdBindDescriptorSets"));
+    dispatch_table.CmdBindIndexBuffer = @ptrCast(gdpa(device, "vkCmdBindIndexBuffer"));
+    dispatch_table.CmdBindPipeline = @ptrCast(gdpa(device, "vkCmdBindPipeline"));
+    dispatch_table.CmdBindVertexBuffers = @ptrCast(gdpa(device, "vkCmdBindVertexBuffers"));
     dispatch_table.CmdCopyBufferToImage = @ptrCast(gdpa(device, "vkCmdCopyBufferToImage"));
     dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
     dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
+    dispatch_table.CmdEndRenderPass = @ptrCast(gdpa(device, "vkCmdEndRenderPass"));
     dispatch_table.CmdPipelineBarrier = @ptrCast(gdpa(device, "vkCmdPipelineBarrier"));
+    dispatch_table.CmdPushConstants = @ptrCast(gdpa(device, "vkCmdPushConstants"));
+    dispatch_table.CmdSetScissor = @ptrCast(gdpa(device, "vkCmdSetScissor"));
+    dispatch_table.CmdSetViewport = @ptrCast(gdpa(device, "vkCmdSetViewport"));
     dispatch_table.CreateBuffer = @ptrCast(gdpa(device, "vkCreateBuffer"));
     dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
     dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
@@ -206,12 +214,14 @@ callconv(vk.vulkan_call_conv) vk.Result
     dispatch_table.CreateSemaphore = @ptrCast(gdpa(device, "vkCreateSemaphore"));
     dispatch_table.CreateShaderModule = @ptrCast(gdpa(device, "vkCreateShaderModule"));
     dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
+    dispatch_table.DestroyBuffer = @ptrCast(gdpa(device, "vkDestroyBuffer"));
     dispatch_table.DestroyDevice = @ptrCast(gdpa(device, "vkDestroyDevice"));
     dispatch_table.DestroyRenderPass = @ptrCast(gdpa(device, "vkDestroyRenderPass"));
     dispatch_table.DestroyShaderModule = @ptrCast(gdpa(device, "vkDestroyShaderModule"));
     dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
     dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
     dispatch_table.FlushMappedMemoryRanges = @ptrCast(gdpa(device, "vkFlushMappedMemoryRanges"));
+    dispatch_table.FreeMemory = @ptrCast(gdpa(device, "vkFreeMemory"));
     dispatch_table.GetBufferMemoryRequirements = @ptrCast(gdpa(device, "vkGetBufferMemoryRequirements"));
     dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
     dispatch_table.GetDeviceQueue = @ptrCast(gdpa(device, "vkGetDeviceQueue"));
@@ -576,6 +586,8 @@ export fn VkLayerLurk_QueuePresentKHR
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
+    var final_result = vk.Result.success;
+
     {
         global_lock.lock();
         defer global_lock.unlock();
@@ -585,7 +597,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             var i: u32 = 0;
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
-                setup.before_present
+                const maybe_draw_data = setup.before_present
                 (
                     p_present_info.p_swapchains[i],
                     device_dispatcher.?,
@@ -596,11 +608,34 @@ callconv(vk.vulkan_call_conv) vk.Result
                     p_present_info.wait_semaphore_count,
                     p_present_info.p_image_indices[i]
                 );
+
+                var present_info = p_present_info.*;
+                if (maybe_draw_data) |draw_data|
+                {
+                    const semaphore_container = [1]vk.Semaphore
+                    {
+                        draw_data.semaphore
+                    };
+                    present_info.p_wait_semaphores = &semaphore_container;
+                    present_info.wait_semaphore_count = 1;
+                }
+
+                const chain_result = device_dispatcher.?.QueuePresentKHR(queue, &present_info);
+
+                if (p_present_info.p_results) |p_results|
+                {
+                    p_results[i] = chain_result;
+                }
+
+                if (chain_result != vk.Result.success and final_result == vk.Result.success)
+                {
+                    final_result = chain_result;
+                }
             }
         }
     }
 
-    return device_dispatcher.?.QueuePresentKHR(queue, p_present_info);
+    return final_result;
 }
 
 export fn VkLayerLurk_GetDeviceProcAddr

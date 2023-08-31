@@ -27,6 +27,7 @@ const DrawData = struct
 const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 const ImageBacking = std.BoundedArray(vk.Image, 256);
 const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
+const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
 const QueueData = struct
 {
     queue_family_index: u32,
@@ -1139,21 +1140,70 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_dispatcher: v
     font_already_uploaded = true;
 }
 
-fn render_swapchain_display
+fn create_or_resize_buffer
 (
-    current_swapchain: vk.SwapchainKHR,
     device_dispatcher: vk_layer_stubs.LayerDispatchTable,
-    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
-    queue_data: QueueData,
-    image_index: u32,
+    buffer: *vk.Buffer,
+    buffer_mem: *vk.DeviceMemory,
+    buffer_size: *vk.DeviceSize,
+    new_size: u64,
+    usage: vk.BufferUsageFlags,
 )
 void
 {
-    _ = current_swapchain;
-    const imgui_draw_data = imgui_holder.get_draw_data();
-    if (imgui_draw_data.total_vtx_count < 1) return;
 
-    const draw_data = get_overlay_draw(device_dispatcher, layer_dispatcher);
+    if (buffer.* != .null_handle)
+    {
+        device_dispatcher.DestroyBuffer(persistent_device.?, buffer.*, null);
+    }
+
+    if (buffer_mem.* != .null_handle)
+    {
+        device_dispatcher.FreeMemory(persistent_device.?, buffer_mem.*, null);
+    }
+
+    const buffer_info = vk.BufferCreateInfo
+    {
+        .size = new_size,
+        .usage = usage,
+        .sharing_mode = .exclusive,
+    };
+    const create_buf_result = device_dispatcher.CreateBuffer(persistent_device.?, &buffer_info, null, buffer);
+    if (create_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateBuffer");
+
+    var req: vk.MemoryRequirements = undefined;
+    device_dispatcher.GetBufferMemoryRequirements(persistent_device.?, buffer.*, &req);
+
+    const alloc_info = vk.MemoryAllocateInfo
+    {
+        .allocation_size = req.size,
+        .memory_type_index = vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
+    };
+    const alloc_mem_result = device_dispatcher.AllocateMemory(persistent_device.?, &alloc_info, null, buffer_mem);
+    if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
+
+    const bind_buf_result = device_dispatcher.BindBufferMemory(persistent_device.?, buffer.*, buffer_mem.*, 0);
+    if (bind_buf_result != vk.Result.success) @panic("Vulkan function call failed: Device.BindBufferMemory");
+
+    buffer_size.* = new_size;
+}
+
+fn render_swapchain_display
+(
+    device_dispatcher: vk_layer_stubs.LayerDispatchTable,
+    layer_dispatcher: vk_layer_stubs.LayerInitDispatchTable,
+    queue_data: QueueData,
+    p_wait_semaphores: ?[*]const vk.Semaphore,
+    wait_semaphore_count: u32,
+    image_index: u32,
+)
+?DrawData
+{
+    const imgui_draw_data = imgui_holder.get_draw_data();
+    if (imgui_draw_data.total_vtx_count < 1) return null;
+    const imgui_cmd_lists_count: u32 = @intCast(imgui_draw_data.cmd_lists_count);
+
+    var draw_data = get_overlay_draw(device_dispatcher, layer_dispatcher);
 
     // is this supposed to be ignored? Mesa does...
     _ = device_dispatcher.ResetCommandBuffer(draw_data.command_buffer, .{});
@@ -1181,40 +1231,42 @@ void
 
     ensure_swapchain_fonts(draw_data.command_buffer, device_dispatcher);
 
-    const imb_container = [1]vk.ImageMemoryBarrier
     {
-        vk.ImageMemoryBarrier
+        const imb_container = [1]vk.ImageMemoryBarrier
         {
-            .src_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
-            .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
-            .old_layout = .present_src_khr,
-            .new_layout = .color_attachment_optimal,
-            .src_queue_family_index = queue_data.queue_family_index,
-            .dst_queue_family_index = graphic_queue.?.queue_family_index,
-            .image = images.buffer[image_index],
-            .subresource_range = vk.ImageSubresourceRange
+            vk.ImageMemoryBarrier
             {
-                .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = 1,
+                .src_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+                .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+                .old_layout = .present_src_khr,
+                .new_layout = .color_attachment_optimal,
+                .src_queue_family_index = queue_data.queue_family_index,
+                .dst_queue_family_index = graphic_queue.?.queue_family_index,
+                .image = images.get(image_index),
+                .subresource_range = vk.ImageSubresourceRange
+                {
+                    .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = 1,
+                },
             },
-        },
-    };
-    device_dispatcher.CmdPipelineBarrier
-    (
-        draw_data.command_buffer,
-        vk.PipelineStageFlags{ .all_graphics_bit = true, },
-        vk.PipelineStageFlags{ .all_graphics_bit = true, },
-        .{},
-        0,
-        null,
-        0,
-        null,
-        1,
-        &imb_container,
-    );
+        };
+        device_dispatcher.CmdPipelineBarrier
+        (
+            draw_data.command_buffer,
+            vk.PipelineStageFlags{ .all_graphics_bit = true, },
+            vk.PipelineStageFlags{ .all_graphics_bit = true, },
+            .{},
+            0,
+            null,
+            0,
+            null,
+            1,
+            &imb_container,
+        );
+    }
 
     device_dispatcher.CmdBeginRenderPass
     (
@@ -1222,6 +1274,361 @@ void
         &render_pass_info,
         .@"inline",
     );
+
+    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.total_vtx_count)) * imgui_holder.DrawVertSize;
+    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.total_idx_count)) * imgui_holder.DrawIdxSize;
+
+    if (draw_data.vertex_buffer_size < vertex_size)
+    {
+        create_or_resize_buffer
+        (
+            device_dispatcher,
+            &draw_data.vertex_buffer,
+            &draw_data.vertex_buffer_mem,
+            &draw_data.vertex_buffer_size,
+            vertex_size,
+            vk.BufferUsageFlags{ .vertex_buffer_bit = true, },
+        );
+    }
+
+    if (draw_data.index_buffer_size < index_size)
+    {
+        create_or_resize_buffer
+        (
+            device_dispatcher,
+            &draw_data.index_buffer,
+            &draw_data.index_buffer_mem,
+            &draw_data.index_buffer_size,
+            index_size,
+            vk.BufferUsageFlags{ .index_buffer_bit = true, },
+        );
+    }
+
+    var vertex_dst: [*]imgui_holder.DrawVert = undefined;
+    const map_mem_result1 = device_dispatcher.MapMemory
+    (
+        persistent_device.?,
+        draw_data.vertex_buffer_mem,
+        0,
+        vertex_size,
+        .{},
+        @ptrCast(&vertex_dst)
+    );
+    if (map_mem_result1 != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory 1");
+
+    var index_dst: [*]imgui_holder.DrawIdx = undefined;
+    const map_mem_result2 = device_dispatcher.MapMemory
+    (
+        persistent_device.?,
+        draw_data.index_buffer_mem,
+        0,
+        index_size,
+        .{},
+        @ptrCast(&index_dst)
+    );
+    if (map_mem_result2 != vk.Result.success) @panic("Vulkan function call failed: Device.MapMemory 2");
+
+    for (imgui_draw_data.cmd_lists[0..imgui_cmd_lists_count]) |cmd_list|
+    {
+        const vertex_buf = imgui_holder.get_draw_list_vertex_buffer(cmd_list);
+        const index_buf = imgui_holder.get_draw_list_index_buffer(cmd_list);
+        @memcpy(vertex_dst[0..vertex_buf.len], vertex_buf);
+        @memcpy(index_dst[0..index_buf.len], index_buf);
+        vertex_dst += vertex_buf.len;
+        index_dst += index_buf.len;
+    }
+
+    const range = [2]vk.MappedMemoryRange
+    {
+        std.mem.zeroInit
+        (
+            vk.MappedMemoryRange,
+            .{
+                .memory = draw_data.vertex_buffer_mem,
+                .size = vk.WHOLE_SIZE,
+            }
+        ),
+        std.mem.zeroInit
+        (
+            vk.MappedMemoryRange,
+            .{
+                .memory = draw_data.index_buffer_mem,
+                .size = vk.WHOLE_SIZE,
+            }
+        ),
+    };
+
+    const flush_result = device_dispatcher.FlushMappedMemoryRanges(persistent_device.?, 2, &range);
+    if (flush_result != vk.Result.success) @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
+    device_dispatcher.UnmapMemory(persistent_device.?, draw_data.vertex_buffer_mem);
+    device_dispatcher.UnmapMemory(persistent_device.?, draw_data.index_buffer_mem);
+
+    device_dispatcher.CmdBindPipeline(draw_data.command_buffer, .graphics, pipeline.?);
+    const desc_set_container = [1]vk.DescriptorSet
+    {
+        descriptor_set.?,
+    };
+    device_dispatcher.CmdBindDescriptorSets
+    (
+        draw_data.command_buffer,
+        .graphics,
+        pipeline_layout,
+        0,
+        1,
+        &desc_set_container,
+        0,
+        null,
+    );
+
+    const vertex_buffers_container = [1]vk.Buffer
+    {
+        draw_data.vertex_buffer,
+    };
+    const vertex_offset_container = [1]vk.DeviceSize
+    {
+        0,
+    };
+    device_dispatcher.CmdBindVertexBuffers
+    (
+        draw_data.command_buffer,
+        0,
+        1,
+        &vertex_buffers_container,
+        &vertex_offset_container
+    );
+    device_dispatcher.CmdBindIndexBuffer(draw_data.command_buffer, draw_data.index_buffer, 0, .uint16);
+
+    const viewport_container = [1]vk.Viewport
+    {
+        vk.Viewport
+        {
+            .x = 0,
+            .y = 0,
+            .width = imgui_draw_data.display_size[0],
+            .height = imgui_draw_data.display_size[1],
+            .min_depth = 0.0,
+            .max_depth = 1.0,
+        },
+    };
+    device_dispatcher.CmdSetViewport(draw_data.command_buffer, 0, 1, &viewport_container);
+
+    const scale = [2]f32
+    {
+        2.0 / imgui_draw_data.display_size[0], // x
+        2.0 / imgui_draw_data.display_size[1], // y
+    };
+    device_dispatcher.CmdPushConstants
+    (
+        draw_data.command_buffer,
+        pipeline_layout,
+        vk.ShaderStageFlags{ .vertex_bit = true, },
+        @sizeOf(f32) * 0, // can't this just be 0?
+        @sizeOf(f32) * 2,
+        std.mem.asBytes(&scale),
+    );
+
+    const translate = [2]f32
+    {
+        -1.0 - imgui_draw_data.display_size[0] * scale[0], // x
+        -1.0 - imgui_draw_data.display_size[1] * scale[1], // y
+    };
+    device_dispatcher.CmdPushConstants
+    (
+        draw_data.command_buffer,
+        pipeline_layout,
+        vk.ShaderStageFlags{ .vertex_bit = true, },
+        @sizeOf(f32) * 2,
+        @sizeOf(f32) * 2,
+        std.mem.asBytes(&translate),
+    );
+
+    {
+        var vertex_offset: u32 = 0;
+        var index_offset: u32 = 0;
+        for (imgui_draw_data.cmd_lists[0..imgui_cmd_lists_count], 0..) |cmd_list, it|
+        {
+            _ = it;
+            for (imgui_holder.get_draw_list_command_buffer(cmd_list)) |cmd|
+            {
+                const x_pos: i32 = @intFromFloat(cmd.clip_rect[0] - imgui_draw_data.display_pos[0]);
+                                                // cmd.clip_rect.x - imgui_draw_data.display_pos.x
+                const y_pos: i32 = @intFromFloat(cmd.clip_rect[1] - imgui_draw_data.display_pos[1]);
+                                                // cmd.clip_rect.y - imgui_draw_data.display_pos.y
+                const scissor = [1]vk.Rect2D
+                {
+                    vk.Rect2D
+                    {
+                        .offset = vk.Offset2D
+                        {
+                            .x = if (x_pos > 0) x_pos else 0,
+                            .y = if (y_pos > 0) y_pos else 0,
+                        },
+                        .extent = vk.Extent2D
+                        {
+                            .width = @intFromFloat
+                            (
+                                cmd.clip_rect[2] - cmd.clip_rect[0]
+                            ), // cmd.clip_rect.z - cmd.clip_rect.x
+                            .height = @intFromFloat
+                            (
+                                cmd.clip_rect[3] - cmd.clip_rect[1] + 1.0
+                            ), // cmd.clip_rect.w - cmd.clip_rect.y + 1
+                        },
+                    },
+                };
+                device_dispatcher.CmdSetScissor(draw_data.command_buffer, 0, 1, &scissor);
+
+                device_dispatcher.CmdDrawIndexed
+                (
+                    draw_data.command_buffer,
+                    cmd.elem_count,
+                    1,
+                    index_offset,
+                    @intCast(vertex_offset),
+                    0
+                );
+
+                index_offset += cmd.elem_count;
+            }
+
+            vertex_offset += @intCast(imgui_holder.get_draw_list_vertex_buffer(cmd_list).len);
+        }
+    }
+
+    device_dispatcher.CmdEndRenderPass(draw_data.command_buffer);
+
+    if (queue_data.queue_family_index != graphic_queue.?.queue_family_index)
+    {
+        const imb_container = [1]vk.ImageMemoryBarrier
+        {
+            vk.ImageMemoryBarrier
+            {
+                .src_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+                .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
+                .old_layout = .present_src_khr,
+                .new_layout = .present_src_khr,
+                .src_queue_family_index = graphic_queue.?.queue_family_index,
+                .dst_queue_family_index = queue_data.queue_family_index,
+                .image = images.get(image_index),
+                .subresource_range = vk.ImageSubresourceRange
+                {
+                    .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = 1,
+                },
+            },
+        };
+        device_dispatcher.CmdPipelineBarrier
+        (
+            draw_data.command_buffer,
+            vk.PipelineStageFlags{ .all_graphics_bit = true, },
+            vk.PipelineStageFlags{ .all_graphics_bit = true, },
+            .{},
+            0,
+            null,
+            0,
+            null,
+            1,
+            &imb_container,
+        );
+    }
+
+    // again, why does mesa ignore this?
+    _ = device_dispatcher.EndCommandBuffer(draw_data.command_buffer);
+
+    if (wait_semaphore_count == 0 and queue_data.queue != graphic_queue.?.queue)
+    {
+        const stages_wait_container = [1]vk.PipelineStageFlags
+        {
+            vk.PipelineStageFlags{ .all_commands_bit = true, },
+        };
+        const ce_semaphore_container = [1]vk.Semaphore
+        {
+            draw_data.cross_engine_semaphore,
+        };
+        const submit_info_container1 = [1]vk.SubmitInfo
+        {
+            vk.SubmitInfo
+            {
+                .wait_semaphore_count = 0,
+                .p_wait_dst_stage_mask = &stages_wait_container,
+                .command_buffer_count = 0,
+                .signal_semaphore_count = 1,
+                .p_signal_semaphores = &ce_semaphore_container,
+            },
+        };
+
+        // why u ignore, mesa?
+        _ = device_dispatcher.QueueSubmit(queue_data.queue, 1, &submit_info_container1, .null_handle);
+
+        const command_buf_container = [1]vk.CommandBuffer
+        {
+            draw_data.command_buffer,
+        };
+        const semaphore_container = [1]vk.Semaphore
+        {
+            draw_data.semaphore,
+        };
+        const submit_info_container2 = [1]vk.SubmitInfo
+        {
+            vk.SubmitInfo
+            {
+                .wait_semaphore_count = 1,
+                .p_wait_semaphores = &ce_semaphore_container,
+                .p_wait_dst_stage_mask = &stages_wait_container,
+                .command_buffer_count = 1,
+                .p_command_buffers = &command_buf_container,
+                .signal_semaphore_count = 1,
+                .p_signal_semaphores = &semaphore_container,
+            },
+        };
+
+        // why u ignore, mesa?
+        _ = device_dispatcher.QueueSubmit(graphic_queue.?.queue, 1, &submit_info_container2, draw_data.fence);
+    }
+    else
+    {
+        var stages_wait_backing = PipelineStageFlagsBacking.init(0)
+        catch @panic("Failed to get backing buffer for PipelineStageFlags");
+        stages_wait_backing.resize(wait_semaphore_count) catch @panic("PipelineStageFlags buffer overflow");
+
+        {
+            var i: u32 = 0;
+            while (i < wait_semaphore_count) : (i += 1)
+            {
+                stages_wait_backing.buffer[i] = vk.PipelineStageFlags{ .fragment_shader_bit = true, };
+            }
+        }
+
+        const command_buf_container = [1]vk.CommandBuffer
+        {
+            draw_data.command_buffer,
+        };
+        const semaphore_container = [1]vk.Semaphore
+        {
+            draw_data.semaphore,
+        };
+        const submit_info_container = [1]vk.SubmitInfo
+        {
+            vk.SubmitInfo
+            {
+                .wait_semaphore_count = wait_semaphore_count,
+                .p_wait_semaphores = p_wait_semaphores,
+                .p_wait_dst_stage_mask = stages_wait_backing.constSlice().ptr,
+                .command_buffer_count = 1,
+                .p_command_buffers = &command_buf_container,
+                .signal_semaphore_count = 1,
+                .p_signal_semaphores = &semaphore_container,
+            },
+        };
+
+        // why u ignore, mesa?
+        _ = device_dispatcher.QueueSubmit(graphic_queue.?.queue, 1, &submit_info_container, draw_data.fence);
+    }
+
+    return draw_data;
 }
 
 pub fn before_present
@@ -1235,15 +1642,24 @@ pub fn before_present
     wait_semaphore_count: u32,
     image_index: u32,
 )
-void
+?DrawData
 {
+    _ = current_swapchain;
     _ = instance_dispatcher;
-    _ = p_wait_semaphores;
-    _ = wait_semaphore_count;
 
     if (current_image_count > 0)
     {
         imgui_holder.draw_frame();
-        render_swapchain_display(current_swapchain, device_dispatcher, layer_dispatcher, queue_data, image_index);
+        return render_swapchain_display
+        (
+            device_dispatcher,
+            layer_dispatcher,
+            queue_data,
+            p_wait_semaphores,
+            wait_semaphore_count,
+            image_index
+        );
     }
+
+    return null;
 }
