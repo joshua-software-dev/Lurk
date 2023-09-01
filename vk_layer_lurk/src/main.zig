@@ -45,16 +45,6 @@ const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
 
-// single global lock, for simplicity
-var global_lock: std.Thread.Mutex = .{};
-
-// layer book-keeping information, to store dispatch tables
-// A hash table isn't needed as this layer is only given one device and one
-// instance
-var device_dispatcher: ?vk_layer_stubs.LayerDispatchTable = null;
-var layer_dispatcher: ?vk_layer_stubs.LayerInitDispatchTable = null;
-
-
 ///////////////////////////////////////////////////////////////////////////////
 // Layer init and shutdown
 
@@ -66,16 +56,16 @@ export fn VkLayerLurk_CreateInstance
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    global_lock.lock();
-    defer global_lock.unlock();
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
 
-    vk_setup_wrappers.create_instance_wrapper(p_create_info, p_instance);
-    if (vk_global_state.base_wrapper == null or vk_global_state.instance_wrapper == null)
+    vk_setup_wrappers.create_instance_wrappers(p_create_info, p_instance);
+    if (vk_global_state.base_wrapper) |base_wrapper|
     {
-        return vk.Result.error_initialization_failed;
+        return base_wrapper.dispatch.vkCreateInstance(p_create_info, p_allocator, p_instance);
     }
 
-    return vk_global_state.base_wrapper.?.dispatch.vkCreateInstance(p_create_info, p_allocator, p_instance);
+    return vk.Result.error_initialization_failed;
 }
 
 export fn VkLayerLurk_DestroyInstance
@@ -89,12 +79,12 @@ callconv(vk.vulkan_call_conv) void
 
     disc.stop_discord_conn();
 
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        setup.destroy_instance(instance, vk_global_state.instance_wrapper.?);
-        vk_global_state.instance_wrapper = null;
-    }
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
+    setup.destroy_instance(instance, vk_global_state.instance_wrapper.?);
+
+    vk_global_state.base_wrapper = null;
+    vk_global_state.instance_wrapper = null;
 }
 
 export fn VkLayerLurk_CreateDevice
@@ -106,93 +96,31 @@ export fn VkLayerLurk_CreateDevice
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    const local_layer_dispatcher = vk_layer_stubs.LayerInitDispatchTable.init(p_create_info);
-    const gdpa = local_layer_dispatcher.pfn_next_get_device_proc_addr;
-    const gipa = local_layer_dispatcher.pfn_next_get_instance_proc_addr;
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
 
-    const createFunc: vk.PfnCreateDevice = @ptrCast(gipa(vk.Instance.null_handle, "vkCreateDevice"));
-    const create_device_result = createFunc(physical_device, p_create_info, p_allocator, p_device);
-    if (create_device_result != vk.Result.success) @panic("Vulkan function call failed: vkCreateDevice");
+    const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
+    (
+        physical_device,
+        p_create_info,
+        p_allocator,
+        p_device,
+    );
+    if (create_device_result != vk.Result.success) return create_device_result;
 
-    // fetch our own dispatch table for the functions we need, into the next
-    // layer
-    const device = p_device.*;
-    var dispatch_table: vk_layer_stubs.LayerDispatchTable = undefined;
-    dispatch_table.AllocateCommandBuffers = @ptrCast(gdpa(device, "vkAllocateCommandBuffers"));
-    dispatch_table.AllocateDescriptorSets = @ptrCast(gdpa(device, "vkAllocateDescriptorSets"));
-    dispatch_table.AllocateMemory = @ptrCast(gdpa(device, "vkAllocateMemory"));
-    dispatch_table.BeginCommandBuffer = @ptrCast(gdpa(device, "vkBeginCommandBuffer"));
-    dispatch_table.BindBufferMemory = @ptrCast(gdpa(device, "vkBindBufferMemory"));
-    dispatch_table.BindImageMemory = @ptrCast(gdpa(device, "vkBindImageMemory"));
-    dispatch_table.CmdBeginRenderPass = @ptrCast(gdpa(device, "vkCmdBeginRenderPass"));
-    dispatch_table.CmdBindDescriptorSets = @ptrCast(gdpa(device, "vkCmdBindDescriptorSets"));
-    dispatch_table.CmdBindIndexBuffer = @ptrCast(gdpa(device, "vkCmdBindIndexBuffer"));
-    dispatch_table.CmdBindPipeline = @ptrCast(gdpa(device, "vkCmdBindPipeline"));
-    dispatch_table.CmdBindVertexBuffers = @ptrCast(gdpa(device, "vkCmdBindVertexBuffers"));
-    dispatch_table.CmdCopyBufferToImage = @ptrCast(gdpa(device, "vkCmdCopyBufferToImage"));
-    dispatch_table.CmdDraw = @ptrCast(gdpa(device, "vkCmdDraw"));
-    dispatch_table.CmdDrawIndexed = @ptrCast(gdpa(device, "vkCmdDrawIndexed"));
-    dispatch_table.CmdEndRenderPass = @ptrCast(gdpa(device, "vkCmdEndRenderPass"));
-    dispatch_table.CmdPipelineBarrier = @ptrCast(gdpa(device, "vkCmdPipelineBarrier"));
-    dispatch_table.CmdPushConstants = @ptrCast(gdpa(device, "vkCmdPushConstants"));
-    dispatch_table.CmdSetScissor = @ptrCast(gdpa(device, "vkCmdSetScissor"));
-    dispatch_table.CmdSetViewport = @ptrCast(gdpa(device, "vkCmdSetViewport"));
-    dispatch_table.CreateBuffer = @ptrCast(gdpa(device, "vkCreateBuffer"));
-    dispatch_table.CreateCommandPool = @ptrCast(gdpa(device, "vkCreateCommandPool"));
-    dispatch_table.CreateDescriptorPool = @ptrCast(gdpa(device, "vkCreateDescriptorPool"));
-    dispatch_table.CreateDescriptorSetLayout = @ptrCast(gdpa(device, "vkCreateDescriptorSetLayout"));
-    dispatch_table.CreateFence = @ptrCast(gdpa(device, "vkCreateFence"));
-    dispatch_table.CreateFramebuffer = @ptrCast(gdpa(device, "vkCreateFramebuffer"));
-    dispatch_table.CreateGraphicsPipelines = @ptrCast(gdpa(device, "vkCreateGraphicsPipelines"));
-    dispatch_table.CreateImage = @ptrCast(gdpa(device, "vkCreateImage"));
-    dispatch_table.CreateImageView = @ptrCast(gdpa(device, "vkCreateImageView"));
-    dispatch_table.CreatePipelineLayout = @ptrCast(gdpa(device, "vkCreatePipelineLayout"));
-    dispatch_table.CreateRenderPass = @ptrCast(gdpa(device, "vkCreateRenderPass"));
-    dispatch_table.CreateSampler = @ptrCast(gdpa(device, "vkCreateSampler"));
-    dispatch_table.CreateSemaphore = @ptrCast(gdpa(device, "vkCreateSemaphore"));
-    dispatch_table.CreateShaderModule = @ptrCast(gdpa(device, "vkCreateShaderModule"));
-    dispatch_table.CreateSwapchainKHR = @ptrCast(gdpa(device, "vkCreateSwapchainKHR"));
-    dispatch_table.DestroyBuffer = @ptrCast(gdpa(device, "vkDestroyBuffer"));
-    dispatch_table.DestroyDevice = @ptrCast(gdpa(device, "vkDestroyDevice"));
-    dispatch_table.DestroyRenderPass = @ptrCast(gdpa(device, "vkDestroyRenderPass"));
-    dispatch_table.DestroyShaderModule = @ptrCast(gdpa(device, "vkDestroyShaderModule"));
-    dispatch_table.DestroySwapchainKHR = @ptrCast(gdpa(device, "vkDestroySwapchainKHR"));
-    dispatch_table.EndCommandBuffer = @ptrCast(gdpa(device, "vkEndCommandBuffer"));
-    dispatch_table.FlushMappedMemoryRanges = @ptrCast(gdpa(device, "vkFlushMappedMemoryRanges"));
-    dispatch_table.FreeMemory = @ptrCast(gdpa(device, "vkFreeMemory"));
-    dispatch_table.GetBufferMemoryRequirements = @ptrCast(gdpa(device, "vkGetBufferMemoryRequirements"));
-    dispatch_table.GetDeviceProcAddr = @ptrCast(gdpa(device, "vkGetDeviceProcAddr"));
-    dispatch_table.GetDeviceQueue = @ptrCast(gdpa(device, "vkGetDeviceQueue"));
-    dispatch_table.GetFenceStatus = @ptrCast(gdpa(device, "vkGetFenceStatus"));
-    dispatch_table.GetImageMemoryRequirements = @ptrCast(gdpa(device, "vkGetImageMemoryRequirements"));
-    dispatch_table.GetSwapchainImagesKHR = @ptrCast(gdpa(device, "vkGetSwapchainImagesKHR"));
-    dispatch_table.MapMemory = @ptrCast(gdpa(device, "vkMapMemory"));
-    dispatch_table.QueuePresentKHR = @ptrCast(gdpa(device, "vkQueuePresentKHR"));
-    dispatch_table.QueueSubmit = @ptrCast(gdpa(device, "vkQueueSubmit"));
-    dispatch_table.ResetCommandBuffer = @ptrCast(gdpa(device, "vkResetCommandBuffer"));
-    dispatch_table.ResetFences = @ptrCast(gdpa(device, "vkResetFences"));
-    dispatch_table.UnmapMemory = @ptrCast(gdpa(device, "vkUnmapMemory"));
-    dispatch_table.UpdateDescriptorSets = @ptrCast(gdpa(device, "vkUpdateDescriptorSets"));
-    dispatch_table.WaitForFences = @ptrCast(gdpa(device, "vkWaitForFences"));
-
-    // store layer global device dispatch table
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        device_dispatcher = dispatch_table;
-        layer_dispatcher = local_layer_dispatcher;
-    }
+    vk_setup_wrappers.create_device_wrappers(p_device, p_create_info);
 
     setup.get_physical_mem_props(physical_device, vk_global_state.instance_wrapper.?);
     setup.device_map_queues
     (
         physical_device,
-        device,
-        device_dispatcher.?,
+        p_device.*,
+        vk_global_state.device_wrapper.?,
         vk_global_state.instance_wrapper.?,
-        layer_dispatcher.?,
+        vk_global_state.init_wrapper.?,
         p_create_info,
     );
+
     return vk.Result.success;
 }
 
@@ -205,11 +133,11 @@ callconv(vk.vulkan_call_conv) void
 {
     _ = device;
     _ = p_allocator;
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        device_dispatcher = null;
-    }
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
+
+    vk_global_state.device_wrapper = null;
+    vk_global_state.init_wrapper = null;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -224,14 +152,18 @@ export fn VkLayerLurk_CreateSwapchainKHR
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    const result = device_dispatcher.?.CreateSwapchainKHR(device, p_create_info, p_allocator, p_swapchain);
-    if (result != vk.Result.success) return result;
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
 
-    {
-        global_lock.lock();
-        defer global_lock.unlock();
-        setup.setup_swapchain(device, device_dispatcher.?, p_create_info, p_swapchain);
-    }
+    const result = vk_global_state.device_wrapper.?.dispatch.vkCreateSwapchainKHR
+    (
+        device,
+        p_create_info,
+        p_allocator,
+        p_swapchain,
+    );
+    if (result != vk.Result.success) return result;
+    setup.setup_swapchain(device, vk_global_state.device_wrapper.?, p_create_info, p_swapchain);
 
     return result;
 }
@@ -244,11 +176,11 @@ export fn VkLayerLurk_DestroySwapchainKHR
 )
 callconv(vk.vulkan_call_conv) void
 {
-    global_lock.lock();
-    defer global_lock.unlock();
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
 
-    device_dispatcher.?.DestroySwapchainKHR(device, swapchain, p_allocator);
-    setup.destroy_swapchain(device, device_dispatcher.?);
+    vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
+    setup.destroy_swapchain(device, vk_global_state.device_wrapper.?);
 }
 
 export fn VkLayerLurk_QueuePresentKHR
@@ -261,9 +193,9 @@ callconv(vk.vulkan_call_conv) vk.Result
     var final_result = vk.Result.success;
 
     {
-        global_lock.lock();
-        defer global_lock.unlock();
-        const queue_data = setup.wait_before_queue_present(queue, device_dispatcher.?);
+        vk_global_state.wrappers_global_lock.lock();
+        defer vk_global_state.wrappers_global_lock.unlock();
+        const queue_data = setup.wait_before_queue_present(queue, vk_global_state.device_wrapper.?);
 
         {
             var i: u32 = 0;
@@ -271,8 +203,8 @@ callconv(vk.vulkan_call_conv) vk.Result
             {
                 const maybe_draw_data = setup.before_present
                 (
-                    device_dispatcher.?,
-                    layer_dispatcher.?,
+                    vk_global_state.device_wrapper.?,
+                    vk_global_state.init_wrapper.?,
                     queue_data,
                     p_present_info.p_wait_semaphores,
                     p_present_info.wait_semaphore_count,
@@ -290,7 +222,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                     present_info.wait_semaphore_count = 1;
                 }
 
-                const chain_result = device_dispatcher.?.QueuePresentKHR(queue, &present_info);
+                const chain_result = vk_global_state.device_wrapper.?.dispatch.vkQueuePresentKHR(queue, &present_info);
 
                 if (p_present_info.p_results) |p_results|
                 {
@@ -404,8 +336,8 @@ callconv(vk.vulkan_call_conv) vk.Result
             return vk.Result.success;
         }
 
-        global_lock.lock();
-        defer global_lock.unlock();
+        vk_global_state.wrappers_global_lock.lock();
+        defer vk_global_state.wrappers_global_lock.unlock();
         return vk_global_state.instance_wrapper.?.dispatch.vkEnumerateDeviceExtensionProperties
         (
             physical_device,
@@ -463,12 +395,9 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
         return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
     }
 
-    global_lock.lock();
-    defer global_lock.unlock();
-    const table =
-        device_dispatcher
-        orelse @panic("GetDeviceProcAddr failed to get dispatch table");
-    return @ptrCast(@alignCast(table.GetDeviceProcAddr(device, p_name)));
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
+    return @ptrCast(@alignCast(vk_global_state.init_wrapper.?.pfn_next_get_device_proc_addr(device, p_name)));
 }
 
 export fn VkLayerLurk_GetInstanceProcAddr
@@ -539,7 +468,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
         return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
     }
 
-    global_lock.lock();
-    defer global_lock.unlock();
+    vk_global_state.wrappers_global_lock.lock();
+    defer vk_global_state.wrappers_global_lock.unlock();
     return @ptrCast(@alignCast(vk_global_state.base_wrapper.?.getInstanceProcAddr(instance, p_name)));
 }
