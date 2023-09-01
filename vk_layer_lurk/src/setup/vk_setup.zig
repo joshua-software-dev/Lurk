@@ -3,37 +3,19 @@ const std = @import("std");
 const embedded_shaders = @import("vk_embedded_shaders.zig");
 const imgui_holder = @import("../imgui_holder.zig");
 const vk_global_state = @import("vk_global_state.zig");
+const vkh = @import("vk_helpers.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
 
 const vk = @import("../vk.zig");
 
 
-fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
-{
-    if (vk_global_state.physical_mem_props) |props|
-    {
-        var i: u32 = 0;
-        var supported_mem_type: u32 = 1;
-        while (i < props.memory_type_count) : ({i += 1; supported_mem_type += supported_mem_type;})
-        {
-            if
-            (
-                props.memory_types[i].property_flags.contains(properties)
-                and ((type_bits & supported_mem_type) > 0)
-            )
-            {
-                return i;
-            }
-        }
-
-        @panic("Unable to find memory type");
-    }
-
-    @panic("Physical memory properties are null!");
-}
-
-fn setup_swapchain_data_pipeline(device: vk.Device, device_wrapper: vkt.LayerDeviceWrapper) void
+fn setup_swapchain_data_pipeline
+(
+    device: vk.Device,
+    device_wrapper: vkt.LayerDeviceWrapper,
+)
+void
 {
     // Create shader modules
     const frag_info = vk.ShaderModuleCreateInfo
@@ -369,7 +351,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_wrapper: vkt.LayerDev
     const image_alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = font_image_req.size,
-        .memory_type_index = vk_memory_type
+        .memory_type_index = vkh.vk_memory_type
         (
             vk.MemoryPropertyFlags{ .device_local_bit = true, },
             font_image_req.memory_type_bits
@@ -632,13 +614,23 @@ void
     if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
-pub fn destroy_swapchain(device: vk.Device, device_wrapper: vkt.LayerDeviceWrapper) void
+pub fn destroy_swapchain
+(
+    device: vk.Device,
+    device_wrapper: vkt.LayerDeviceWrapper,
+)
+void
 {
     std.log.scoped(.LAYER).debug("Destroying render pass...", .{});
     device_wrapper.destroyRenderPass(device, vk_global_state.render_pass, null);
 }
 
-pub fn destroy_instance(instance: vk.Instance, instance_wrapper: vkt.LayerInstanceWrapper) void
+pub fn destroy_instance
+(
+    instance: vk.Instance,
+    instance_wrapper: vkt.LayerInstanceWrapper,
+)
+void
 {
     _ = instance;
     _ = instance_wrapper;
@@ -652,7 +644,7 @@ pub fn get_physical_mem_props
 )
 void
 {
-    vk_global_state.physical_mem_props = instance_wrapper.getPhysicalDeviceMemoryProperties(physical_device);
+    vkh.physical_mem_props = instance_wrapper.getPhysicalDeviceMemoryProperties(physical_device);
 }
 
 fn new_queue_data
@@ -742,7 +734,11 @@ void
 /// The backing for this should likely be replaced with a hashmap, but the
 /// common case is that there is only 1 item in the buffer, so its somewhat
 /// moot at the moment.
-fn get_queue_data(queue: vk.Queue) vkt.QueueData
+fn get_queue_data
+(
+    queue: vk.Queue,
+)
+vkt.QueueData
 {
     for (vk_global_state.device_queues.constSlice()) |it|
     {
@@ -860,7 +856,12 @@ vkt.DrawData
     return vk_global_state.previous_draw_data.?;
 }
 
-fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_wrapper: vkt.LayerDeviceWrapper) void
+fn ensure_swapchain_fonts
+(
+    command_buffer: vk.CommandBuffer,
+    device_wrapper: vkt.LayerDeviceWrapper,
+)
+void
 {
     if (vk_global_state.font_already_uploaded) return;
 
@@ -892,7 +893,7 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_wrapper: vkt.
     const upload_alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = upload_buffer_req.size,
-        .memory_type_index = vk_memory_type
+        .memory_type_index = vkh.vk_memory_type
         (
             vk.MemoryPropertyFlags{ .host_visible_bit = true, },
             upload_buffer_req.memory_type_bits
@@ -1094,7 +1095,7 @@ void
     const alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = req.size,
-        .memory_type_index = vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
+        .memory_type_index = vkh.vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
     };
     buffer_mem.* = device_wrapper.allocateMemory(vk_global_state.persistent_device.?, &alloc_info, null)
     catch @panic("Vulkan function call failed: Device.AllocateMemory");

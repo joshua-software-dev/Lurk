@@ -24,7 +24,6 @@ pub var height: ?u32 = null;
 pub var image_views: vkt.ImageViewBacking = vkt.ImageViewBacking.init(0) catch @panic("oom");
 pub var images: vkt.ImageBacking = vkt.ImageBacking.init(0) catch @panic("oom");
 pub var persistent_device: ?vk.Device = null;
-pub var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 pub var pipeline_layout: vk.PipelineLayout = std.mem.zeroes(vk.PipelineLayout);
 pub var pipeline: ?vk.Pipeline = null;
 pub var previous_draw_data: ?vkt.DrawData = null;
