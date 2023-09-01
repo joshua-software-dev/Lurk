@@ -4,6 +4,7 @@ const embedded_shaders = @import("vk_embedded_shaders.zig");
 const imgui_holder = @import("../imgui_holder.zig");
 const vk_global_state = @import("vk_global_state.zig");
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
+const vkt = @import("vk_types.zig");
 
 const vk = @import("../vk.zig");
 
@@ -32,7 +33,7 @@ fn vk_memory_type(properties: vk.MemoryPropertyFlags, type_bits: u32) u32
     @panic("Physical memory properties are null!");
 }
 
-fn setup_swapchain_data_pipeline(device: vk.Device, device_wrapper: vk_global_state.LayerDeviceWrapper) void
+fn setup_swapchain_data_pipeline(device: vk.Device, device_wrapper: vkt.LayerDeviceWrapper) void
 {
     // Create shader modules
     const frag_info = vk.ShaderModuleCreateInfo
@@ -443,7 +444,7 @@ fn setup_swapchain_data_pipeline(device: vk.Device, device_wrapper: vk_global_st
 pub fn setup_swapchain
 (
     device: vk.Device,
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
     p_create_info: *const vk.SwapchainCreateInfoKHR,
     p_swapchain: *vk.SwapchainKHR
 )
@@ -631,13 +632,13 @@ void
     if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
-pub fn destroy_swapchain(device: vk.Device, device_wrapper: vk_global_state.LayerDeviceWrapper) void
+pub fn destroy_swapchain(device: vk.Device, device_wrapper: vkt.LayerDeviceWrapper) void
 {
     std.log.scoped(.LAYER).debug("Destroying render pass...", .{});
     device_wrapper.destroyRenderPass(device, vk_global_state.render_pass, null);
 }
 
-pub fn destroy_instance(instance: vk.Instance, instance_wrapper: vk_global_state.LayerInstanceWrapper) void
+pub fn destroy_instance(instance: vk.Instance, instance_wrapper: vkt.LayerInstanceWrapper) void
 {
     _ = instance;
     _ = instance_wrapper;
@@ -647,7 +648,7 @@ pub fn destroy_instance(instance: vk.Instance, instance_wrapper: vk_global_state
 pub fn get_physical_mem_props
 (
     physical_device: vk.PhysicalDevice,
-    instance_wrapper: vk_global_state.LayerInstanceWrapper,
+    instance_wrapper: vkt.LayerInstanceWrapper,
 )
 void
 {
@@ -656,9 +657,9 @@ void
 
 fn new_queue_data
 (
-    data: *vk_global_state.QueueData,
+    data: *vkt.QueueData,
     device: vk.Device,
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
 )
 void
 {
@@ -680,8 +681,8 @@ pub fn device_map_queues
 (
     physical_device: vk.PhysicalDevice,
     device: vk.Device,
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
-    instance_wrapper: vk_global_state.LayerInstanceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
+    instance_wrapper: vkt.LayerInstanceWrapper,
     init_wrapper: vk_layer_stubs.LayerInitWrapper,
     p_create_info: *const vk.DeviceCreateInfo,
 )
@@ -692,7 +693,7 @@ void
     var queue_family_props_count: u32 = 0;
     instance_wrapper.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
-    var family_props = vk_global_state.QueueFamilyPropsBacking.init(0)
+    var family_props = vkt.QueueFamilyPropsBacking.init(0)
     catch @panic("Failed to get backing buffer for QueueFamilyProperties");
     family_props.resize(queue_family_props_count) catch @panic("QueueFamilyProperties buffer overflow");
 
@@ -714,10 +715,10 @@ void
             vk_global_state.device_queues.resize(device_queue_index + 1)
             catch @panic("QueueDataBacking buffer overflow");
 
-            var data: *vk_global_state.QueueData = &vk_global_state.device_queues.buffer[device_queue_index];
+            var data = &vk_global_state.device_queues.buffer[device_queue_index];
             data.* = std.mem.zeroInit
             (
-                vk_global_state.QueueData,
+                vkt.QueueData,
                 .{
                     .queue_family_index = queue_family_index,
                     .queue_flags = family_props.buffer[queue_family_index].queue_flags,
@@ -741,7 +742,7 @@ void
 /// The backing for this should likely be replaced with a hashmap, but the
 /// common case is that there is only 1 item in the buffer, so its somewhat
 /// moot at the moment.
-fn get_queue_data(queue: vk.Queue) vk_global_state.QueueData
+fn get_queue_data(queue: vk.Queue) vkt.QueueData
 {
     for (vk_global_state.device_queues.constSlice()) |it|
     {
@@ -754,9 +755,9 @@ fn get_queue_data(queue: vk.Queue) vk_global_state.QueueData
 pub fn wait_before_queue_present
 (
     queue: vk.Queue,
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
 )
-vk_global_state.QueueData
+vkt.QueueData
 {
     const queue_data = get_queue_data(queue);
     const fence_container = [1]vk.Fence
@@ -778,10 +779,10 @@ vk_global_state.QueueData
 
 fn get_overlay_draw
 (
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
     init_wrapper: vk_layer_stubs.LayerInitWrapper,
 )
-vk_global_state.DrawData
+vkt.DrawData
 {
     if (vk_global_state.previous_draw_data) |draw_data|
     {
@@ -801,7 +802,7 @@ vk_global_state.DrawData
         }
     }
 
-    var draw_data: vk_global_state.DrawData = std.mem.zeroInit(vk_global_state.DrawData, .{});
+    var draw_data: vkt.DrawData = std.mem.zeroInit(vkt.DrawData, .{});
 
     const cmd_buffer_info = vk.CommandBufferAllocateInfo
     {
@@ -859,7 +860,7 @@ vk_global_state.DrawData
     return vk_global_state.previous_draw_data.?;
 }
 
-fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_wrapper: vk_global_state.LayerDeviceWrapper) void
+fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_wrapper: vkt.LayerDeviceWrapper) void
 {
     if (vk_global_state.font_already_uploaded) return;
 
@@ -1060,7 +1061,7 @@ fn ensure_swapchain_fonts(command_buffer: vk.CommandBuffer, device_wrapper: vk_g
 
 fn create_or_resize_buffer
 (
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
     buffer: *vk.Buffer,
     buffer_mem: *vk.DeviceMemory,
     buffer_size: *vk.DeviceSize,
@@ -1106,14 +1107,14 @@ void
 
 fn render_swapchain_display
 (
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
     init_wrapper: vk_layer_stubs.LayerInitWrapper,
-    queue_data: vk_global_state.QueueData,
+    queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
 )
-?vk_global_state.DrawData
+?vkt.DrawData
 {
     const imgui_draw_data = imgui_holder.get_draw_data();
     if (imgui_draw_data.total_vtx_count < 1) return null;
@@ -1508,7 +1509,7 @@ fn render_swapchain_display
     }
     else
     {
-        var stages_wait_backing = vk_global_state.PipelineStageFlagsBacking.init(0)
+        var stages_wait_backing = vkt.PipelineStageFlagsBacking.init(0)
         catch @panic("Failed to get backing buffer for PipelineStageFlags");
         stages_wait_backing.resize(wait_semaphore_count) catch @panic("PipelineStageFlags buffer overflow");
 
@@ -1551,14 +1552,14 @@ fn render_swapchain_display
 
 pub fn before_present
 (
-    device_wrapper: vk_global_state.LayerDeviceWrapper,
+    device_wrapper: vkt.LayerDeviceWrapper,
     init_wrapper: vk_layer_stubs.LayerInitWrapper,
-    queue_data: vk_global_state.QueueData,
+    queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
 )
-?vk_global_state.DrawData
+?vkt.DrawData
 {
     if (vk_global_state.current_image_count > 0)
     {

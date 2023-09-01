@@ -1,5 +1,6 @@
 const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const vk_global_state = @import("vk_global_state.zig");
+const vkt = @import("vk_types.zig");
 
 const vk = @import("../vk.zig");
 
@@ -35,13 +36,13 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
     var final_lci: *vk_layer_stubs.LayerInstanceCreateInfo = layer_create_info.?;
 
     // use `vulkan-zig`'s handy dandy function table struct to save some function tables
-    vk_global_state.base_wrapper = vk_global_state.LayerBaseWrapper.load
+    vk_global_state.base_wrapper = vkt.LayerBaseWrapper.load
     (
         final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr,
     )
     catch @panic("Failed to load Vulkan Instance function table 1.");
 
-    vk_global_state.instance_wrapper = vk_global_state.LayerInstanceWrapper.load
+    vk_global_state.instance_wrapper = vkt.LayerInstanceWrapper.load
     (
         p_instance.*,
         final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr,
@@ -56,7 +57,7 @@ pub fn create_device_wrappers(p_device: *vk.Device, p_create_info: *const vk.Dev
 {
     vk_global_state.init_wrapper = vk_layer_stubs.LayerInitWrapper.init(p_create_info);
 
-    vk_global_state.device_wrapper = vk_global_state.LayerDeviceWrapper.load
+    vk_global_state.device_wrapper = vkt.LayerDeviceWrapper.load
     (
         p_device.*,
         vk_global_state.init_wrapper.?.pfn_next_get_device_proc_addr,
