@@ -354,7 +354,7 @@ pub const struct_ImVector_ImWchar = extern struct {
     Capacity: c_int,
     Data: [*c]ImWchar,
 };
-pub const ImVector_ImWchar = struct_ImVector_ImWchar; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:1263:18: warning: struct demoted to opaque type - has bitfield
+pub const ImVector_ImWchar = struct_ImVector_ImWchar; // ./deps/cimgui.git/cimgui.h:1263:18: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImFontGlyph = opaque {};
 pub const ImFontGlyph = struct_ImFontGlyph;
 pub const struct_ImVector_ImFontGlyph = extern struct {
@@ -944,7 +944,7 @@ pub const struct_ImGuiViewportP = extern struct {
     BuildWorkOffsetMin: ImVec2,
     BuildWorkOffsetMax: ImVec2,
 };
-pub const ImGuiViewportP = struct_ImGuiViewportP; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:2773:15: warning: struct demoted to opaque type - has bitfield
+pub const ImGuiViewportP = struct_ImGuiViewportP; // ./deps/cimgui.git/cimgui.h:2773:15: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiWindow = opaque {};
 pub const ImGuiWindow = struct_ImGuiWindow;
 pub const struct_ImVector_ImGuiWindowPtr = extern struct {
@@ -1260,7 +1260,7 @@ pub const struct_ImGuiTableTempData = extern struct {
 pub const ImGuiTableTempData = struct_ImGuiTableTempData;
 pub const ImGuiTableColumnFlags = c_int;
 pub const ImGuiTableColumnIdx = ImS16;
-pub const ImGuiTableDrawChannelIdx = ImU16; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:2933:10: warning: struct demoted to opaque type - has bitfield
+pub const ImGuiTableDrawChannelIdx = ImU16; // ./deps/cimgui.git/cimgui.h:2933:10: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiTableColumn = opaque {};
 pub const ImGuiTableColumn = struct_ImGuiTableColumn;
 pub const struct_ImSpan_ImGuiTableColumn = extern struct {
@@ -1283,7 +1283,7 @@ pub const struct_ImSpan_ImGuiTableCellData = extern struct {
     DataEnd: [*c]ImGuiTableCellData,
 };
 pub const ImSpan_ImGuiTableCellData = struct_ImSpan_ImGuiTableCellData;
-pub const ImBitArrayPtr = [*c]ImU32; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:2988:24: warning: struct demoted to opaque type - has bitfield
+pub const ImBitArrayPtr = [*c]ImU32; // ./deps/cimgui.git/cimgui.h:2988:24: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiTable = opaque {};
 pub const ImGuiTable = struct_ImGuiTable;
 pub const struct_ImVector_ImGuiTableTempData = extern struct {
@@ -1502,7 +1502,7 @@ pub const struct_ImGuiDockContext = extern struct {
     NodesSettings: ImVector_ImGuiDockNodeSettings,
     WantFullRebuild: bool,
 };
-pub const ImGuiDockContext = struct_ImGuiDockContext; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:2198:24: warning: struct demoted to opaque type - has bitfield
+pub const ImGuiDockContext = struct_ImGuiDockContext; // ./deps/cimgui.git/cimgui.h:2198:24: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiDockNode = opaque {};
 pub const ImGuiDockNode = struct_ImGuiDockNode;
 pub const struct_ImGuiSettingsHandler = extern struct {
@@ -1572,7 +1572,7 @@ pub const struct_ImGuiMetricsConfig = extern struct {
     ShowWindowsRectsType: c_int,
     ShowTablesRectsType: c_int,
 };
-pub const ImGuiMetricsConfig = struct_ImGuiMetricsConfig; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:2341:19: warning: struct demoted to opaque type - has bitfield
+pub const ImGuiMetricsConfig = struct_ImGuiMetricsConfig; // ./deps/cimgui.git/cimgui.h:2341:19: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiStackLevelInfo = opaque {};
 pub const ImGuiStackLevelInfo = struct_ImGuiStackLevelInfo;
 pub const struct_ImVector_ImGuiStackLevelInfo = extern struct {
@@ -1869,7 +1869,7 @@ pub const ImGuiInputTextCallbackData = struct_ImGuiInputTextCallbackData;
 pub const struct_ImGuiOnceUponAFrame = extern struct {
     RefFrame: c_int,
 };
-pub const ImGuiOnceUponAFrame = struct_ImGuiOnceUponAFrame; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:1073:24: warning: struct demoted to opaque type - has bitfield
+pub const ImGuiOnceUponAFrame = struct_ImGuiOnceUponAFrame; // ./deps/cimgui.git/cimgui.h:1073:24: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiTableColumnSortSpecs = opaque {};
 pub const ImGuiTableColumnSortSpecs = struct_ImGuiTableColumnSortSpecs;
 pub const struct_ImGuiTableSortSpecs = extern struct {
@@ -3081,7 +3081,7 @@ pub const struct_ImVector_ImGuiTableColumnSortSpecs = extern struct {
     Capacity: c_int,
     Data: ?*ImGuiTableColumnSortSpecs,
 };
-pub const ImVector_ImGuiTableColumnSortSpecs = struct_ImVector_ImGuiTableColumnSortSpecs; // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:3094:10: warning: struct demoted to opaque type - has bitfield
+pub const ImVector_ImGuiTableColumnSortSpecs = struct_ImVector_ImGuiTableColumnSortSpecs; // ./deps/cimgui.git/cimgui.h:3094:10: warning: struct demoted to opaque type - has bitfield
 pub const struct_ImGuiTableColumnSettings = opaque {};
 pub const ImGuiTableColumnSettings = struct_ImGuiTableColumnSettings;
 pub extern fn ImVec2_ImVec2_Nil() [*c]ImVec2;
@@ -4440,7 +4440,7 @@ pub const __UINT32_C_SUFFIX__ = @compileError("unable to translate macro: undefi
 pub const __UINT64_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `UL`"); // (no file):213:9
 pub const __seg_gs = @compileError("unable to translate macro: undefined identifier `__attribute__`"); // (no file):342:9
 pub const __seg_fs = @compileError("unable to translate macro: undefined identifier `__attribute__`"); // (no file):343:9
-pub const _LIBCPP_ABI_NAMESPACE = @compileError("unable to translate macro: undefined identifier `__1`"); // (no file):420:9
+pub const CIMGUI_DEFINE_ENUMS_AND_STRUCTS = @compileError("unable to translate C expr: unexpected token ';'"); // cimgui_zig.h:1:9
 pub const __GLIBC_USE = @compileError("unable to translate macro: undefined identifier `__GLIBC_USE_`"); // /usr/include/features.h:188:9
 pub const __glibc_has_attribute = @compileError("unable to translate macro: undefined identifier `__has_attribute`"); // /usr/include/sys/cdefs.h:45:10
 pub const __glibc_has_extension = @compileError("unable to translate macro: undefined identifier `__has_extension`"); // /usr/include/sys/cdefs.h:55:10
@@ -4509,14 +4509,14 @@ pub const __builtin_huge_valf64x = @compileError("unable to translate macro: und
 pub const __builtin_inff64x = @compileError("unable to translate macro: undefined identifier `__builtin_infl`"); // /usr/include/bits/floatn-common.h:290:13
 pub const __builtin_nanf64x = @compileError("unable to translate macro: undefined identifier `__builtin_nanl`"); // /usr/include/bits/floatn-common.h:291:13
 pub const __builtin_nansf64x = @compileError("unable to translate macro: undefined identifier `__builtin_nansl`"); // /usr/include/bits/floatn-common.h:292:13
-pub const API = @compileError("unable to translate macro: undefined identifier `__attribute__`"); // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:17:17
+pub const API = @compileError("unable to translate macro: undefined identifier `__attribute__`"); // ./deps/cimgui.git/cimgui.h:17:17
 pub const va_start = @compileError("unable to translate macro: undefined identifier `__builtin_va_start`"); // /home/jfield/.asdf/installs/zig/0.11.0/lib/include/stdarg.h:33:9
 pub const va_end = @compileError("unable to translate macro: undefined identifier `__builtin_va_end`"); // /home/jfield/.asdf/installs/zig/0.11.0/lib/include/stdarg.h:35:9
 pub const va_arg = @compileError("unable to translate macro: undefined identifier `__builtin_va_arg`"); // /home/jfield/.asdf/installs/zig/0.11.0/lib/include/stdarg.h:36:9
 pub const __va_copy = @compileError("unable to translate macro: undefined identifier `__builtin_va_copy`"); // /home/jfield/.asdf/installs/zig/0.11.0/lib/include/stdarg.h:41:9
 pub const va_copy = @compileError("unable to translate macro: undefined identifier `__builtin_va_copy`"); // /home/jfield/.asdf/installs/zig/0.11.0/lib/include/stdarg.h:46:9
-pub const EXTERN = @compileError("unable to translate C expr: unexpected token 'extern'"); // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:28:13
-pub const CONST = @compileError("unable to translate C expr: unexpected token 'const'"); // /home/jfield/Documents/git/Lurk/vk_layer_lurk/deps/imgui_ui/dep/cimgui.git/cimgui.h:32:9
+pub const EXTERN = @compileError("unable to translate C expr: unexpected token 'extern'"); // ./deps/cimgui.git/cimgui.h:28:13
+pub const CONST = @compileError("unable to translate C expr: unexpected token 'const'"); // ./deps/cimgui.git/cimgui.h:32:9
 pub const __llvm__ = @as(c_int, 1);
 pub const __clang__ = @as(c_int, 1);
 pub const __clang_major__ = @as(c_int, 16);
@@ -4919,19 +4919,10 @@ pub const __STDC_HOSTED__ = @as(c_int, 1);
 pub const __STDC_VERSION__ = @as(c_long, 201710);
 pub const __STDC_UTF_16__ = @as(c_int, 1);
 pub const __STDC_UTF_32__ = @as(c_int, 1);
-pub const _LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS = @as(c_int, 1);
-pub const _LIBCXXABI_DISABLE_VISIBILITY_ANNOTATIONS = @as(c_int, 1);
-pub const _LIBCPP_HAS_NO_VENDOR_AVAILABILITY_ANNOTATIONS = @as(c_int, 1);
-pub const _LIBCPP_ABI_VERSION = @as(c_int, 1);
 pub const __GLIBC_MINOR__ = @as(c_int, 19);
 pub const _DEBUG = @as(c_int, 1);
 pub const __GCC_HAVE_DWARF2_CFI_ASM = @as(c_int, 1);
-pub const CIMGUI_DEFINE_ENUMS_AND_STRUCTS = "";
 pub const CIMGUI_INCLUDED = "";
-pub const _LIBCPP_STDIO_H = "";
-pub const _LIBCPP___CONFIG = "";
-pub const _LIBCPP_COMPILER_CLANG_BASED = "";
-pub const _LIBCPP_CLANG_VER = (__clang_major__ * @as(c_int, 100)) + __clang_minor__;
 pub const _STDIO_H = @as(c_int, 1);
 pub const __GLIBC_INTERNAL_STARTING_HEADER_IMPLEMENTATION = "";
 pub const _FEATURES_H = @as(c_int, 1);
@@ -5196,7 +5187,6 @@ pub inline fn __builtin_inff32() @TypeOf(__builtin_inff()) {
 pub inline fn __builtin_nanf32(x: anytype) @TypeOf(__builtin_nanf(x)) {
     return __builtin_nanf(x);
 }
-pub const _LIBCPP_STDINT_H = "";
 pub const __CLANG_STDINT_H = "";
 pub const _STDINT_H = @as(c_int, 1);
 pub const _BITS_WCHAR_H = @as(c_int, 1);
@@ -5280,7 +5270,6 @@ pub const INTMAX_C = @import("std").zig.c_translation.Macros.L_SUFFIX;
 pub const UINTMAX_C = @import("std").zig.c_translation.Macros.UL_SUFFIX;
 pub const __STDARG_H = "";
 pub const _VA_LIST = "";
-pub const _LIBCPP_STDBOOL_H = "";
 pub const __STDBOOL_H = "";
 pub const __bool_true_false_are_defined = @as(c_int, 1);
 pub const @"bool" = bool;
