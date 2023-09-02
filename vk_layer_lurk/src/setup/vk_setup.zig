@@ -60,19 +60,8 @@ void
         }
     );
 
-    var font_sampler_container = [1]vk.Sampler
-    {
-        vk.Sampler.null_handle,
-    };
-    const font_sampler_result = device_wrapper.dispatch.vkCreateSampler
-    (
-        device,
-        &font_sampler_info,
-        null,
-        &font_sampler_container[0],
-    );
-    if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
-    g_font_sampler.* = font_sampler_container[0];
+    g_font_sampler.* = device_wrapper.createSampler(device, &font_sampler_info, null)
+    catch @panic("Vulkan function call failed: Device.CreateSampler");
 
     // Descriptor pool
     const sampler_pool_size = [1]vk.DescriptorPoolSize
@@ -103,7 +92,7 @@ void
                 .descriptor_type = .combined_image_sampler,
                 .descriptor_count = 1,
                 .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
-                .p_immutable_samplers = &font_sampler_container,
+                .p_immutable_samplers = &[1]vk.Sampler{ g_font_sampler.*.?, },
             },
         ),
     };
@@ -112,29 +101,15 @@ void
         .binding_count = 1,
         .p_bindings = &binding,
     };
-    var descriptor_layout_container = [1]vk.DescriptorSetLayout
-    {
-        vk.DescriptorSetLayout.null_handle,
-    };
-    const desc_layout_result = device_wrapper.dispatch.vkCreateDescriptorSetLayout
-    (
-        device,
-        &set_layout_info,
-        null,
-        &descriptor_layout_container[0],
-    );
-    if (desc_layout_result != vk.Result.success)
-    {
-        @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
-    }
-    g_descriptor_layout.* = descriptor_layout_container[0];
+    g_descriptor_layout.* = device_wrapper.createDescriptorSetLayout(device, &set_layout_info, null)
+    catch @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
 
     // Descriptor set
     const alloc_info = vk.DescriptorSetAllocateInfo
     {
         .descriptor_pool = g_descriptor_pool.*.?,
         .descriptor_set_count = 1,
-        .p_set_layouts = &descriptor_layout_container,
+        .p_set_layouts = &[1]vk.DescriptorSetLayout{ g_descriptor_layout.*.?, },
     };
 
     var descriptor_set_container = [1]vk.DescriptorSet
@@ -159,7 +134,7 @@ void
     const layout_info = vk.PipelineLayoutCreateInfo
     {
         .set_layout_count = 1,
-        .p_set_layouts = &descriptor_layout_container,
+        .p_set_layouts = &[1]vk.DescriptorSetLayout{ g_descriptor_layout.*.?, },
         .push_constant_range_count = 1,
         .p_push_constant_ranges = &push_constants,
     };
@@ -599,14 +574,8 @@ void
         while (i < g_image_count.*.?) : (i += 1)
         {
             view_info.image = g_images.buffer[i];
-            const create_imgv_result = device_wrapper.dispatch.vkCreateImageView
-            (
-                device,
-                &view_info,
-                null,
-                &g_image_views.buffer[i],
-            );
-            if (create_imgv_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
+            g_image_views.buffer[i] = device_wrapper.createImageView(device, &view_info, null)
+            catch @panic("Vulkan function call failed: Device.CreateImageView");
         }
     }
 
@@ -625,14 +594,8 @@ void
         while (i < g_image_count.*.?) : (i += 1)
         {
             fb_info.p_attachments = g_image_views.buffer[i..i].ptr;
-            const create_fb_result = device_wrapper.dispatch.vkCreateFramebuffer
-            (
-                device,
-                &fb_info,
-                null,
-                &g_framebuffers.buffer[i]
-            );
-            if (create_fb_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFramebuffer");
+            g_framebuffers.buffer[i] = device_wrapper.createFramebuffer(device, &fb_info, null)
+            catch @panic("Vulkan function call failed: Device.CreateFramebuffer");
         }
     }
 
@@ -694,8 +657,8 @@ void
     {
         .flags = vk.FenceCreateFlags{ .signaled_bit = true, },
     };
-    const create_fence_result = device_wrapper.dispatch.vkCreateFence(device, &fence_info, null, &data.fence);
-    if (create_fence_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFence");
+    data.fence = device_wrapper.createFence(device, &fence_info, null)
+    catch @panic("Vulkan function call failed: Device.CreateFence");
 
     if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true,}))
     {

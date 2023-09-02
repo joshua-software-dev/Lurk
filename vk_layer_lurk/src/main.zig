@@ -269,13 +269,17 @@ callconv(vk.vulkan_call_conv) vk.Result
                 {
                     const semaphore_container = [1]vk.Semaphore
                     {
-                        draw_data.semaphore
+                        draw_data.semaphore,
                     };
                     present_info.p_wait_semaphores = &semaphore_container;
                     present_info.wait_semaphore_count = 1;
                 }
 
-                const chain_result = vk_global_state.device_wrapper.?.dispatch.vkQueuePresentKHR(queue, &present_info);
+                const chain_result = vk_global_state.device_wrapper.?.dispatch.vkQueuePresentKHR
+                (
+                    queue,
+                    &present_info,
+                );
 
                 if (p_present_info.p_results) |p_results|
                 {
