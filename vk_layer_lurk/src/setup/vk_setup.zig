@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const embedded_shaders = @import("vk_embedded_shaders.zig");
-const imgui_holder = @import("imgui_ui");
+const imgui_ui = @import("imgui_ui");
 const vkh = @import("vk_helpers.zig");
 const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
@@ -164,7 +164,7 @@ void
             vk.VertexInputBindingDescription,
             .{
                 .input_rate = .vertex,
-                .stride = imgui_holder.DrawVertSize,
+                .stride = @sizeOf(imgui_ui.DrawVert),
             }
         ),
     };
@@ -175,21 +175,21 @@ void
             .location = 0,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = imgui_holder.DrawVertOffsetOfPos,
+            .offset = @offsetOf(imgui_ui.DrawVert, "pos"),
         },
         vk.VertexInputAttributeDescription
         {
             .location = 1,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = imgui_holder.DrawVertOffsetOfUv,
+            .offset = @offsetOf(imgui_ui.DrawVert, "uv"),
         },
         vk.VertexInputAttributeDescription
         {
             .location = 2,
             .binding = binding_desc[0].binding,
             .format = .r8g8b8a8_unorm,
-            .offset = imgui_holder.DrawVertOffsetOfColor,
+            .offset = @offsetOf(imgui_ui.DrawVert, "col"),
         },
     };
 
@@ -311,7 +311,7 @@ void
 
     var h: i32 = 0;
     var w: i32 = 0;
-    _ = imgui_holder.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
+    _ = imgui_ui.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
 
     // Font image
     const image_info = vk.ImageCreateInfo
@@ -439,7 +439,7 @@ void
     g_width.* = p_create_info.image_extent.width;
     g_format.* = p_create_info.image_format;
 
-    imgui_holder.setup_context(@floatFromInt(g_width.*.?), @floatFromInt(g_height.*.?));
+    imgui_ui.setup_context(@floatFromInt(g_width.*.?), @floatFromInt(g_height.*.?));
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
@@ -630,7 +630,7 @@ void
 {
     _ = instance;
     _ = instance_wrapper;
-    _ = imgui_holder.destroy_context();
+    _ = imgui_ui.destroy_context();
 }
 
 pub fn get_physical_mem_props
@@ -875,7 +875,7 @@ void
 
     var w: i32 = 0;
     var h: i32 = 0;
-    const pixels = imgui_holder.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
+    const pixels = imgui_ui.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
     const upload_size: u64 = @intCast(w * h * 4);
 
     const buffer_info = vk.BufferCreateInfo
@@ -1064,7 +1064,7 @@ void
         &use_barrier,
     );
 
-    imgui_holder.set_fonts_tex_ident(@ptrCast(&(g_font_image.*.?)));
+    imgui_ui.set_fonts_tex_ident(@ptrCast(&(g_font_image.*.?)));
     g_font_already_uploaded.* = true;
 }
 
@@ -1142,7 +1142,7 @@ fn render_swapchain_display
 )
 ?vkt.DrawData
 {
-    const imgui_draw_data = imgui_holder.get_draw_data();
+    const imgui_draw_data = imgui_ui.get_draw_data();
     if (imgui_draw_data.TotalVtxCount < 1) return null;
 
     var draw_data = get_overlay_draw(device, device_wrapper, init_wrapper, g_command_pool, g_previous_draw_data);
@@ -1221,8 +1221,8 @@ fn render_swapchain_display
 
     device_wrapper.cmdBeginRenderPass(draw_data.command_buffer, &render_pass_info, .@"inline");
 
-    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalVtxCount)) * imgui_holder.DrawVertSize;
-    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalIdxCount)) * imgui_holder.DrawIdxSize;
+    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalVtxCount)) * @sizeOf(imgui_ui.DrawVert);
+    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalIdxCount)) * @sizeOf(imgui_ui.DrawIdx);
 
     if (draw_data.vertex_buffer_size < vertex_size)
     {
@@ -1252,7 +1252,7 @@ fn render_swapchain_display
         );
     }
 
-    var vertex_dst: [*]imgui_holder.DrawVert = @ptrCast
+    var vertex_dst: [*]imgui_ui.DrawVert = @ptrCast
     (
         @alignCast
         (
@@ -1268,7 +1268,7 @@ fn render_swapchain_display
         ),
     );
 
-    var index_dst: [*]imgui_holder.DrawIdx = @ptrCast
+    var index_dst: [*]imgui_ui.DrawIdx = @ptrCast
     (
         @alignCast
         (
@@ -1284,10 +1284,10 @@ fn render_swapchain_display
         ),
     );
 
-    for (imgui_holder.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
+    for (imgui_ui.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
     {
-        const vertex_buf = imgui_holder.get_draw_list_vertex_buffer(cmd_list.*);
-        const index_buf = imgui_holder.get_draw_list_index_buffer(cmd_list.*);
+        const vertex_buf = imgui_ui.get_draw_list_vertex_buffer(cmd_list.*);
+        const index_buf = imgui_ui.get_draw_list_index_buffer(cmd_list.*);
         @memcpy(vertex_dst[0..vertex_buf.len], vertex_buf);
         @memcpy(index_dst[0..index_buf.len], index_buf);
         vertex_dst += vertex_buf.len;
@@ -1397,9 +1397,9 @@ fn render_swapchain_display
     {
         var vertex_offset: u32 = 0;
         var index_offset: u32 = 0;
-        for (imgui_holder.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
+        for (imgui_ui.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
         {
-            for (imgui_holder.get_draw_list_command_buffer(cmd_list.*)) |cmd|
+            for (imgui_ui.get_draw_list_command_buffer(cmd_list.*)) |cmd|
             {
                 const x_pos: i32 = @intFromFloat(cmd.ClipRect.x - imgui_draw_data.DisplayPos.x);
                 const y_pos: i32 = @intFromFloat(cmd.ClipRect.y - imgui_draw_data.DisplayPos.y);
@@ -1434,7 +1434,7 @@ fn render_swapchain_display
                 index_offset += cmd.ElemCount;
             }
 
-            vertex_offset += @intCast(imgui_holder.get_draw_list_vertex_buffer(cmd_list.*).len);
+            vertex_offset += @intCast(imgui_ui.get_draw_list_vertex_buffer(cmd_list.*).len);
         }
     }
 
@@ -1604,7 +1604,7 @@ pub fn before_present
 {
     if (g_image_count.*.? > 0)
     {
-        imgui_holder.draw_frame();
+        imgui_ui.draw_frame();
         return render_swapchain_display
         (
             device,

@@ -1,21 +1,8 @@
-// const cimgui = @cImport
-// (
-//     {
-//         @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", {});
-//         @cInclude("cimgui.h");
-//     }
-// );
-
 const cimgui = @import("cimgui.zig");
 
 
 pub const DrawIdx = cimgui.ImDrawIdx;
 pub const DrawVert = cimgui.ImDrawVert;
-pub const DrawIdxSize = @sizeOf(DrawIdx);
-pub const DrawVertSize = @sizeOf(DrawVert);
-pub const DrawVertOffsetOfPos = @offsetOf(DrawVert, "pos");
-pub const DrawVertOffsetOfUv = @offsetOf(DrawVert, "uv");
-pub const DrawVertOffsetOfColor = @offsetOf(DrawVert, "col");
 
 var current_imgui_context: ?*cimgui.ImGuiContext = null;
 
