@@ -1,65 +1,81 @@
-const zgui = @import("zgui");
+const cimgui = @cImport
+(
+    {
+        @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", {});
+        @cInclude("cimgui.h");
+    }
+);
 
 
-pub const DrawIdx = zgui.DrawIdx;
-pub const DrawVert = zgui.DrawVert;
+pub const DrawIdx = cimgui.ImDrawIdx;
+pub const DrawVert = cimgui.ImDrawVert;
 pub const DrawIdxSize = @sizeOf(DrawIdx);
 pub const DrawVertSize = @sizeOf(DrawVert);
 pub const DrawVertOffsetOfPos = @offsetOf(DrawVert, "pos");
 pub const DrawVertOffsetOfUv = @offsetOf(DrawVert, "uv");
-pub const DrawVertOffsetOfColor = @offsetOf(DrawVert, "color");
+pub const DrawVertOffsetOfColor = @offsetOf(DrawVert, "col");
 
-
-var current_imgui_context: ?zgui.Context = null;
+var current_imgui_context: ?*cimgui.ImGuiContext = null;
 
 
 pub fn setup_context(display_x_width: f32, display_y_height: f32) void
 {
-    current_imgui_context = zgui.zguiCreateContext(null);
-    zgui.zguiSetCurrentContext(current_imgui_context.?);
+    current_imgui_context = cimgui.igCreateContext(null);
+    cimgui.igSetCurrentContext(current_imgui_context.?);
 
-    zgui.io.setIniFilename(null);
-    zgui.io.setDisplaySize(display_x_width, display_y_height);
+    const io = cimgui.igGetIO();
+    io.*.IniFilename = null;
+    io.*.DisplaySize = cimgui.ImVec2{ .x = display_x_width, .y = display_y_height, };
 }
 
 pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
 {
-    const result = zgui.io.getFontsTextDataAsRgba32(x_width, y_height);
+    const io = cimgui.igGetIO();
+    var pixels: ?[*]u8 = undefined;
+    var bpp: i32 = 0;
+    cimgui.ImFontAtlas_GetTexDataAsRGBA32(io.*.Fonts, @ptrCast(&pixels.?), x_width, y_height, &bpp);
 
-    if (result == null) return error.InvalidTexData
+    if (pixels == null) return error.InvalidTexData
     else if (x_width.* < 1 or y_height.* < 1) return error.InvalidFontSize;
 
-    return @ptrCast(@constCast(result));
+    return pixels.?;
 }
 
 pub fn set_fonts_tex_ident(id: *anyopaque) void
 {
-    zgui.io.setFontsTexId(@ptrCast(id));
+    const io = cimgui.igGetIO();
+    cimgui.ImFontAtlas_SetTexID(io.*.Fonts, @ptrCast(id));
 }
 
-pub fn get_draw_list_command_buffer(draw_list: zgui.DrawList) []const zgui.DrawCmd
+pub fn get_draw_data_draw_list(draw_data: *cimgui.ImDrawData) []const *cimgui.ImDrawList
 {
-    const length = draw_list.getCmdBufferLength();
-    return draw_list.getCmdBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+    const length: i32 = @intCast(draw_data.CmdLists.Size);
+    return @ptrCast(draw_data.CmdLists.Data[0..(if (length > -1) @intCast(length) else 0)]);
 }
 
-pub fn get_draw_list_index_buffer(draw_list: zgui.DrawList) []const DrawIdx
+pub fn get_draw_list_command_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawCmd
 {
-    const length = draw_list.getIndexBufferLength();
-    return draw_list.getIndexBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+    const length: i32 = @intCast(draw_list.CmdBuffer.Size);
+    return draw_list.CmdBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
 }
 
-pub fn get_draw_list_vertex_buffer(draw_list: zgui.DrawList) []const DrawVert
+pub fn get_draw_list_index_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawIdx
 {
-    const length = draw_list.getVertexBufferLength();
-    return draw_list.getVertexBufferData()[0..(if (length > -1) @intCast(length) else 0)];
+    const length: i32 = @intCast(draw_list.IdxBuffer.Size);
+    return draw_list.IdxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
+}
+
+pub fn get_draw_list_vertex_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawVert
+{
+    const length: i32 = @intCast(draw_list.VtxBuffer.Size);
+    return draw_list.VtxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
 }
 
 pub fn destroy_context() bool
 {
     if (current_imgui_context) |context|
     {
-        zgui.zguiDestroyContext(context);
+        cimgui.igDestroyContext(context);
         return true;
     }
 
@@ -68,7 +84,9 @@ pub fn destroy_context() bool
 
 fn draw_frame_contents() void
 {
-    zgui.separator();
+    cimgui.igSeparator();
+    cimgui.igText("Hello World!");
+    cimgui.igSeparator();
 }
 
 pub fn draw_frame() void
@@ -90,39 +108,33 @@ pub fn draw_frame() void
 
     const margin: f32 = 20;
 
-    zgui.zguiSetCurrentContext(current_imgui_context.?);
-    zgui.newFrame();
+    cimgui.igSetCurrentContext(current_imgui_context.?);
+    cimgui.igNewFrame();
 
-    zgui.setNextWindowBgAlpha(.{ .alpha = 0.5, });
-    zgui.setNextWindowSize
+    cimgui.igSetNextWindowBgAlpha(0.5);
+    cimgui.igSetNextWindowSize(cimgui.ImVec2{ .x = 100, .y = 100, }, cimgui.ImGuiCond_Always);
+    cimgui.igSetNextWindowPos
     (
         .{
-            .h = 100,
-            .w = 100,
-            .cond = .always,
-        },
-    );
-    zgui.setNextWindowPos
-    (
-        .{
-            .cond = .always,
             .x = margin,
             .y = margin,
-        }
+        },
+        cimgui.ImGuiCond_Always,
+        .{ .x = 0, .y = 0, },
     );
 
     var show_window = true;
-    if (zgui.begin("Lurk", .{ .popen = &show_window, }))
+    if (cimgui.igBegin("Lurk", &show_window, cimgui.ImGuiWindowFlags_None))
     {
         draw_frame_contents();
     }
 
-    zgui.end();
-    zgui.endFrame();
-    zgui.render();
+    cimgui.igEnd();
+    cimgui.igEndFrame();
+    cimgui.igRender();
 }
 
-pub fn get_draw_data() zgui.DrawData
+pub fn get_draw_data() *cimgui.ImDrawData
 {
-    return zgui.getDrawData();
+    return cimgui.igGetDrawData();
 }

@@ -78,6 +78,31 @@ pub fn build(b: *std.Build) void
             .options = .{ .backend = .no_backend }
         }
     );
+    _ = zgui_pkg;
+
+    const cimgui = b.addStaticLibrary
+    (
+        .{
+            .name = "zigcimgui",
+            .target = target,
+            .optimize = optimize,
+        }
+    );
+    cimgui.linkLibC();
+
+    const imguiSources = &[_][]const u8
+    {
+        "deps/cimgui/cimgui.cpp",
+        "deps/cimgui/imgui/imgui.cpp",
+        "deps/cimgui/imgui/imgui_demo.cpp",
+        "deps/cimgui/imgui/imgui_draw.cpp",
+        "deps/cimgui/imgui/imgui_tables.cpp",
+        "deps/cimgui/imgui/imgui_widgets.cpp",
+    };
+    for (imguiSources) |src|
+    {
+        cimgui.addCSourceFile(.{ .file = .{ .path = src }, .flags = &[_][]const u8{ "-std=c++17" }, });
+    }
 
     const lib = b.addSharedLibrary
     (
@@ -99,8 +124,11 @@ pub fn build(b: *std.Build) void
     lib.addModule("discord_ws_conn", disc);
 
     lib.linkLibC();
+    lib.linkLibCpp();
     find_existing_or_generate_new_vulkan_bindings(b, lib, use_system_vulkan);
-    zgui_pkg.link(lib);
+    // zgui_pkg.link(lib);
+    lib.addIncludePath(.{ .path = "deps/cimgui/" });
+    lib.linkLibrary(cimgui);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when

@@ -1143,8 +1143,7 @@ fn render_swapchain_display
 ?vkt.DrawData
 {
     const imgui_draw_data = imgui_holder.get_draw_data();
-    if (imgui_draw_data.total_vtx_count < 1) return null;
-    const imgui_cmd_lists_count: u32 = @intCast(imgui_draw_data.cmd_lists_count);
+    if (imgui_draw_data.TotalVtxCount < 1) return null;
 
     var draw_data = get_overlay_draw(device, device_wrapper, init_wrapper, g_command_pool, g_previous_draw_data);
 
@@ -1222,8 +1221,8 @@ fn render_swapchain_display
 
     device_wrapper.cmdBeginRenderPass(draw_data.command_buffer, &render_pass_info, .@"inline");
 
-    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.total_vtx_count)) * imgui_holder.DrawVertSize;
-    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.total_idx_count)) * imgui_holder.DrawIdxSize;
+    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalVtxCount)) * imgui_holder.DrawVertSize;
+    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.TotalIdxCount)) * imgui_holder.DrawIdxSize;
 
     if (draw_data.vertex_buffer_size < vertex_size)
     {
@@ -1285,10 +1284,10 @@ fn render_swapchain_display
         ),
     );
 
-    for (imgui_draw_data.cmd_lists[0..imgui_cmd_lists_count]) |cmd_list|
+    for (imgui_holder.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
     {
-        const vertex_buf = imgui_holder.get_draw_list_vertex_buffer(cmd_list);
-        const index_buf = imgui_holder.get_draw_list_index_buffer(cmd_list);
+        const vertex_buf = imgui_holder.get_draw_list_vertex_buffer(cmd_list.*);
+        const index_buf = imgui_holder.get_draw_list_index_buffer(cmd_list.*);
         @memcpy(vertex_dst[0..vertex_buf.len], vertex_buf);
         @memcpy(index_dst[0..index_buf.len], index_buf);
         vertex_dst += vertex_buf.len;
@@ -1361,8 +1360,8 @@ fn render_swapchain_display
         {
             .x = 0,
             .y = 0,
-            .width = imgui_draw_data.display_size[0],
-            .height = imgui_draw_data.display_size[1],
+            .width = imgui_draw_data.DisplaySize.x,
+            .height = imgui_draw_data.DisplaySize.y,
             .min_depth = 0.0,
             .max_depth = 1.0,
         },
@@ -1371,8 +1370,8 @@ fn render_swapchain_display
 
     const scale = [2]f32
     {
-        2.0 / imgui_draw_data.display_size[0], // x
-        2.0 / imgui_draw_data.display_size[1], // y
+        2.0 / imgui_draw_data.DisplaySize.x,
+        2.0 / imgui_draw_data.DisplaySize.y,
     };
     device_wrapper.cmdPushConstants
     (
@@ -1398,14 +1397,12 @@ fn render_swapchain_display
     {
         var vertex_offset: u32 = 0;
         var index_offset: u32 = 0;
-        for (imgui_draw_data.cmd_lists[0..imgui_cmd_lists_count]) |cmd_list|
+        for (imgui_holder.get_draw_data_draw_list(imgui_draw_data)) |cmd_list|
         {
-            for (imgui_holder.get_draw_list_command_buffer(cmd_list)) |cmd|
+            for (imgui_holder.get_draw_list_command_buffer(cmd_list.*)) |cmd|
             {
-                const x_pos: i32 = @intFromFloat(cmd.clip_rect[0] - imgui_draw_data.display_pos[0]);
-                                                // cmd.clip_rect.x - imgui_draw_data.display_pos.x
-                const y_pos: i32 = @intFromFloat(cmd.clip_rect[1] - imgui_draw_data.display_pos[1]);
-                                                // cmd.clip_rect.y - imgui_draw_data.display_pos.y
+                const x_pos: i32 = @intFromFloat(cmd.ClipRect.x - imgui_draw_data.DisplayPos.x);
+                const y_pos: i32 = @intFromFloat(cmd.ClipRect.y - imgui_draw_data.DisplayPos.y);
                 const scissor = [1]vk.Rect2D
                 {
                     vk.Rect2D
@@ -1417,14 +1414,8 @@ fn render_swapchain_display
                         },
                         .extent = vk.Extent2D
                         {
-                            .width = @intFromFloat
-                            (
-                                cmd.clip_rect[2] - cmd.clip_rect[0]
-                            ), // cmd.clip_rect.z - cmd.clip_rect.x
-                            .height = @intFromFloat
-                            (
-                                cmd.clip_rect[3] - cmd.clip_rect[1] + 1.0
-                            ), // cmd.clip_rect.w - cmd.clip_rect.y + 1
+                            .width = @intFromFloat(cmd.ClipRect.z - cmd.ClipRect.x),
+                            .height = @intFromFloat(cmd.ClipRect.w - cmd.ClipRect.y + 1.0),
                         },
                     },
                 };
@@ -1433,17 +1424,17 @@ fn render_swapchain_display
                 device_wrapper.cmdDrawIndexed
                 (
                     draw_data.command_buffer,
-                    cmd.elem_count,
+                    cmd.ElemCount,
                     1,
                     index_offset,
                     @intCast(vertex_offset),
                     0,
                 );
 
-                index_offset += cmd.elem_count;
+                index_offset += cmd.ElemCount;
             }
 
-            vertex_offset += @intCast(imgui_holder.get_draw_list_vertex_buffer(cmd_list).len);
+            vertex_offset += @intCast(imgui_holder.get_draw_list_vertex_buffer(cmd_list.*).len);
         }
     }
 
