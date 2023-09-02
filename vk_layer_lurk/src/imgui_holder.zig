@@ -97,8 +97,8 @@ pub fn draw_frame() void
     zgui.setNextWindowSize
     (
         .{
-            .h = 600,
-            .w = 600,
+            .h = 100,
+            .w = 100,
             .cond = .always,
         },
     );

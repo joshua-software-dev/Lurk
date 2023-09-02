@@ -1384,11 +1384,7 @@ fn render_swapchain_display
         std.mem.asBytes(&scale),
     );
 
-    const translate = [2]f32
-    {
-        -1.0 - imgui_draw_data.display_size[0] * scale[0], // x
-        -1.0 - imgui_draw_data.display_size[1] * scale[1], // y
-    };
+    const translate = [2]f32{ -1, -1 };
     device_wrapper.cmdPushConstants
     (
         draw_data.command_buffer,
