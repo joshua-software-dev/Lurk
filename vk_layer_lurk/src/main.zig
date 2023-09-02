@@ -252,7 +252,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                     &vk_global_state.font_image,
                     &vk_global_state.framebuffers,
                     &vk_global_state.graphic_queue,
-                    &vk_global_state.height,
+                    vk_global_state.height.?,
                     &vk_global_state.image_count,
                     &vk_global_state.images,
                     &vk_global_state.pipeline_layout,
@@ -261,7 +261,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                     &vk_global_state.render_pass,
                     &vk_global_state.upload_font_buffer_mem,
                     &vk_global_state.upload_font_buffer,
-                    &vk_global_state.width,
+                    vk_global_state.width.?,
                 );
 
                 var present_info = p_present_info.*;

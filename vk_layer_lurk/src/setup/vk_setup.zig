@@ -22,7 +22,7 @@ fn setup_swapchain_data_pipeline
     g_font_sampler: *?vk.Sampler,
     g_pipeline_layout: *?vk.PipelineLayout,
     g_pipeline: *?vk.Pipeline,
-    g_render_pass: *?vk.RenderPass,
+    g_render_pass: *const ?vk.RenderPass,
 )
 void
 {
@@ -422,7 +422,7 @@ pub fn setup_swapchain
     g_font_sampler: *?vk.Sampler,
     g_format: *?vk.Format,
     g_framebuffers: *vkt.FramebufferBacking,
-    g_graphic_queue: *?vkt.QueueData,
+    g_graphic_queue: *const ?vkt.QueueData,
     g_height: *?u32,
     g_image_count: *?u32,
     g_image_views: *vkt.ImageViewBacking,
@@ -430,7 +430,7 @@ pub fn setup_swapchain
     g_pipeline_layout: *?vk.PipelineLayout,
     g_pipeline: *?vk.Pipeline,
     g_render_pass: *?vk.RenderPass,
-    g_swapchain: *?vk.SwapchainKHR,
+    g_swapchain: *const ?vk.SwapchainKHR,
     g_width: *?u32,
 )
 void
@@ -613,7 +613,7 @@ pub fn destroy_swapchain
 (
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    g_render_pass: *?vk.RenderPass,
+    g_render_pass: *const ?vk.RenderPass,
 )
 void
 {
@@ -734,7 +734,7 @@ void
 fn get_queue_data
 (
     queue: vk.Queue,
-    g_device_queues: *vkt.QueueDataBacking,
+    g_device_queues: *const vkt.QueueDataBacking,
 )
 vkt.QueueData
 {
@@ -751,7 +751,7 @@ pub fn wait_before_queue_present
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     queue: vk.Queue,
-    g_device_queues: *vkt.QueueDataBacking,
+    g_device_queues: *const vkt.QueueDataBacking,
 )
 vkt.QueueData
 {
@@ -778,7 +778,7 @@ fn get_overlay_draw
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     init_wrapper: vkl.LayerInitWrapper,
-    g_command_pool: *?vk.CommandPool,
+    g_command_pool: *const ?vk.CommandPool,
     g_previous_draw_data: *?vkt.DrawData,
 )
 vkt.DrawData
@@ -1124,21 +1124,21 @@ fn render_swapchain_display
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_command_pool: *?vk.CommandPool,
-    g_descriptor_set: *?vk.DescriptorSet,
+    g_command_pool: *const ?vk.CommandPool,
+    g_descriptor_set: *const ?vk.DescriptorSet,
     g_font_already_uploaded: *bool,
     g_font_image: *?vk.Image,
-    g_framebuffers: *vkt.FramebufferBacking,
-    g_graphic_queue: *?vkt.QueueData,
-    g_height: *?u32,
-    g_images: *vkt.ImageBacking,
-    g_pipeline_layout: *?vk.PipelineLayout,
-    g_pipeline: *?vk.Pipeline,
+    g_framebuffers: *const vkt.FramebufferBacking,
+    g_graphic_queue: *const ?vkt.QueueData,
+    g_height: u32,
+    g_images: *const vkt.ImageBacking,
+    g_pipeline_layout: *const ?vk.PipelineLayout,
+    g_pipeline: *const ?vk.Pipeline,
     g_previous_draw_data: *?vkt.DrawData,
-    g_render_pass: *?vk.RenderPass,
+    g_render_pass: *const ?vk.RenderPass,
     g_upload_font_buffer_mem: *?vk.DeviceMemory,
     g_upload_font_buffer: *?vk.Buffer,
-    g_width: *?u32,
+    g_width: u32,
 )
 ?vkt.DrawData
 {
@@ -1161,8 +1161,8 @@ fn render_swapchain_display
             .{
                 .extent = vk.Extent2D
                 {
-                    .width = g_width.*.?,
-                    .height = g_height.*.?
+                    .width = g_width,
+                    .height = g_height,
                 }
             },
         ),
@@ -1596,22 +1596,22 @@ pub fn before_present
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_command_pool: *?vk.CommandPool,
-    g_descriptor_set: *?vk.DescriptorSet,
+    g_command_pool: *const ?vk.CommandPool,
+    g_descriptor_set: *const ?vk.DescriptorSet,
     g_font_already_uploaded: *bool,
     g_font_image: *?vk.Image,
-    g_framebuffers: *vkt.FramebufferBacking,
-    g_graphic_queue: *?vkt.QueueData,
-    g_height: *?u32,
-    g_image_count: *?u32,
-    g_images: *vkt.ImageBacking,
-    g_pipeline_layout: *?vk.PipelineLayout,
-    g_pipeline: *?vk.Pipeline,
+    g_framebuffers: *const vkt.FramebufferBacking,
+    g_graphic_queue: *const ?vkt.QueueData,
+    g_height: u32,
+    g_image_count: *const ?u32,
+    g_images: *const vkt.ImageBacking,
+    g_pipeline_layout: *const ?vk.PipelineLayout,
+    g_pipeline: *const ?vk.Pipeline,
     g_previous_draw_data: *?vkt.DrawData,
-    g_render_pass: *?vk.RenderPass,
+    g_render_pass: *const ?vk.RenderPass,
     g_upload_font_buffer_mem: *?vk.DeviceMemory,
     g_upload_font_buffer: *?vk.Buffer,
-    g_width: *?u32,
+    g_width: u32,
 )
 ?vkt.DrawData
 {
