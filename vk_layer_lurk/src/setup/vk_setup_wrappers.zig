@@ -1,5 +1,5 @@
-const vk_layer_stubs = @import("vk_layer_stubs.zig");
 const vk_global_state = @import("vk_global_state.zig");
+const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
 
 const vk = @import("../vk.zig");
@@ -9,7 +9,7 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
 {
     // Ensure this is a nullable pointer (?*) to allow stepping through the
     // chain of p_next
-    var layer_create_info: ?*vk_layer_stubs.LayerInstanceCreateInfo =
+    var layer_create_info: ?*vkl.LayerInstanceCreateInfo =
         @ptrCast(@alignCast(@constCast(p_create_info.p_next)));
 
     // step through the chain of p_next until we get to the link info
@@ -18,7 +18,7 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
         layer_create_info != null and
         (
             layer_create_info.?.s_type != vk.StructureType.loader_instance_create_info or
-            layer_create_info.?.function != vk_layer_stubs.LayerFunction_LAYER_LINK_INFO
+            layer_create_info.?.function != vkl.LayerFunction_LAYER_LINK_INFO
         )
     )
     {
@@ -33,7 +33,7 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
 
     // create non-null pointer variable to make further interactions with this
     // type easier
-    var final_lci: *vk_layer_stubs.LayerInstanceCreateInfo = layer_create_info.?;
+    var final_lci: *vkl.LayerInstanceCreateInfo = layer_create_info.?;
 
     // use `vulkan-zig`'s handy dandy function table struct to save some function tables
     vk_global_state.base_wrapper = vkt.LayerBaseWrapper.load
@@ -55,7 +55,7 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
 
 pub fn create_device_wrappers(p_device: *vk.Device, p_create_info: *const vk.DeviceCreateInfo) void
 {
-    vk_global_state.init_wrapper = vk_layer_stubs.LayerInitWrapper.init(p_create_info);
+    vk_global_state.init_wrapper = vkl.LayerInitWrapper.init(p_create_info);
 
     vk_global_state.device_wrapper = vkt.LayerDeviceWrapper.load
     (

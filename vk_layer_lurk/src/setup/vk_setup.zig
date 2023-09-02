@@ -2,9 +2,8 @@ const std = @import("std");
 
 const embedded_shaders = @import("vk_embedded_shaders.zig");
 const imgui_holder = @import("../imgui_holder.zig");
-const vk_global_state = @import("vk_global_state.zig");
 const vkh = @import("vk_helpers.zig");
-const vk_layer_stubs = @import("vk_layer_stubs.zig");
+const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
 
 const vk = @import("../vk.zig");
@@ -14,6 +13,16 @@ fn setup_swapchain_data_pipeline
 (
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
+    g_descriptor_layout: *?vk.DescriptorSetLayout,
+    g_descriptor_pool: *?vk.DescriptorPool,
+    g_descriptor_set: *?vk.DescriptorSet,
+    g_font_image_view: *?vk.ImageView,
+    g_font_image: *?vk.Image,
+    g_font_mem: *?vk.DeviceMemory,
+    g_font_sampler: *?vk.Sampler,
+    g_pipeline_layout: *?vk.PipelineLayout,
+    g_pipeline: *?vk.Pipeline,
+    g_render_pass: *?vk.RenderPass,
 )
 void
 {
@@ -63,7 +72,7 @@ void
         &font_sampler_container[0],
     );
     if (font_sampler_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateSampler");
-    vk_global_state.font_sampler = font_sampler_container[0];
+    g_font_sampler.* = font_sampler_container[0];
 
     // Descriptor pool
     const sampler_pool_size = [1]vk.DescriptorPoolSize
@@ -81,7 +90,7 @@ void
         .p_pool_sizes = &sampler_pool_size,
     };
 
-    vk_global_state.descriptor_pool = device_wrapper.createDescriptorPool(device, &desc_pool_info, null)
+    g_descriptor_pool.* = device_wrapper.createDescriptorPool(device, &desc_pool_info, null)
     catch @panic("Vulkan function call failed: Device.CreateDescriptorPool");
 
     // Descriptor layout
@@ -118,12 +127,12 @@ void
     {
         @panic("Vulkan function call failed: Device.CreateDescriptorSetLayout");
     }
-    vk_global_state.descriptor_layout = descriptor_layout_container[0];
+    g_descriptor_layout.* = descriptor_layout_container[0];
 
     // Descriptor set
     const alloc_info = vk.DescriptorSetAllocateInfo
     {
-        .descriptor_pool = vk_global_state.descriptor_pool,
+        .descriptor_pool = g_descriptor_pool.*.?,
         .descriptor_set_count = 1,
         .p_set_layouts = &descriptor_layout_container,
     };
@@ -134,7 +143,7 @@ void
     };
     device_wrapper.allocateDescriptorSets(device, &alloc_info, &descriptor_set_container)
     catch @panic("Vulkan function call failed: Device.AllocateDescriptorSets");
-    vk_global_state.descriptor_set = descriptor_set_container[0];
+    g_descriptor_set.* = descriptor_set_container[0];
 
     // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full
     // 3d projection matrix
@@ -154,7 +163,7 @@ void
         .push_constant_range_count = 1,
         .p_push_constant_ranges = &push_constants,
     };
-    vk_global_state.pipeline_layout = device_wrapper.createPipelineLayout(device, &layout_info, null)
+    g_pipeline_layout.* = device_wrapper.createPipelineLayout(device, &layout_info, null)
     catch @panic("Vulkan function call failed: Device.CreatePipelineLayout");
 
     const stage = [2]vk.PipelineShaderStageCreateInfo
@@ -309,8 +318,8 @@ void
                 .p_depth_stencil_state = &depth_info,
                 .p_color_blend_state = &blend_info,
                 .p_dynamic_state = &dynamic_state,
-                .layout = vk_global_state.pipeline_layout,
-                .render_pass = vk_global_state.render_pass,
+                .layout = g_pipeline_layout.*.?,
+                .render_pass = g_render_pass.*.?,
             }
         ),
     };
@@ -320,7 +329,7 @@ void
     };
     _ = device_wrapper.createGraphicsPipelines(device, .null_handle, 1, &info_container, null, &pipeline_container)
     catch @panic("Vulkan function call failed: Device.CreateGraphicsPipelines");
-    vk_global_state.pipeline = pipeline_container[0];
+    g_pipeline.* = pipeline_container[0];
 
     device_wrapper.destroyShaderModule(device, vert_module, null);
     device_wrapper.destroyShaderModule(device, frag_module, null);
@@ -343,10 +352,10 @@ void
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
     };
-    vk_global_state.font_image = device_wrapper.createImage(device, &image_info, null)
+    g_font_image.* = device_wrapper.createImage(device, &image_info, null)
     catch @panic("Vulkan function call failed: Device.CreateImage");
 
-    var font_image_req = device_wrapper.getImageMemoryRequirements(device, vk_global_state.font_image);
+    var font_image_req = device_wrapper.getImageMemoryRequirements(device, g_font_image.*.?);
 
     const image_alloc_info = vk.MemoryAllocateInfo
     {
@@ -357,10 +366,10 @@ void
             font_image_req.memory_type_bits
         ),
     };
-    vk_global_state.font_mem = device_wrapper.allocateMemory(device, &image_alloc_info, null)
+    g_font_mem.* = device_wrapper.allocateMemory(device, &image_alloc_info, null)
     catch @panic("Vulkan function call failed: Device.AllocateMemory");
 
-    device_wrapper.bindImageMemory(device, vk_global_state.font_image, vk_global_state.font_mem, 0)
+    device_wrapper.bindImageMemory(device, g_font_image.*.?, g_font_mem.*.?, 0)
     catch @panic("Vulkan function call failed: Device.BindImageMemory");
 
     // Font image view
@@ -368,7 +377,7 @@ void
     (
         vk.ImageViewCreateInfo,
         .{
-            .image = vk_global_state.font_image,
+            .image = g_font_image.*.?,
             .view_type = .@"2d",
             .format = .r8g8b8a8_unorm,
             .subresource_range = std.mem.zeroInit
@@ -382,7 +391,7 @@ void
             )
         }
     );
-    vk_global_state.font_image_view = device_wrapper.createImageView(device, &view_info, null)
+    g_font_image_view.* = device_wrapper.createImageView(device, &view_info, null)
     catch @panic("Vulkan function call failed: Device.CreateImageView");
 
     // Descriptor set
@@ -390,8 +399,8 @@ void
     {
         vk.DescriptorImageInfo
         {
-            .sampler = vk_global_state.font_sampler.?,
-            .image_view = vk_global_state.font_image_view,
+            .sampler = g_font_sampler.*.?,
+            .image_view = g_font_image_view.*.?,
             .image_layout = .shader_read_only_optimal,
         },
     };
@@ -401,7 +410,7 @@ void
         (
             vk.WriteDescriptorSet,
             .{
-                .dst_set = vk_global_state.descriptor_set.?,
+                .dst_set = g_descriptor_set.*.?,
                 .descriptor_count = 1,
                 .descriptor_type = .combined_image_sampler,
                 .p_image_info = &desc_image,
@@ -428,23 +437,40 @@ pub fn setup_swapchain
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     p_create_info: *const vk.SwapchainCreateInfoKHR,
-    p_swapchain: *vk.SwapchainKHR
+    g_command_pool: *?vk.CommandPool,
+    g_descriptor_layout: *?vk.DescriptorSetLayout,
+    g_descriptor_pool: *?vk.DescriptorPool,
+    g_descriptor_set: *?vk.DescriptorSet,
+    g_font_image_view: *?vk.ImageView,
+    g_font_image: *?vk.Image,
+    g_font_mem: *?vk.DeviceMemory,
+    g_font_sampler: *?vk.Sampler,
+    g_format: *?vk.Format,
+    g_framebuffers: *vkt.FramebufferBacking,
+    g_graphic_queue: *?vkt.QueueData,
+    g_height: *?u32,
+    g_image_count: *?u32,
+    g_image_views: *vkt.ImageViewBacking,
+    g_images: *vkt.ImageBacking,
+    g_pipeline_layout: *?vk.PipelineLayout,
+    g_pipeline: *?vk.Pipeline,
+    g_render_pass: *?vk.RenderPass,
+    g_swapchain: *?vk.SwapchainKHR,
+    g_width: *?u32,
 )
 void
 {
-    vk_global_state.swapchain = p_swapchain;
+    g_height.* = p_create_info.image_extent.height;
+    g_width.* = p_create_info.image_extent.width;
+    g_format.* = p_create_info.image_format;
 
-    vk_global_state.height = p_create_info.image_extent.height;
-    vk_global_state.width = p_create_info.image_extent.width;
-    vk_global_state.format = p_create_info.image_format;
-
-    imgui_holder.setup_context(@floatFromInt(vk_global_state.width.?), @floatFromInt(vk_global_state.height.?));
+    imgui_holder.setup_context(@floatFromInt(g_width.*.?), @floatFromInt(g_height.*.?));
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
         vk.AttachmentDescription
         {
-            .format = vk_global_state.format.?,
+            .format = g_format.*.?,
             .samples = vk.SampleCountFlags{ .@"1_bit" = true, },
             .load_op = .load,
             .store_op = .store,
@@ -498,33 +524,48 @@ void
         .p_dependencies = &dependency,
     };
 
-    vk_global_state.render_pass = device_wrapper.createRenderPass(device, &render_pass_info, null)
+    g_render_pass.* = device_wrapper.createRenderPass(device, &render_pass_info, null)
     catch @panic("Vulkan function call failed: Device.CreateRenderPass");
 
-    setup_swapchain_data_pipeline(device, device_wrapper);
+    setup_swapchain_data_pipeline
+    (
+        device,
+        device_wrapper,
+        g_descriptor_layout,
+        g_descriptor_pool,
+        g_descriptor_set,
+        g_font_image_view,
+        g_font_image,
+        g_font_mem,
+        g_font_sampler,
+        g_pipeline_layout,
+        g_pipeline,
+        g_render_pass,
+    );
 
+    g_image_count.* = 0;
     _ = device_wrapper.getSwapchainImagesKHR
     (
         device,
-        vk_global_state.swapchain.?.*,
-        &vk_global_state.current_image_count,
+        g_swapchain.*.?,
+        &(g_image_count.*.?),
         null,
     )
     catch @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR 1");
 
-    vk_global_state.framebuffers.resize(vk_global_state.current_image_count)
+    g_framebuffers.resize(g_image_count.*.?)
     catch @panic("Framebuffer buffer overflow");
-    vk_global_state.image_views.resize(vk_global_state.current_image_count)
+    g_image_views.resize(g_image_count.*.?)
     catch @panic("Image View buffer overflow");
-    vk_global_state.images.resize(vk_global_state.current_image_count)
+    g_images.resize(g_image_count.*.?)
     catch @panic("Image buffer overflow");
 
     _ = device_wrapper.getSwapchainImagesKHR
     (
         device,
-        vk_global_state.swapchain.?.*,
-        &vk_global_state.current_image_count,
-        &vk_global_state.images.buffer,
+        g_swapchain.*.?,
+        &(g_image_count.*.?),
+        &g_images.buffer,
     )
     catch @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR 2");
 
@@ -534,7 +575,7 @@ void
         vk.ImageViewCreateInfo,
         .{
             .view_type = .@"2d",
-            .format = vk_global_state.format.?,
+            .format = g_format.*.?,
             .components = vk.ComponentMapping
             {
                 .r = .r,
@@ -555,15 +596,15 @@ void
 
     {
         var i: u32 = 0;
-        while (i < vk_global_state.current_image_count) : (i += 1)
+        while (i < g_image_count.*.?) : (i += 1)
         {
-            view_info.image = vk_global_state.images.buffer[i];
+            view_info.image = g_images.buffer[i];
             const create_imgv_result = device_wrapper.dispatch.vkCreateImageView
             (
                 device,
                 &view_info,
                 null,
-                &vk_global_state.image_views.buffer[i],
+                &g_image_views.buffer[i],
             );
             if (create_imgv_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateImageView");
         }
@@ -572,24 +613,24 @@ void
     // Framebuffers
     var fb_info = vk.FramebufferCreateInfo
     {
-        .render_pass = vk_global_state.render_pass,
+        .render_pass = g_render_pass.*.?,
         .attachment_count = 1,
-        .width = vk_global_state.width.?,
-        .height = vk_global_state.height.?,
+        .width = g_width.*.?,
+        .height = g_height.*.?,
         .layers = 1,
     };
 
     {
         var i: u32 = 0;
-        while (i < vk_global_state.current_image_count) : (i += 1)
+        while (i < g_image_count.*.?) : (i += 1)
         {
-            fb_info.p_attachments = vk_global_state.image_views.buffer[i..i].ptr;
+            fb_info.p_attachments = g_image_views.buffer[i..i].ptr;
             const create_fb_result = device_wrapper.dispatch.vkCreateFramebuffer
             (
                 device,
                 &fb_info,
                 null,
-                &vk_global_state.framebuffers.buffer[i]
+                &g_framebuffers.buffer[i]
             );
             if (create_fb_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateFramebuffer");
         }
@@ -599,30 +640,22 @@ void
     const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
     {
         .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
-        .queue_family_index =
-            (
-                vk_global_state.graphic_queue orelse @panic("graphics QueueData was null")
-            ).queue_family_index,
+        .queue_family_index = g_graphic_queue.*.?.queue_family_index,
     };
-    const create_pool_result = device_wrapper.dispatch.vkCreateCommandPool
-    (
-        device,
-        &cmd_buffer_pool_info,
-        null,
-        &vk_global_state.command_pool,
-    );
-    if (create_pool_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateCommandPool");
+    g_command_pool.* = device_wrapper.createCommandPool(device, &cmd_buffer_pool_info, null)
+    catch @panic("Vulkan function call failed: Device.CreateCommandPool");
 }
 
 pub fn destroy_swapchain
 (
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
+    g_render_pass: *?vk.RenderPass,
 )
 void
 {
     std.log.scoped(.LAYER).debug("Destroying render pass...", .{});
-    device_wrapper.destroyRenderPass(device, vk_global_state.render_pass, null);
+    device_wrapper.destroyRenderPass(device, g_render_pass.*.?, null);
 }
 
 pub fn destroy_instance
@@ -652,6 +685,7 @@ fn new_queue_data
     data: *vkt.QueueData,
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
+    g_graphic_queue: *?vkt.QueueData,
 )
 void
 {
@@ -665,23 +699,23 @@ void
 
     if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true,}))
     {
-        vk_global_state.graphic_queue = data;
+        g_graphic_queue.* = data.*;
     }
 }
 
 pub fn device_map_queues
 (
+    p_create_info: *const vk.DeviceCreateInfo,
     physical_device: vk.PhysicalDevice,
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
+    init_wrapper: vkl.LayerInitWrapper,
     instance_wrapper: vkt.LayerInstanceWrapper,
-    init_wrapper: vk_layer_stubs.LayerInitWrapper,
-    p_create_info: *const vk.DeviceCreateInfo,
+    g_device_queues: *vkt.QueueDataBacking,
+    g_graphic_queue: *?vkt.QueueData,
 )
 void
 {
-    vk_global_state.persistent_device = device;
-
     var queue_family_props_count: u32 = 0;
     instance_wrapper.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
@@ -704,10 +738,10 @@ void
         var j: u32 = 0;
         while (j < p_create_info.p_queue_create_infos[i].queue_count) : ({j += 1; device_queue_index += 1;})
         {
-            vk_global_state.device_queues.resize(device_queue_index + 1)
+            g_device_queues.resize(device_queue_index + 1)
             catch @panic("QueueDataBacking buffer overflow");
 
-            var data = &vk_global_state.device_queues.buffer[device_queue_index];
+            var data = &g_device_queues.buffer[device_queue_index];
             data.* = std.mem.zeroInit
             (
                 vkt.QueueData,
@@ -726,7 +760,7 @@ void
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
             }
 
-            new_queue_data(data, device, device_wrapper);
+            new_queue_data(data, device, device_wrapper, g_graphic_queue);
         }
     }
 }
@@ -737,10 +771,11 @@ void
 fn get_queue_data
 (
     queue: vk.Queue,
+    g_device_queues: *vkt.QueueDataBacking,
 )
 vkt.QueueData
 {
-    for (vk_global_state.device_queues.constSlice()) |it|
+    for (g_device_queues.constSlice()) |it|
     {
         if(it.queue == queue) return it;
     }
@@ -750,24 +785,26 @@ vkt.QueueData
 
 pub fn wait_before_queue_present
 (
-    queue: vk.Queue,
+    device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
+    queue: vk.Queue,
+    g_device_queues: *vkt.QueueDataBacking,
 )
 vkt.QueueData
 {
-    const queue_data = get_queue_data(queue);
+    const queue_data = get_queue_data(queue, g_device_queues);
     const fence_container = [1]vk.Fence
     {
         queue_data.fence,
     };
 
-    _ = device_wrapper.resetFences(vk_global_state.persistent_device.?, 1, &fence_container)
+    _ = device_wrapper.resetFences(device, 1, &fence_container)
     catch @panic("Vulkan function call failed: Device.ResetFences");
 
     device_wrapper.queueSubmit(queue, 0, null, queue_data.fence)
     catch @panic("Vulkan function call failed: Device.QueueSubmit");
 
-    _ = device_wrapper.waitForFences(vk_global_state.persistent_device.?, 1, &fence_container, 0, std.math.maxInt(u64))
+    _ = device_wrapper.waitForFences(device, 1, &fence_container, 0, std.math.maxInt(u64))
     catch @panic("Vulkan function call failed: Device.WaitForFences");
 
     return queue_data;
@@ -775,14 +812,17 @@ vkt.QueueData
 
 fn get_overlay_draw
 (
+    device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vk_layer_stubs.LayerInitWrapper,
+    init_wrapper: vkl.LayerInitWrapper,
+    g_command_pool: *?vk.CommandPool,
+    g_previous_draw_data: *?vkt.DrawData,
 )
 vkt.DrawData
 {
-    if (vk_global_state.previous_draw_data) |draw_data|
+    if (g_previous_draw_data.*) |draw_data|
     {
-        const get_fence_result = device_wrapper.getFenceStatus(vk_global_state.persistent_device.?, draw_data.fence)
+        const get_fence_result = device_wrapper.getFenceStatus(device, draw_data.fence)
         catch @panic("Vulkan function call failed: Device.GetFenceStatus");
 
         if (get_fence_result == vk.Result.success)
@@ -791,7 +831,7 @@ vkt.DrawData
             {
                 draw_data.fence,
             };
-            device_wrapper.resetFences(vk_global_state.persistent_device.?, 1, &fence_container)
+            device_wrapper.resetFences(device, 1, &fence_container)
             catch @panic("Vulkan function call failed: Device.ResetFences");
 
             return draw_data;
@@ -802,7 +842,7 @@ vkt.DrawData
 
     const cmd_buffer_info = vk.CommandBufferAllocateInfo
     {
-        .command_pool = vk_global_state.command_pool,
+        .command_pool = g_command_pool.*.?,
         .level = .primary,
         .command_buffer_count = 1,
     };
@@ -812,7 +852,7 @@ vkt.DrawData
     };
     device_wrapper.allocateCommandBuffers
     (
-        vk_global_state.persistent_device.?,
+        device,
         &cmd_buffer_info,
         &command_buf_container,
     )
@@ -824,7 +864,7 @@ vkt.DrawData
     // but all subsequent calls need to be against the older address
     const set_dvc_loader_result = init_wrapper.pfn_set_device_loader_data
     (
-        vk_global_state.persistent_device.?,
+        device,
         &command_buf_container[0],
     );
     if (set_dvc_loader_result != vk.Result.success)
@@ -835,35 +875,40 @@ vkt.DrawData
     const fence_info = vk.FenceCreateInfo{};
     draw_data.fence = device_wrapper.createFence
     (
-        vk_global_state.persistent_device.?,
+        device,
         &fence_info,
         null,
     )
     catch @panic("Vulkan function call failed: Device.CreateFence");
 
     const sem_info = vk.SemaphoreCreateInfo{};
-    draw_data.semaphore = device_wrapper.createSemaphore(vk_global_state.persistent_device.?, &sem_info, null)
+    draw_data.semaphore = device_wrapper.createSemaphore(device, &sem_info, null)
     catch @panic("Vulkan function call failed: Device.CreateSemaphore 1");
     draw_data.cross_engine_semaphore = device_wrapper.createSemaphore
     (
-        vk_global_state.persistent_device.?,
+        device,
         &sem_info,
         null,
     )
     catch @panic("Vulkan function call failed: Device.CreateSemaphore 2");
 
-    vk_global_state.previous_draw_data = draw_data;
-    return vk_global_state.previous_draw_data.?;
+    g_previous_draw_data.* = draw_data;
+    return g_previous_draw_data.*.?;
 }
 
 fn ensure_swapchain_fonts
 (
+    device: vk.Device,
     command_buffer: vk.CommandBuffer,
     device_wrapper: vkt.LayerDeviceWrapper,
+    g_font_already_uploaded: *bool,
+    g_font_image: *?vk.Image,
+    g_upload_font_buffer_mem: *?vk.DeviceMemory,
+    g_upload_font_buffer: *?vk.Buffer,
 )
 void
 {
-    if (vk_global_state.font_already_uploaded) return;
+    if (g_font_already_uploaded.*) return;
 
     var w: i32 = 0;
     var h: i32 = 0;
@@ -876,9 +921,9 @@ void
         .usage = vk.BufferUsageFlags{ .transfer_src_bit = true, },
         .sharing_mode = .exclusive,
     };
-    vk_global_state.upload_font_buffer = device_wrapper.createBuffer
+    g_upload_font_buffer.* = device_wrapper.createBuffer
     (
-        vk_global_state.persistent_device.?,
+        device,
         &buffer_info,
         null,
     )
@@ -886,8 +931,8 @@ void
 
     const upload_buffer_req = device_wrapper.getBufferMemoryRequirements
     (
-        vk_global_state.persistent_device.?,
-        vk_global_state.upload_font_buffer,
+        device,
+        g_upload_font_buffer.*.?,
     );
 
     const upload_alloc_info = vk.MemoryAllocateInfo
@@ -899,9 +944,9 @@ void
             upload_buffer_req.memory_type_bits
         ),
     };
-    vk_global_state.upload_font_buffer_mem = device_wrapper.allocateMemory
+    g_upload_font_buffer_mem.* = device_wrapper.allocateMemory
     (
-        vk_global_state.persistent_device.?,
+        device,
         &upload_alloc_info,
         null,
     )
@@ -909,9 +954,9 @@ void
 
     device_wrapper.bindBufferMemory
     (
-        vk_global_state.persistent_device.?,
-        vk_global_state.upload_font_buffer,
-        vk_global_state.upload_font_buffer_mem,
+        device,
+        g_upload_font_buffer.*.?,
+        g_upload_font_buffer_mem.*.?,
         0,
     )
     catch @panic("Vulkan function call failed: Device.BindBufferMemory");
@@ -920,8 +965,8 @@ void
     (
         device_wrapper.mapMemory
         (
-            vk_global_state.persistent_device.?,
-            vk_global_state.upload_font_buffer_mem,
+            device,
+            g_upload_font_buffer_mem.*.?,
             0,
             upload_size,
             .{},
@@ -936,14 +981,14 @@ void
         (
             vk.MappedMemoryRange,
             .{
-                .memory = vk_global_state.upload_font_buffer_mem,
+                .memory = g_upload_font_buffer_mem.*.?,
                 .size = upload_size,
             },
         ),
     };
-    device_wrapper.flushMappedMemoryRanges(vk_global_state.persistent_device.?, 1, &range)
+    device_wrapper.flushMappedMemoryRanges(device, 1, &range)
     catch @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
-    device_wrapper.unmapMemory(vk_global_state.persistent_device.?, vk_global_state.upload_font_buffer_mem);
+    device_wrapper.unmapMemory(device, g_upload_font_buffer_mem.*.?);
 
     const copy_barrier = [1]vk.ImageMemoryBarrier
     {
@@ -956,7 +1001,7 @@ void
                 .new_layout = .transfer_dst_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = vk_global_state.font_image,
+                .image = g_font_image.*.?,
                 .subresource_range = std.mem.zeroInit
                 (
                     vk.ImageSubresourceRange,
@@ -1010,8 +1055,8 @@ void
     device_wrapper.cmdCopyBufferToImage
     (
         command_buffer,
-        vk_global_state.upload_font_buffer,
-        vk_global_state.font_image,
+        g_upload_font_buffer.*.?,
+        g_font_image.*.?,
         .transfer_dst_optimal,
         1,
         &region,
@@ -1029,7 +1074,7 @@ void
                 .new_layout = .shader_read_only_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = vk_global_state.font_image,
+                .image = g_font_image.*.?,
                 .subresource_range = std.mem.zeroInit
                 (
                     vk.ImageSubresourceRange,
@@ -1056,12 +1101,13 @@ void
         &use_barrier,
     );
 
-    imgui_holder.set_fonts_tex_ident(@ptrCast(&vk_global_state.font_image));
-    vk_global_state.font_already_uploaded = true;
+    imgui_holder.set_fonts_tex_ident(@ptrCast(&(g_font_image.*.?)));
+    g_font_already_uploaded.* = true;
 }
 
 fn create_or_resize_buffer
 (
+    device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     buffer: *vk.Buffer,
     buffer_mem: *vk.DeviceMemory,
@@ -1074,12 +1120,12 @@ void
 
     if (buffer.* != .null_handle)
     {
-        device_wrapper.destroyBuffer(vk_global_state.persistent_device.?, buffer.*, null);
+        device_wrapper.destroyBuffer(device, buffer.*, null);
     }
 
     if (buffer_mem.* != .null_handle)
     {
-        device_wrapper.freeMemory(vk_global_state.persistent_device.?, buffer_mem.*, null);
+        device_wrapper.freeMemory(device, buffer_mem.*, null);
     }
 
     const buffer_info = vk.BufferCreateInfo
@@ -1088,19 +1134,19 @@ void
         .usage = usage,
         .sharing_mode = .exclusive,
     };
-    buffer.* = device_wrapper.createBuffer(vk_global_state.persistent_device.?, &buffer_info, null)
+    buffer.* = device_wrapper.createBuffer(device, &buffer_info, null)
     catch @panic("Vulkan function call failed: Device.CreateBuffer");
 
-    const req = device_wrapper.getBufferMemoryRequirements(vk_global_state.persistent_device.?, buffer.*);
+    const req = device_wrapper.getBufferMemoryRequirements(device, buffer.*);
     const alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = req.size,
         .memory_type_index = vkh.vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
     };
-    buffer_mem.* = device_wrapper.allocateMemory(vk_global_state.persistent_device.?, &alloc_info, null)
+    buffer_mem.* = device_wrapper.allocateMemory(device, &alloc_info, null)
     catch @panic("Vulkan function call failed: Device.AllocateMemory");
 
-    device_wrapper.bindBufferMemory(vk_global_state.persistent_device.?, buffer.*, buffer_mem.*, 0)
+    device_wrapper.bindBufferMemory(device, buffer.*, buffer_mem.*, 0)
     catch @panic("Vulkan function call failed: Device.BindBufferMemory");
 
     buffer_size.* = new_size;
@@ -1108,12 +1154,28 @@ void
 
 fn render_swapchain_display
 (
+    device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vk_layer_stubs.LayerInitWrapper,
+    init_wrapper: vkl.LayerInitWrapper,
     queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
+    g_command_pool: *?vk.CommandPool,
+    g_descriptor_set: *?vk.DescriptorSet,
+    g_font_already_uploaded: *bool,
+    g_font_image: *?vk.Image,
+    g_framebuffers: *vkt.FramebufferBacking,
+    g_graphic_queue: *?vkt.QueueData,
+    g_height: *?u32,
+    g_images: *vkt.ImageBacking,
+    g_pipeline_layout: *?vk.PipelineLayout,
+    g_pipeline: *?vk.Pipeline,
+    g_previous_draw_data: *?vkt.DrawData,
+    g_render_pass: *?vk.RenderPass,
+    g_upload_font_buffer_mem: *?vk.DeviceMemory,
+    g_upload_font_buffer: *?vk.Buffer,
+    g_width: *?u32,
 )
 ?vkt.DrawData
 {
@@ -1121,23 +1183,23 @@ fn render_swapchain_display
     if (imgui_draw_data.total_vtx_count < 1) return null;
     const imgui_cmd_lists_count: u32 = @intCast(imgui_draw_data.cmd_lists_count);
 
-    var draw_data = get_overlay_draw(device_wrapper, init_wrapper);
+    var draw_data = get_overlay_draw(device, device_wrapper, init_wrapper, g_command_pool, g_previous_draw_data);
 
     device_wrapper.resetCommandBuffer(draw_data.command_buffer, .{})
     catch @panic("Vulkan function call failed: Device.ResetCommandBuffer");
 
     const render_pass_info = vk.RenderPassBeginInfo
     {
-        .render_pass = vk_global_state.render_pass,
-        .framebuffer = vk_global_state.framebuffers.buffer[image_index],
+        .render_pass = g_render_pass.*.?,
+        .framebuffer = g_framebuffers.buffer[image_index],
         .render_area = std.mem.zeroInit
         (
             vk.Rect2D,
             .{
                 .extent = vk.Extent2D
                 {
-                    .width = vk_global_state.width.?,
-                    .height = vk_global_state.height.?
+                    .width = g_width.*.?,
+                    .height = g_height.*.?
                 }
             },
         ),
@@ -1147,7 +1209,16 @@ fn render_swapchain_display
     device_wrapper.beginCommandBuffer(draw_data.command_buffer, &buffer_begin_info)
     catch @panic("Vulkan function call failed: Device.BeginCommandBuffer");
 
-    ensure_swapchain_fonts(draw_data.command_buffer, device_wrapper);
+    ensure_swapchain_fonts
+    (
+        device,
+        draw_data.command_buffer,
+        device_wrapper,
+        g_font_already_uploaded,
+        g_font_image,
+        g_upload_font_buffer_mem,
+        g_upload_font_buffer,
+    );
 
     {
         const imb_container = [1]vk.ImageMemoryBarrier
@@ -1159,8 +1230,8 @@ fn render_swapchain_display
                 .old_layout = .present_src_khr,
                 .new_layout = .color_attachment_optimal,
                 .src_queue_family_index = queue_data.queue_family_index,
-                .dst_queue_family_index = vk_global_state.graphic_queue.?.queue_family_index,
-                .image = vk_global_state.images.get(image_index),
+                .dst_queue_family_index = g_graphic_queue.*.?.queue_family_index,
+                .image = g_images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
                 {
                     .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
@@ -1195,6 +1266,7 @@ fn render_swapchain_display
     {
         create_or_resize_buffer
         (
+            device,
             device_wrapper,
             &draw_data.vertex_buffer,
             &draw_data.vertex_buffer_mem,
@@ -1208,6 +1280,7 @@ fn render_swapchain_display
     {
         create_or_resize_buffer
         (
+            device,
             device_wrapper,
             &draw_data.index_buffer,
             &draw_data.index_buffer_mem,
@@ -1223,7 +1296,7 @@ fn render_swapchain_display
         (
             device_wrapper.mapMemory
             (
-                vk_global_state.persistent_device.?,
+                device,
                 draw_data.vertex_buffer_mem,
                 0,
                 vertex_size,
@@ -1239,7 +1312,7 @@ fn render_swapchain_display
         (
             device_wrapper.mapMemory
             (
-                vk_global_state.persistent_device.?,
+                device,
                 draw_data.index_buffer_mem,
                 0,
                 index_size,
@@ -1279,21 +1352,21 @@ fn render_swapchain_display
         ),
     };
 
-    device_wrapper.flushMappedMemoryRanges(vk_global_state.persistent_device.?, 2, &range)
+    device_wrapper.flushMappedMemoryRanges(device, 2, &range)
     catch @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
-    device_wrapper.unmapMemory(vk_global_state.persistent_device.?, draw_data.vertex_buffer_mem);
-    device_wrapper.unmapMemory(vk_global_state.persistent_device.?, draw_data.index_buffer_mem);
+    device_wrapper.unmapMemory(device, draw_data.vertex_buffer_mem);
+    device_wrapper.unmapMemory(device, draw_data.index_buffer_mem);
 
-    device_wrapper.cmdBindPipeline(draw_data.command_buffer, .graphics, vk_global_state.pipeline.?);
+    device_wrapper.cmdBindPipeline(draw_data.command_buffer, .graphics, g_pipeline.*.?);
     const desc_set_container = [1]vk.DescriptorSet
     {
-        vk_global_state.descriptor_set.?,
+        g_descriptor_set.*.?,
     };
     device_wrapper.cmdBindDescriptorSets
     (
         draw_data.command_buffer,
         .graphics,
-        vk_global_state.pipeline_layout,
+        g_pipeline_layout.*.?,
         0,
         1,
         &desc_set_container,
@@ -1341,7 +1414,7 @@ fn render_swapchain_display
     device_wrapper.cmdPushConstants
     (
         draw_data.command_buffer,
-        vk_global_state.pipeline_layout,
+        g_pipeline_layout.*.?,
         vk.ShaderStageFlags{ .vertex_bit = true, },
         @sizeOf(f32) * 0, // can't this just be 0?
         @sizeOf(f32) * 2,
@@ -1356,7 +1429,7 @@ fn render_swapchain_display
     device_wrapper.cmdPushConstants
     (
         draw_data.command_buffer,
-        vk_global_state.pipeline_layout,
+        g_pipeline_layout.*.?,
         vk.ShaderStageFlags{ .vertex_bit = true, },
         @sizeOf(f32) * 2,
         @sizeOf(f32) * 2,
@@ -1417,7 +1490,7 @@ fn render_swapchain_display
 
     device_wrapper.cmdEndRenderPass(draw_data.command_buffer);
 
-    if (queue_data.queue_family_index != vk_global_state.graphic_queue.?.queue_family_index)
+    if (queue_data.queue_family_index != g_graphic_queue.*.?.queue_family_index)
     {
         const imb_container = [1]vk.ImageMemoryBarrier
         {
@@ -1427,9 +1500,9 @@ fn render_swapchain_display
                 .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
                 .old_layout = .present_src_khr,
                 .new_layout = .present_src_khr,
-                .src_queue_family_index = vk_global_state.graphic_queue.?.queue_family_index,
+                .src_queue_family_index = g_graphic_queue.*.?.queue_family_index,
                 .dst_queue_family_index = queue_data.queue_family_index,
-                .image = vk_global_state.images.get(image_index),
+                .image = g_images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
                 {
                     .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
@@ -1458,7 +1531,7 @@ fn render_swapchain_display
     device_wrapper.endCommandBuffer(draw_data.command_buffer)
     catch @panic("Vulkan function call failed: Device.EndCommandBuffer");
 
-    if (wait_semaphore_count == 0 and queue_data.queue != vk_global_state.graphic_queue.?.queue)
+    if (wait_semaphore_count == 0 and queue_data.queue != g_graphic_queue.*.?.queue)
     {
         const stages_wait_container = [1]vk.PipelineStageFlags
         {
@@ -1505,7 +1578,7 @@ fn render_swapchain_display
             },
         };
 
-        device_wrapper.queueSubmit(vk_global_state.graphic_queue.?.queue, 1, &submit_info_container2, draw_data.fence)
+        device_wrapper.queueSubmit(g_graphic_queue.*.?.queue, 1, &submit_info_container2, draw_data.fence)
         catch @panic("Vulkan function call failed: Device.QueueSubmit 2");
     }
     else
@@ -1544,7 +1617,7 @@ fn render_swapchain_display
             },
         };
 
-        device_wrapper.queueSubmit(vk_global_state.graphic_queue.?.queue, 1, &submit_info_container, draw_data.fence)
+        device_wrapper.queueSubmit(g_graphic_queue.*.?.queue, 1, &submit_info_container, draw_data.fence)
         catch @panic("Vulkan function call failed: Device.QueueSubmit");
     }
 
@@ -1553,26 +1626,59 @@ fn render_swapchain_display
 
 pub fn before_present
 (
+    device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vk_layer_stubs.LayerInitWrapper,
+    init_wrapper: vkl.LayerInitWrapper,
     queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
+    g_command_pool: *?vk.CommandPool,
+    g_descriptor_set: *?vk.DescriptorSet,
+    g_font_already_uploaded: *bool,
+    g_font_image: *?vk.Image,
+    g_framebuffers: *vkt.FramebufferBacking,
+    g_graphic_queue: *?vkt.QueueData,
+    g_height: *?u32,
+    g_image_count: *?u32,
+    g_images: *vkt.ImageBacking,
+    g_pipeline_layout: *?vk.PipelineLayout,
+    g_pipeline: *?vk.Pipeline,
+    g_previous_draw_data: *?vkt.DrawData,
+    g_render_pass: *?vk.RenderPass,
+    g_upload_font_buffer_mem: *?vk.DeviceMemory,
+    g_upload_font_buffer: *?vk.Buffer,
+    g_width: *?u32,
 )
 ?vkt.DrawData
 {
-    if (vk_global_state.current_image_count > 0)
+    if (g_image_count.*.? > 0)
     {
         imgui_holder.draw_frame();
         return render_swapchain_display
         (
+            device,
             device_wrapper,
             init_wrapper,
             queue_data,
             p_wait_semaphores,
             wait_semaphore_count,
-            image_index
+            image_index,
+            g_command_pool,
+            g_descriptor_set,
+            g_font_already_uploaded,
+            g_font_image,
+            g_framebuffers,
+            g_graphic_queue,
+            g_height,
+            g_images,
+            g_pipeline_layout,
+            g_pipeline,
+            g_previous_draw_data,
+            g_render_pass,
+            g_upload_font_buffer_mem,
+            g_upload_font_buffer,
+            g_width,
         );
     }
 

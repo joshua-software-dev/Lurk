@@ -4,7 +4,6 @@ const std = @import("std");
 const disc = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
-const vk_layer_stubs = @import("setup/vk_layer_stubs.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
 
 const vk = @import("vk.zig");
@@ -109,16 +108,19 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (create_device_result != vk.Result.success) return create_device_result;
 
     vk_setup_wrappers.create_device_wrappers(p_device, p_create_info);
+    vk_global_state.persistent_device = p_device.*;
 
     setup.get_physical_mem_props(physical_device, vk_global_state.instance_wrapper.?);
     setup.device_map_queues
     (
+        p_create_info,
         physical_device,
         p_device.*,
         vk_global_state.device_wrapper.?,
-        vk_global_state.instance_wrapper.?,
         vk_global_state.init_wrapper.?,
-        p_create_info,
+        vk_global_state.instance_wrapper.?,
+        &vk_global_state.device_queues,
+        &vk_global_state.graphic_queue,
     );
 
     return vk.Result.success;
@@ -163,7 +165,35 @@ callconv(vk.vulkan_call_conv) vk.Result
         p_swapchain,
     );
     if (result != vk.Result.success) return result;
-    setup.setup_swapchain(device, vk_global_state.device_wrapper.?, p_create_info, p_swapchain);
+
+    vk_global_state.swapchain = p_swapchain.*;
+
+    setup.setup_swapchain
+    (
+        device,
+        vk_global_state.device_wrapper.?,
+        p_create_info,
+        &vk_global_state.command_pool,
+        &vk_global_state.descriptor_layout,
+        &vk_global_state.descriptor_pool,
+        &vk_global_state.descriptor_set,
+        &vk_global_state.font_image_view,
+        &vk_global_state.font_image,
+        &vk_global_state.font_mem,
+        &vk_global_state.font_sampler,
+        &vk_global_state.format,
+        &vk_global_state.framebuffers,
+        &vk_global_state.graphic_queue,
+        &vk_global_state.height,
+        &vk_global_state.image_count,
+        &vk_global_state.image_views,
+        &vk_global_state.images,
+        &vk_global_state.pipeline_layout,
+        &vk_global_state.pipeline,
+        &vk_global_state.render_pass,
+        &vk_global_state.swapchain,
+        &vk_global_state.width,
+    );
 
     return result;
 }
@@ -180,7 +210,7 @@ callconv(vk.vulkan_call_conv) void
     defer vk_global_state.wrappers_global_lock.unlock();
 
     vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
-    setup.destroy_swapchain(device, vk_global_state.device_wrapper.?);
+    setup.destroy_swapchain(device, vk_global_state.device_wrapper.?, &vk_global_state.render_pass);
 }
 
 export fn VkLayerLurk_QueuePresentKHR
@@ -195,7 +225,13 @@ callconv(vk.vulkan_call_conv) vk.Result
     {
         vk_global_state.wrappers_global_lock.lock();
         defer vk_global_state.wrappers_global_lock.unlock();
-        const queue_data = setup.wait_before_queue_present(queue, vk_global_state.device_wrapper.?);
+        const queue_data = setup.wait_before_queue_present
+        (
+            vk_global_state.persistent_device.?,
+            vk_global_state.device_wrapper.?,
+            queue,
+            &vk_global_state.device_queues,
+        );
 
         {
             var i: u32 = 0;
@@ -203,12 +239,29 @@ callconv(vk.vulkan_call_conv) vk.Result
             {
                 const maybe_draw_data = setup.before_present
                 (
+                    vk_global_state.persistent_device.?,
                     vk_global_state.device_wrapper.?,
                     vk_global_state.init_wrapper.?,
                     queue_data,
                     p_present_info.p_wait_semaphores,
                     p_present_info.wait_semaphore_count,
-                    p_present_info.p_image_indices[i]
+                    p_present_info.p_image_indices[i],
+                    &vk_global_state.command_pool,
+                    &vk_global_state.descriptor_set,
+                    &vk_global_state.font_already_uploaded,
+                    &vk_global_state.font_image,
+                    &vk_global_state.framebuffers,
+                    &vk_global_state.graphic_queue,
+                    &vk_global_state.height,
+                    &vk_global_state.image_count,
+                    &vk_global_state.images,
+                    &vk_global_state.pipeline_layout,
+                    &vk_global_state.pipeline,
+                    &vk_global_state.previous_draw_data,
+                    &vk_global_state.render_pass,
+                    &vk_global_state.upload_font_buffer_mem,
+                    &vk_global_state.upload_font_buffer,
+                    &vk_global_state.width,
                 );
 
                 var present_info = p_present_info.*;
