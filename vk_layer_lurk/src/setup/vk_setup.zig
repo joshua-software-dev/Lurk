@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const embedded_shaders = @import("vk_embedded_shaders.zig");
-const imgui_holder = @import("../imgui_holder.zig");
+const imgui_holder = @import("imgui_ui");
 const vkh = @import("vk_helpers.zig");
 const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");

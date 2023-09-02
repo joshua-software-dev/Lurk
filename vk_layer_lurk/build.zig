@@ -3,7 +3,6 @@ const std = @import("std");
 const download_xml = @import("src/download_xml.zig");
 
 const discb = @import("deps/discord_ws_conn/build.zig");
-const zgui = @import("deps/zgui/build.zig");
 
 
 fn find_existing_or_generate_new_vulkan_bindings(b: *std.Build, lib: *std.build.Step.Compile, use_sysvk: bool) void
@@ -69,40 +68,15 @@ pub fn build(b: *std.Build) void
     ) orelse false;
 
     const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
-    const zgui_pkg = zgui.package
+    const imgui_ui = b.anonymousDependency
     (
-        b,
-        target,
-        optimize,
+        "deps/imgui_ui",
+        @import("deps/imgui_ui/build.zig"),
         .{
-            .options = .{ .backend = .no_backend }
-        }
-    );
-    _ = zgui_pkg;
-
-    const cimgui = b.addStaticLibrary
-    (
-        .{
-            .name = "zigcimgui",
             .target = target,
             .optimize = optimize,
         }
     );
-    cimgui.linkLibC();
-
-    const imguiSources = &[_][]const u8
-    {
-        "deps/cimgui/cimgui.cpp",
-        "deps/cimgui/imgui/imgui.cpp",
-        "deps/cimgui/imgui/imgui_demo.cpp",
-        "deps/cimgui/imgui/imgui_draw.cpp",
-        "deps/cimgui/imgui/imgui_tables.cpp",
-        "deps/cimgui/imgui/imgui_widgets.cpp",
-    };
-    for (imguiSources) |src|
-    {
-        cimgui.addCSourceFile(.{ .file = .{ .path = src }, .flags = &[_][]const u8{ "-std=c++17" }, });
-    }
 
     const lib = b.addSharedLibrary
     (
@@ -123,12 +97,12 @@ pub fn build(b: *std.Build) void
 
     lib.addModule("discord_ws_conn", disc);
 
+    lib.addIncludePath(.{ .path = "deps/imgui_ui/dep/cimgui.git/" });
+    lib.linkLibrary(imgui_ui.artifact("imgui_ui"));
+    lib.modules.put("imgui_ui", imgui_ui.module("imgui_ui")) catch @panic("fuck");
+
     lib.linkLibC();
-    lib.linkLibCpp();
     find_existing_or_generate_new_vulkan_bindings(b, lib, use_system_vulkan);
-    // zgui_pkg.link(lib);
-    lib.addIncludePath(.{ .path = "deps/cimgui/" });
-    lib.linkLibrary(cimgui);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
