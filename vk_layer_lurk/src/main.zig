@@ -205,8 +205,33 @@ callconv(vk.vulkan_call_conv) void
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
 
+    if (swapchain == .null_handle)
+    {
+        vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
+        return;
+    }
+
+    setup.destroy_swapchain
+    (
+        device,
+        vk_global_state.device_wrapper.?,
+        &vk_global_state.command_pool,
+        &vk_global_state.descriptor_layout,
+        &vk_global_state.descriptor_pool,
+        &vk_global_state.font_image_view,
+        &vk_global_state.font_image,
+        &vk_global_state.font_mem,
+        &vk_global_state.font_sampler,
+        &vk_global_state.framebuffers,
+        &vk_global_state.image_views,
+        &vk_global_state.pipeline_layout,
+        &vk_global_state.pipeline,
+        &vk_global_state.previous_draw_data,
+        &vk_global_state.render_pass,
+        &vk_global_state.upload_font_buffer_mem,
+        &vk_global_state.upload_font_buffer,
+    );
     vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
-    setup.destroy_swapchain(device, vk_global_state.device_wrapper.?, &vk_global_state.render_pass);
 }
 
 export fn VkLayerLurk_QueuePresentKHR

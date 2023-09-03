@@ -613,12 +613,121 @@ pub fn destroy_swapchain
 (
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    g_render_pass: *const ?vk.RenderPass,
+    g_command_pool: *?vk.CommandPool,
+    g_descriptor_layout: *?vk.DescriptorSetLayout,
+    g_descriptor_pool: *?vk.DescriptorPool,
+    g_font_image_view: *?vk.ImageView,
+    g_font_image: *?vk.Image,
+    g_font_mem: *?vk.DeviceMemory,
+    g_font_sampler: *?vk.Sampler,
+    g_framebuffers: *vkt.FramebufferBacking,
+    g_image_views: *vkt.ImageViewBacking,
+    g_pipeline_layout: *?vk.PipelineLayout,
+    g_pipeline: *?vk.Pipeline,
+    g_previous_draw_data: *?vkt.DrawData,
+    g_render_pass: *?vk.RenderPass,
+    g_upload_font_buffer_mem: *?vk.DeviceMemory,
+    g_upload_font_buffer: *?vk.Buffer,
 )
 void
 {
-    std.log.scoped(.LAYER).debug("Destroying render pass...", .{});
-    device_wrapper.destroyRenderPass(device, g_render_pass.*.?, null);
+    if (g_previous_draw_data.* != null)
+    {
+        device_wrapper.destroySemaphore(device, g_previous_draw_data.*.?.cross_engine_semaphore, null);
+        device_wrapper.destroySemaphore(device, g_previous_draw_data.*.?.semaphore, null);
+        device_wrapper.destroyFence(device, g_previous_draw_data.*.?.fence, null);
+        device_wrapper.destroyBuffer(device, g_previous_draw_data.*.?.vertex_buffer, null);
+        device_wrapper.destroyBuffer(device, g_previous_draw_data.*.?.index_buffer, null);
+        device_wrapper.freeMemory(device, g_previous_draw_data.*.?.vertex_buffer_mem, null);
+        device_wrapper.freeMemory(device, g_previous_draw_data.*.?.index_buffer_mem, null);
+        g_previous_draw_data.* = null;
+    }
+
+    if (g_image_views.len > 0 or g_framebuffers.len > 0)
+    {
+        for (g_image_views.slice(), g_framebuffers.slice()) |iv, fb|
+        {
+            device_wrapper.destroyImageView(device, iv, null);
+            device_wrapper.destroyFramebuffer(device, fb, null);
+        }
+
+        g_image_views.len = 0;
+        g_framebuffers.len = 0;
+    }
+
+    if (g_render_pass.* != null)
+    {
+        device_wrapper.destroyRenderPass(device, g_render_pass.*.?, null);
+        g_render_pass.* = null;
+    }
+
+    if (g_command_pool.* != null)
+    {
+        device_wrapper.destroyCommandPool(device, g_command_pool.*.?, null);
+        g_command_pool.* = null;
+    }
+
+    if (g_pipeline.* != null)
+    {
+        device_wrapper.destroyPipeline(device, g_pipeline.*.?, null);
+        g_pipeline.* = null;
+    }
+
+    if (g_pipeline_layout.* != null)
+    {
+        device_wrapper.destroyPipelineLayout(device, g_pipeline_layout.*.?, null);
+        g_pipeline_layout.* = null;
+    }
+
+    if (g_descriptor_pool.* != null)
+    {
+        device_wrapper.destroyDescriptorPool(device, g_descriptor_pool.*.?, null);
+        g_descriptor_pool.* = null;
+    }
+
+    if (g_descriptor_layout.* != null)
+    {
+        device_wrapper.destroyDescriptorSetLayout(device, g_descriptor_layout.*.?, null);
+        g_descriptor_layout.* = null;
+    }
+
+    if (g_font_sampler.* != null)
+    {
+        device_wrapper.destroySampler(device, g_font_sampler.*.?, null);
+        g_font_sampler.* = null;
+    }
+
+    if (g_font_image_view.* != null)
+    {
+        device_wrapper.destroyImageView(device, g_font_image_view.*.?, null);
+        g_font_image_view.* = null;
+    }
+
+    if (g_font_image.* != null)
+    {
+        device_wrapper.destroyImage(device, g_font_image.*.?, null);
+        g_font_image.* = null;
+    }
+
+    if (g_font_mem.* != null)
+    {
+        device_wrapper.freeMemory(device, g_font_mem.*.?, null);
+        g_font_mem.* = null;
+    }
+
+    if (g_upload_font_buffer.* != null)
+    {
+        device_wrapper.destroyBuffer(device, g_upload_font_buffer.*.?, null);
+        g_upload_font_buffer.* = null;
+    }
+
+    if (g_upload_font_buffer_mem.* != null)
+    {
+        device_wrapper.freeMemory(device, g_upload_font_buffer_mem.*.?, null);
+        g_upload_font_buffer_mem.* = null;
+    }
+
+    _ = imgui_ui.destroy_context();
 }
 
 pub fn destroy_instance
@@ -630,7 +739,6 @@ void
 {
     _ = instance;
     _ = instance_wrapper;
-    _ = imgui_ui.destroy_context();
 }
 
 pub fn get_physical_mem_props
