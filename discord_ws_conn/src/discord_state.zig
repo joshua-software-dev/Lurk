@@ -317,7 +317,7 @@ pub const DiscordState = struct
 
             try writer.print
             (
-                "{s} | {: <5} | {}\n",
+                "{s: <32} | {: <5} | {}\n",
                 .{
                     nickname_buffer.constSlice(),
                     user.muted,
