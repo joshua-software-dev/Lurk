@@ -52,7 +52,7 @@ pub fn handle_message_thread() !void
 
             var stream = std.io.fixedBufferStream(&output_buffer);
             var writter = stream.writer();
-            try conn.state.write_users_data_to_write_stream(writter);
+            try conn.state.write_users_data_to_write_stream_ascii(writter);
             _ = try writter.write("\x00");
             output_label = stream.getWritten();
         }
