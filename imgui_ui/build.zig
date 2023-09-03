@@ -44,7 +44,6 @@ pub fn build(b: *std.Build) void {
     }
     cimgui.step.dependOn(&cimgui_repo.step);
 
-    cimgui.linkLibC();
     cimgui.linkLibCpp();
 
     const imguiSources = &[_][]const u8
