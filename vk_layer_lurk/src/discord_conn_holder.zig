@@ -12,8 +12,10 @@ const debug = switch (builtin.mode)
 
 var background_thread: std.Thread = undefined;
 var conn: disc.DiscordWsConn = undefined;
+var output_buffer: [256*100]u8 = undefined;
+pub var output_label: []const u8 = "";
+pub var output_lock: std.Thread.Mutex = .{};
 var running = false;
-var stdout: ?std.fs.File = null;
 
 
 pub fn start_discord_conn(allocator: std.mem.Allocator) !void
@@ -27,7 +29,6 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     errdefer conn.close();
 
     std.log.scoped(.LAYER).info("Connection Success: {+/}", .{ connUri });
-    stdout = std.io.getStdOut();
 
     background_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
 }
@@ -45,9 +46,15 @@ pub fn handle_message_thread() !void
 
         if (!success) return error.DiscordMessageHandleFailure;
 
-        if (stdout) |out|
+        if (output_lock.tryLock())
         {
-            try conn.state.write_users_data_to_write_stream(out.writer());
+            defer output_lock.unlock();
+
+            var stream = std.io.fixedBufferStream(&output_buffer);
+            var writter = stream.writer();
+            try conn.state.write_users_data_to_write_stream(writter);
+            _ = try writter.write("\x00");
+            output_label = stream.getWritten();
         }
     }
 }

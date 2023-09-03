@@ -234,6 +234,9 @@ callconv(vk.vulkan_call_conv) vk.Result
         );
 
         {
+            disc.output_lock.lock();
+            defer disc.output_lock.unlock();
+
             var i: u32 = 0;
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
@@ -262,6 +265,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                     &vk_global_state.upload_font_buffer_mem,
                     &vk_global_state.upload_font_buffer,
                     vk_global_state.width.?,
+                    disc.output_label,
                 );
 
                 var present_info = p_present_info.*;

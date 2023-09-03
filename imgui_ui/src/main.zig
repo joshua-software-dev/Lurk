@@ -4,6 +4,14 @@ const cimgui = @import("cimgui.zig");
 pub const DrawIdx = cimgui.ImDrawIdx;
 pub const DrawVert = cimgui.ImDrawVert;
 
+const WindowPosition = enum
+{
+    TOP_LEFT,
+    TOP_RIGHT,
+    BOTTOM_LEFT,
+    BOTTOM_RIGHT,
+};
+
 var current_imgui_context: ?*cimgui.ImGuiContext = null;
 
 
@@ -11,6 +19,7 @@ pub fn setup_context(display_x_width: f32, display_y_height: f32) void
 {
     current_imgui_context = cimgui.igCreateContext(null);
     cimgui.igSetCurrentContext(current_imgui_context.?);
+    cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
 
     const io = cimgui.igGetIO();
     io.*.IniFilename = null;
@@ -71,51 +80,103 @@ pub fn destroy_context() bool
     return false;
 }
 
-fn draw_frame_contents() void
+fn draw_frame_contents(label: []const u8) void
 {
-    cimgui.igSeparator();
-    cimgui.igText("Hello World!");
-    cimgui.igSeparator();
+    cimgui.igText(label.ptr);
 }
 
-pub fn draw_frame() void
+fn set_window_position
+(
+    display_x: u32,
+    display_y: u32,
+    window_size: cimgui.ImVec2,
+    position: WindowPosition,
+    margin: f32,
+)
+void
 {
-    // ImGui::SetCurrentContext(data->imgui_context);
-    // ImGui::NewFrame();
+    switch (position)
+    {
+        .TOP_LEFT =>
+        {
+            cimgui.igSetNextWindowPos
+            (
+                .{
+                    .x = margin,
+                    .y = margin,
+                },
+                cimgui.ImGuiCond_Always,
+                .{
+                    .x = 0,
+                    .y = 0,
+                },
+            );
+        },
+        .TOP_RIGHT =>
+        {
+            cimgui.igSetNextWindowPos
+            (
+                .{
+                    .x = @as(f32, @floatFromInt(display_x)) - window_size.x - margin,
+                    .y = margin,
+                },
+                cimgui.ImGuiCond_Always,
+                .{
+                    .x = 0,
+                    .y = 0,
+                },
+            );
+        },
+        .BOTTOM_LEFT =>
+        {
+            cimgui.igSetNextWindowPos
+            (
+                .{
+                    .x = margin,
+                    .y = @as(f32, @floatFromInt(display_y)) - window_size.y - margin,
+                },
+                cimgui.ImGuiCond_Always,
+                .{
+                    .x = 0,
+                    .y = 0,
+                },
+            );
+        },
+        .BOTTOM_RIGHT =>
+        {
+            cimgui.igSetNextWindowPos
+            (
+                .{
+                    .x = @as(f32, @floatFromInt(display_x)) - window_size.x - margin,
+                    .y = @as(f32, @floatFromInt(display_y)) - window_size.y - margin,
+                },
+                cimgui.ImGuiCond_Always,
+                .{
+                    .x = 0,
+                    .y = 0,
+                },
+            );
+        },
+    }
+}
 
-    // ImGui::SetNextWindowBgAlpha(0.5);
-    // ImGui::SetNextWindowSize(data->window_size, ImGuiCond_Always);
-    // ImGui::SetNextWindowPos(ImVec2(margin, margin), ImGuiCond_Always);
-
-    // ImGui::Begin("Mesa overlay");
-
-    // ImGui::Separator();
-
-    // ImGui::End();
-    // ImGui::EndFrame();
-    // ImGui::Render();
-
+pub fn draw_frame(display_x: u32, display_y: u32, label: []const u8) void
+{
     const margin: f32 = 20;
 
     cimgui.igSetCurrentContext(current_imgui_context.?);
     cimgui.igNewFrame();
 
-    cimgui.igSetNextWindowBgAlpha(0.5);
-    cimgui.igSetNextWindowSize(cimgui.ImVec2{ .x = 100, .y = 100, }, cimgui.ImGuiCond_Always);
-    cimgui.igSetNextWindowPos
-    (
-        .{
-            .x = margin,
-            .y = margin,
-        },
-        cimgui.ImGuiCond_Always,
-        .{ .x = 0, .y = 0, },
-    );
+    cimgui.igSetNextWindowBgAlpha(0);
+
+    const window_size = cimgui.ImVec2{ .x = 400, .y = 300, };
+    cimgui.igSetNextWindowSize(window_size, cimgui.ImGuiCond_Always);
+    set_window_position(display_x, display_y, window_size, .TOP_RIGHT, margin);
 
     var show_window = true;
-    if (cimgui.igBegin("Lurk", &show_window, cimgui.ImGuiWindowFlags_None))
+    if (cimgui.igBegin("Lurk", &show_window, cimgui.ImGuiWindowFlags_NoTitleBar | cimgui.ImGuiWindowFlags_NoScrollbar | cimgui.ImGuiWindowFlags_NoDecoration))
     {
-        draw_frame_contents();
+        draw_frame_contents(label);
     }
 
     cimgui.igEnd();

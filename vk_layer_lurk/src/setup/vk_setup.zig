@@ -1599,12 +1599,13 @@ pub fn before_present
     g_upload_font_buffer_mem: *?vk.DeviceMemory,
     g_upload_font_buffer: *?vk.Buffer,
     g_width: u32,
+    label: []const u8,
 )
 ?vkt.DrawData
 {
     if (g_image_count.*.? > 0)
     {
-        imgui_ui.draw_frame();
+        imgui_ui.draw_frame(g_width, g_height, label);
         return render_swapchain_display
         (
             device,
