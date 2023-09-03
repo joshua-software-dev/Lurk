@@ -1,3 +1,5 @@
+const builtin = @import("builtin");
+
 const cimgui = @import("cimgui.zig");
 
 
@@ -82,6 +84,11 @@ pub fn destroy_context() bool
 
 fn draw_frame_contents(label: []const u8) void
 {
+    if (builtin.mode == .Debug)
+    {
+        cimgui.igSeparator();
+    }
+
     cimgui.igText(label.ptr);
 }
 
