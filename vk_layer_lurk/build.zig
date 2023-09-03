@@ -53,6 +53,11 @@ pub fn build(b: *std.Build) void
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
+    switch (target.getCpuArch())
+    {
+        .x86, .x86_64 => { },
+        else => @panic("Unsupported CPU architecture.")
+    }
 
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
@@ -109,31 +114,26 @@ pub fn build(b: *std.Build) void
     // running `zig build`).
     const install = b.addInstallArtifact(lib, .{});
     install.dest_dir = .prefix;
-    install.dest_sub_path = b.fmt
-    (
-        "{s}/{s}",
-        .{
-            switch (target.getCpuArch())
-            {
-                .x86 => "lib32",
-                .x86_64 => "lib64",
-                else => @panic("Unsupported CPU architecture.")
-            },
-            lib.out_filename
-        }
-    );
+    install.dest_sub_path = b.fmt("lib/{s}", .{ lib.out_filename });
 
     b.default_step.dependOn(&install.step);
-    b.installDirectory
-    (
-        .{
-            .source_dir = .{ .path = "manifests/package" },
-            .install_dir = .prefix,
-            .install_subdir = "share/vulkan/implicit_layer.d/"
-        }
-    );
-
     b.installFile("../LICENSE", "share/licenses/lurk/LICENSE");
+
+    switch (target.getCpuArch())
+    {
+        .x86 => b.installFile
+        (
+            "manifests/package/vk_layer_lurk_linux_x86_32.json",
+            "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_32.json"
+        ),
+        .x86_64 => b.installFile
+        (
+            "manifests/package/vk_layer_lurk_linux_x86_64.json",
+            "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_64.json"
+        ),
+        else => @panic("Unsupported CPU architecture."),
+    }
+
     b.installDirectory
     (
         .{
