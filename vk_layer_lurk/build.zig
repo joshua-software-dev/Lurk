@@ -150,4 +150,12 @@ pub fn build(b: *std.Build) void
             .install_subdir = "share/licenses/lurk/third_party"
         }
     );
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "deps/imgui_ui/third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
 }
