@@ -63,10 +63,10 @@ callconv(vk.vulkan_call_conv) vk.Result
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
 
-    vk_setup_wrappers.create_instance_wrappers(p_create_info, p_instance);
-    if (vk_global_state.base_wrapper) |base_wrapper|
+    vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
+    if (vk_global_state.base_wrapper != null and vk_global_state.instance_wrapper != null)
     {
-        return base_wrapper.dispatch.vkCreateInstance(p_create_info, p_allocator, p_instance);
+        return vk.Result.success;
     }
 
     return vk.Result.error_initialization_failed;
@@ -103,16 +103,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
 
-    const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
-    (
-        physical_device,
-        p_create_info,
-        p_allocator,
-        p_device,
-    );
-    if (create_device_result != vk.Result.success) return create_device_result;
-
-    vk_setup_wrappers.create_device_wrappers(p_device, p_create_info);
+    vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
     vk_global_state.persistent_device = p_device.*;
 
     setup.get_physical_mem_props(physical_device, vk_global_state.instance_wrapper.?);

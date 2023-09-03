@@ -5,7 +5,13 @@ const vkt = @import("vk_types.zig");
 const vk = @import("../vk.zig");
 
 
-pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_instance: *vk.Instance) void
+pub fn create_instance_wrappers
+(
+    p_create_info: *const vk.InstanceCreateInfo,
+    p_allocator: ?*const vk.AllocationCallbacks,
+    p_instance: *vk.Instance,
+)
+void
 {
     // Ensure this is a nullable pointer (?*) to allow stepping through the
     // chain of p_next
@@ -42,20 +48,45 @@ pub fn create_instance_wrappers(p_create_info: *const vk.InstanceCreateInfo, p_i
     )
     catch @panic("Failed to load Vulkan Instance function table 1.");
 
+    // move chain on for next layer
+    final_lci.u.p_layer_info = final_lci.u.p_layer_info.p_next;
+
+    // Create instance before loading instance function table
+    const create_instance_result = vk_global_state.base_wrapper.?.dispatch.vkCreateInstance
+    (
+        p_create_info,
+        p_allocator,
+        p_instance,
+    );
+    if (create_instance_result != vk.Result.success) return;
+
     vk_global_state.instance_wrapper = vkt.LayerInstanceWrapper.load
     (
         p_instance.*,
-        final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr,
+        vk_global_state.base_wrapper.?.dispatch.vkGetInstanceProcAddr,
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
-
-    // move chain on for next layer
-    final_lci.u.p_layer_info = final_lci.u.p_layer_info.p_next;
 }
 
-pub fn create_device_wrappers(p_device: *vk.Device, p_create_info: *const vk.DeviceCreateInfo) void
+pub fn create_device_wrappers
+(
+    physical_device: vk.PhysicalDevice,
+    p_create_info: *const vk.DeviceCreateInfo,
+    p_allocator: ?*const vk.AllocationCallbacks,
+    p_device: *vk.Device
+)
+void
 {
     vk_global_state.init_wrapper = vkl.LayerInitWrapper.init(p_create_info);
+
+    const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
+    (
+        physical_device,
+        p_create_info,
+        p_allocator,
+        p_device,
+    );
+    if (create_device_result != vk.Result.success) @panic("Vulkan function call failed: Instance.CreateDevice");
 
     vk_global_state.device_wrapper = vkt.LayerDeviceWrapper.load
     (
