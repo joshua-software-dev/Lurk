@@ -57,7 +57,18 @@ pub fn build(b: *std.Build) void {
     };
     for (imguiSources) |src|
     {
-        cimgui.addCSourceFile(.{ .file = .{ .path = src }, .flags = &[_][]const u8{ "-std=c++17" }, });
+        cimgui.addCSourceFile
+        (
+            .{
+                .file = .{ .path = src },
+                .flags = &[_][]const u8
+                {
+                    "-std=c++17",
+                    "-fno-sanitize=undefined",
+                    "-ffunction-sections",
+                },
+            }
+        );
     }
 
     const lib = b.addStaticLibrary
