@@ -39,7 +39,12 @@ pub const std_options = struct
 // Layer globals definition
 
 // Give this layer a unique name
-const LAYER_NAME = "VK_LAYER_Lurk";
+const LAYER_NAME = "VK_LAYER_Lurk_" ++ switch (builtin.cpu.arch)
+{
+    .x86 => "x86_32",
+    .x86_64 => "x86_64",
+    else => @panic("Unsupported CPU architecture"),
+};
 const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";

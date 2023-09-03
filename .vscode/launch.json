@@ -15,7 +15,7 @@
                 "ENABLE_LURK": "1",
                 "RADV_DEBUG": "llvm",
                 "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
-                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
             "preLaunchTask": "build layer",
@@ -33,7 +33,7 @@
                 "RADV_DEBUG": "llvm",
                 "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
                 "VK_ICD_FILENAMES": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json",
-                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
             "preLaunchTask": "build layer",
@@ -49,7 +49,7 @@
                 "ENABLE_LURK": "1",
                 "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
                 "VK_ICD_FILENAMES": "${workspaceFolder}/../swiftshader/Debug/Linux/vk_swiftshader_icd.json",
-                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
             "preLaunchTask": "build layer",
@@ -83,7 +83,7 @@
                 },
                 {
                     "name": "VK_LOADER_LAYERS_ENABLE",
-                    "value": "VK_LAYER_Lurk"
+                    "value": "VK_LAYER_Lurk_*"
                 },
                 {
                     "name": "VK_LOADER_DEBUG",
@@ -136,7 +136,7 @@
                 },
                 {
                     "name": "VK_LOADER_LAYERS_ENABLE",
-                    "value": "VK_LAYER_Lurk"
+                    "value": "VK_LAYER_Lurk_*"
                 },
                 {
                     "name": "VK_LOADER_DEBUG",
@@ -177,7 +177,7 @@
                 },
                 {
                     "name": "VK_LOADER_LAYERS_ENABLE",
-                    "value": "VK_LAYER_Lurk"
+                    "value": "VK_LAYER_Lurk_*"
                 },
                 {
                     "name": "VK_LOADER_DEBUG",
