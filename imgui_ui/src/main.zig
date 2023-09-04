@@ -1,10 +1,12 @@
 const builtin = @import("builtin");
+const std = @import("std");
 
 const cimgui = @import("cimgui.zig");
 
 
 pub const DrawIdx = cimgui.ImDrawIdx;
 pub const DrawVert = cimgui.ImDrawVert;
+pub const ImGuiContext = cimgui.ImGuiContext;
 
 const WindowPosition = enum
 {
@@ -14,18 +16,18 @@ const WindowPosition = enum
     BOTTOM_RIGHT,
 };
 
-var current_imgui_context: ?*cimgui.ImGuiContext = null;
 
-
-pub fn setup_context(display_x_width: f32, display_y_height: f32) void
+pub fn setup_context(display_x_width: f32, display_y_height: f32) *cimgui.ImGuiContext
 {
-    current_imgui_context = cimgui.igCreateContext(null);
-    cimgui.igSetCurrentContext(current_imgui_context.?);
+    var context_holder: *cimgui.ImGuiContext = @ptrCast(cimgui.igCreateContext(null));
+
+    cimgui.igSetCurrentContext(context_holder);
     cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
 
     const io = cimgui.igGetIO();
     io.*.IniFilename = null;
     io.*.DisplaySize = cimgui.ImVec2{ .x = display_x_width, .y = display_y_height, };
+    return context_holder;
 }
 
 pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
@@ -71,15 +73,9 @@ pub fn get_draw_list_vertex_buffer(draw_list: cimgui.ImDrawList) []const cimgui.
     return draw_list.VtxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
 }
 
-pub fn destroy_context() bool
+pub fn destroy_context(context_holder: *cimgui.ImGuiContext) void
 {
-    if (current_imgui_context) |context|
-    {
-        cimgui.igDestroyContext(context);
-        return true;
-    }
-
-    return false;
+    cimgui.igDestroyContext(@ptrCast(context_holder));
 }
 
 fn draw_frame_contents(label: []const u8) void
@@ -167,11 +163,11 @@ void
     }
 }
 
-pub fn draw_frame(display_x: u32, display_y: u32, label: []const u8) void
+pub fn draw_frame(display_x: u32, display_y: u32, context_holder: *cimgui.ImGuiContext, label: []const u8) void
 {
     const margin: f32 = 20;
 
-    cimgui.igSetCurrentContext(current_imgui_context.?);
+    cimgui.igSetCurrentContext(@ptrCast(context_holder));
     cimgui.igNewFrame();
 
     cimgui.igSetNextWindowBgAlpha(0);
@@ -181,7 +177,19 @@ pub fn draw_frame(display_x: u32, display_y: u32, label: []const u8) void
     set_window_position(display_x, display_y, window_size, .TOP_RIGHT, margin);
 
     var show_window = true;
-    if (cimgui.igBegin("Lurk", &show_window, cimgui.ImGuiWindowFlags_NoTitleBar | cimgui.ImGuiWindowFlags_NoScrollbar | cimgui.ImGuiWindowFlags_NoDecoration))
+    if
+    (
+        cimgui.igBegin
+        (
+            "Lurk",
+            &show_window,
+            (
+                cimgui.ImGuiWindowFlags_NoTitleBar |
+                cimgui.ImGuiWindowFlags_NoScrollbar |
+                cimgui.ImGuiWindowFlags_NoDecoration
+            ),
+        )
+    )
     {
         draw_frame_contents(label);
     }

@@ -5,6 +5,7 @@ const disc = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
+const vkt = @import("setup/vk_types.zig");
 
 const vk = @import("vk.zig");
 
@@ -16,7 +17,7 @@ pub const std_options = struct
     &[_]std.log.ScopeLevel
     {
         .{
-            .scope = .LAYER,
+            .scope = .VKLURK,
             .level = switch (builtin.mode)
             {
                 .Debug => .debug,
@@ -62,6 +63,7 @@ callconv(vk.vulkan_call_conv) vk.Result
 {
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
 
     vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
     if (vk_global_state.base_wrapper != null and vk_global_state.instance_wrapper != null)
@@ -80,6 +82,7 @@ export fn VkLayerLurk_DestroyInstance
 callconv(vk.vulkan_call_conv) void
 {
     _ = p_allocator;
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Instance: " ++ LAYER_NAME, .{});
 
     disc.stop_discord_conn();
 
@@ -102,6 +105,7 @@ callconv(vk.vulkan_call_conv) vk.Result
 {
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
 
     vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
     vk_global_state.persistent_device = p_device.*;
@@ -133,6 +137,7 @@ callconv(vk.vulkan_call_conv) void
     _ = p_allocator;
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
 
     vk_global_state.device_wrapper = null;
     vk_global_state.init_wrapper = null;
@@ -152,6 +157,7 @@ callconv(vk.vulkan_call_conv) vk.Result
 {
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Swapchain: " ++ LAYER_NAME, .{});
 
     const result = vk_global_state.device_wrapper.?.dispatch.vkCreateSwapchainKHR
     (
@@ -162,33 +168,41 @@ callconv(vk.vulkan_call_conv) vk.Result
     );
     if (result != vk.Result.success) return result;
 
-    vk_global_state.swapchain = p_swapchain.*;
+    var swapchain_entry = vk_global_state.swapchain_backing.getOrPut(p_swapchain.*) catch @panic("swapchain oom");
+    swapchain_entry.value_ptr.* = vkt.SwapchainData
+    {
+        .command_pool = null,
+        .descriptor_layout = null,
+        .descriptor_pool = null,
+        .descriptor_set = null,
+        .font_image_view = null,
+        .font_image = null,
+        .font_mem = null,
+        .font_sampler = null,
+        .font_uploaded = false,
+        .format = null,
+        .height = null,
+        .image_count = null,
+        .imgui_context = null,
+        .pipeline_layout = null,
+        .pipeline = null,
+        .render_pass = null,
+        .swapchain = swapchain_entry.key_ptr.*,
+        .upload_font_buffer_mem = null,
+        .upload_font_buffer = null,
+        .width = null,
+        .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
+        .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
+        .images = vkt.ImageBacking.init(0) catch @panic("oom"),
+    };
 
     setup.setup_swapchain
     (
         device,
         vk_global_state.device_wrapper.?,
         p_create_info,
-        &vk_global_state.command_pool,
-        &vk_global_state.descriptor_layout,
-        &vk_global_state.descriptor_pool,
-        &vk_global_state.descriptor_set,
-        &vk_global_state.font_image_view,
-        &vk_global_state.font_image,
-        &vk_global_state.font_mem,
-        &vk_global_state.font_sampler,
-        &vk_global_state.format,
-        &vk_global_state.framebuffers,
+        swapchain_entry.value_ptr,
         &vk_global_state.graphic_queue,
-        &vk_global_state.height,
-        &vk_global_state.image_count,
-        &vk_global_state.image_views,
-        &vk_global_state.images,
-        &vk_global_state.pipeline_layout,
-        &vk_global_state.pipeline,
-        &vk_global_state.render_pass,
-        &vk_global_state.swapchain,
-        &vk_global_state.width,
     );
 
     return result;
@@ -204,6 +218,7 @@ callconv(vk.vulkan_call_conv) void
 {
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
+    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Swapchain: " ++ LAYER_NAME, .{});
 
     if (swapchain == .null_handle)
     {
@@ -211,27 +226,21 @@ callconv(vk.vulkan_call_conv) void
         return;
     }
 
-    setup.destroy_swapchain
-    (
-        device,
-        vk_global_state.device_wrapper.?,
-        &vk_global_state.command_pool,
-        &vk_global_state.descriptor_layout,
-        &vk_global_state.descriptor_pool,
-        &vk_global_state.font_image_view,
-        &vk_global_state.font_image,
-        &vk_global_state.font_mem,
-        &vk_global_state.font_sampler,
-        &vk_global_state.framebuffers,
-        &vk_global_state.image_views,
-        &vk_global_state.pipeline_layout,
-        &vk_global_state.pipeline,
-        &vk_global_state.previous_draw_data,
-        &vk_global_state.render_pass,
-        &vk_global_state.upload_font_buffer_mem,
-        &vk_global_state.upload_font_buffer,
-    );
-    vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
+    if (vk_global_state.swapchain_backing.fetchRemove(swapchain)) |swapchain_data|
+    {
+        setup.destroy_swapchain
+        (
+            device,
+            vk_global_state.device_wrapper.?,
+            @constCast(&swapchain_data.value),
+            &vk_global_state.previous_draw_data,
+        );
+        vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
+
+        return;
+    }
+
+    @panic("Failed to destroy swapchain, specified swapchain not found in backing buffer.");
 }
 
 export fn VkLayerLurk_QueuePresentKHR
@@ -261,59 +270,54 @@ callconv(vk.vulkan_call_conv) vk.Result
             var i: u32 = 0;
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
-                const maybe_draw_data = setup.before_present
-                (
-                    vk_global_state.persistent_device.?,
-                    vk_global_state.device_wrapper.?,
-                    vk_global_state.init_wrapper.?,
-                    queue_data,
-                    p_present_info.p_wait_semaphores,
-                    p_present_info.wait_semaphore_count,
-                    p_present_info.p_image_indices[i],
-                    &vk_global_state.command_pool,
-                    &vk_global_state.descriptor_set,
-                    &vk_global_state.font_already_uploaded,
-                    &vk_global_state.font_image,
-                    &vk_global_state.framebuffers,
-                    &vk_global_state.graphic_queue,
-                    vk_global_state.height.?,
-                    &vk_global_state.image_count,
-                    &vk_global_state.images,
-                    &vk_global_state.pipeline_layout,
-                    &vk_global_state.pipeline,
-                    &vk_global_state.previous_draw_data,
-                    &vk_global_state.render_pass,
-                    &vk_global_state.upload_font_buffer_mem,
-                    &vk_global_state.upload_font_buffer,
-                    vk_global_state.width.?,
-                    disc.output_label,
-                );
-
-                var present_info = p_present_info.*;
-                if (maybe_draw_data) |draw_data|
+                var swapchain = p_present_info.p_swapchains[i];
+                if (vk_global_state.swapchain_backing.getPtr(swapchain)) |swapchain_data|
                 {
-                    const semaphore_container = [1]vk.Semaphore
+                    const maybe_draw_data = setup.before_present
+                    (
+                        vk_global_state.persistent_device.?,
+                        vk_global_state.device_wrapper.?,
+                        vk_global_state.init_wrapper.?,
+                        queue_data,
+                        p_present_info.p_wait_semaphores,
+                        p_present_info.wait_semaphore_count,
+                        p_present_info.p_image_indices[i],
+                        &vk_global_state.graphic_queue,
+                        &vk_global_state.previous_draw_data,
+                        swapchain_data,
+                        disc.output_label,
+                    );
+
+                    var present_info = p_present_info.*;
+                    if (maybe_draw_data) |draw_data|
                     {
-                        draw_data.semaphore,
-                    };
-                    present_info.p_wait_semaphores = &semaphore_container;
-                    present_info.wait_semaphore_count = 1;
+                        const semaphore_container = [1]vk.Semaphore
+                        {
+                            draw_data.semaphore,
+                        };
+                        present_info.p_wait_semaphores = &semaphore_container;
+                        present_info.wait_semaphore_count = 1;
+                    }
+
+                    const chain_result = vk_global_state.device_wrapper.?.dispatch.vkQueuePresentKHR
+                    (
+                        queue,
+                        &present_info,
+                    );
+
+                    if (p_present_info.p_results) |p_results|
+                    {
+                        p_results[i] = chain_result;
+                    }
+
+                    if (chain_result != vk.Result.success and final_result == vk.Result.success)
+                    {
+                        final_result = chain_result;
+                    }
                 }
-
-                const chain_result = vk_global_state.device_wrapper.?.dispatch.vkQueuePresentKHR
-                (
-                    queue,
-                    &present_info,
-                );
-
-                if (p_present_info.p_results) |p_results|
+                else
                 {
-                    p_results[i] = chain_result;
-                }
-
-                if (chain_result != vk.Result.success and final_result == vk.Result.success)
-                {
-                    final_result = chain_result;
+                    final_result = vk.Result.error_unknown;
                 }
             }
         }

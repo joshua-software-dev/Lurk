@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const imgui_ui = @import("imgui_ui");
+
 const vk = @import("../vk.zig");
 
 
@@ -26,6 +28,32 @@ pub const QueueData = struct
     queue_flags: vk.QueueFlags,
     queue: vk.Queue,
     fence: vk.Fence,
+};
+pub const SwapchainData = struct
+{
+    command_pool: ?vk.CommandPool,
+    descriptor_layout: ?vk.DescriptorSetLayout,
+    descriptor_pool: ?vk.DescriptorPool,
+    descriptor_set: ?vk.DescriptorSet,
+    font_image_view: ?vk.ImageView,
+    font_image: ?vk.Image,
+    font_mem: ?vk.DeviceMemory,
+    font_sampler: ?vk.Sampler,
+    font_uploaded: bool,
+    format: ?vk.Format,
+    height: ?u32,
+    image_count: ?u32,
+    imgui_context: ?*imgui_ui.ImGuiContext,
+    pipeline_layout: ?vk.PipelineLayout,
+    pipeline: ?vk.Pipeline,
+    render_pass: ?vk.RenderPass,
+    swapchain: ?vk.SwapchainKHR,
+    upload_font_buffer_mem: ?vk.DeviceMemory,
+    upload_font_buffer: ?vk.Buffer,
+    width: ?u32,
+    framebuffers: FramebufferBacking,
+    image_views: ImageViewBacking,
+    images: ImageBacking,
 };
 
 pub const LayerBaseWrapper = vk.BaseWrapper
@@ -126,3 +154,4 @@ pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
 pub const QueueDataBacking = std.BoundedArray(QueueData, 256);
 pub const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
+pub const SwapchainHashMapBacking = std.hash_map.AutoHashMap(vk.SwapchainKHR, SwapchainData);
