@@ -134,7 +134,7 @@ void
             .graphic_queue = null,
             .previous_draw_data = null,
             .device_wrapper = device_wrapper,
-            .device_queues = vkt.QueueDataBacking.init(0) catch @panic("oom"),
+            .device_queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom"),
             .swapchain_backing = vkt.SwapchainDataQueue.init(0) catch @panic("oom"),
         }
     )

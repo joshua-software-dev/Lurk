@@ -7,6 +7,16 @@ const vkl = @import("vk_layer_stubs.zig");
 const vk = @import("../vk.zig");
 
 
+pub const DeviceData = struct
+{
+    device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
+    graphic_queue: ?VkQueueData,
+    previous_draw_data: ?DrawData,
+    device_wrapper: LayerDeviceWrapper,
+    device_queues: VkQueueDataBacking,
+    swapchain_backing: SwapchainDataQueue
+};
 pub const DrawData = struct
 {
     command_buffer: vk.CommandBuffer,
@@ -23,13 +33,6 @@ pub const DrawData = struct
     index_buffer: vk.Buffer,
     index_buffer_mem: vk.DeviceMemory,
     index_buffer_size: vk.DeviceSize,
-};
-pub const QueueData = struct
-{
-    queue_family_index: u32,
-    queue_flags: vk.QueueFlags,
-    queue: vk.Queue,
-    fence: vk.Fence,
 };
 pub const SwapchainData = struct
 {
@@ -57,15 +60,12 @@ pub const SwapchainData = struct
     image_views: ImageViewBacking,
     images: ImageBacking,
 };
-pub const DeviceData = struct
+pub const VkQueueData = struct
 {
-    device: vk.Device,
-    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
-    graphic_queue: ?QueueData,
-    previous_draw_data: ?DrawData,
-    device_wrapper: LayerDeviceWrapper,
-    device_queues: QueueDataBacking,
-    swapchain_backing: SwapchainDataQueue
+    queue_family_index: u32,
+    queue_flags: vk.QueueFlags,
+    queue: vk.Queue,
+    fence: vk.Fence,
 };
 
 pub const LayerBaseWrapper = vk.BaseWrapper
@@ -161,11 +161,11 @@ pub const LayerInstanceWrapper = vk.InstanceWrapper
     },
 );
 
+pub const DeviceDataQueue = bqueue.BoundedQueue(DeviceData, 2);
 pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 pub const ImageBacking = std.BoundedArray(vk.Image, 256);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
-pub const QueueDataBacking = std.BoundedArray(QueueData, 256);
-pub const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
-pub const DeviceDataQueue = bqueue.BoundedQueue(DeviceData, 2);
 pub const SwapchainDataQueue = bqueue.BoundedQueue(SwapchainData, 2);
+pub const VkQueueDataBacking = std.BoundedArray(VkQueueData, 256);
+pub const VkQueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);

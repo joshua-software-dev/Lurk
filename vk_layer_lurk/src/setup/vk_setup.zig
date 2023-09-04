@@ -404,7 +404,7 @@ pub fn setup_swapchain
     device_wrapper: vkt.LayerDeviceWrapper,
     p_create_info: *const vk.SwapchainCreateInfoKHR,
     swapchain_data: *vkt.SwapchainData,
-    g_graphic_queue: *const ?vkt.QueueData,
+    g_graphic_queue: *const ?vkt.VkQueueData,
 )
 void
 {
@@ -720,10 +720,10 @@ void
 
 fn new_queue_data
 (
-    data: *vkt.QueueData,
+    data: *vkt.VkQueueData,
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
-    g_graphic_queue: *?vkt.QueueData,
+    g_graphic_queue: *?vkt.VkQueueData,
 )
 void
 {
@@ -749,15 +749,15 @@ pub fn device_map_queues
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
     instance_wrapper: vkt.LayerInstanceWrapper,
-    g_device_queues: *vkt.QueueDataBacking,
-    g_graphic_queue: *?vkt.QueueData,
+    g_device_queues: *vkt.VkQueueDataBacking,
+    g_graphic_queue: *?vkt.VkQueueData,
 )
 void
 {
     var queue_family_props_count: u32 = 0;
     instance_wrapper.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_props_count, null);
 
-    var family_props = vkt.QueueFamilyPropsBacking.init(0)
+    var family_props = vkt.VkQueueFamilyPropsBacking.init(0)
     catch @panic("Failed to get backing buffer for QueueFamilyProperties");
     family_props.resize(queue_family_props_count) catch @panic("QueueFamilyProperties buffer overflow");
 
@@ -777,12 +777,12 @@ void
         while (j < p_create_info.p_queue_create_infos[i].queue_count) : ({j += 1; device_queue_index += 1;})
         {
             g_device_queues.resize(device_queue_index + 1)
-            catch @panic("QueueDataBacking buffer overflow");
+            catch @panic("VkQueueDataBacking buffer overflow");
 
             var data = &g_device_queues.buffer[device_queue_index];
             data.* = std.mem.zeroInit
             (
-                vkt.QueueData,
+                vkt.VkQueueData,
                 .{
                     .queue_family_index = queue_family_index,
                     .queue_flags = family_props.buffer[queue_family_index].queue_flags,
@@ -809,9 +809,9 @@ void
 fn get_queue_data
 (
     queue: vk.Queue,
-    g_device_queues: *const vkt.QueueDataBacking,
+    g_device_queues: *const vkt.VkQueueDataBacking,
 )
-vkt.QueueData
+vkt.VkQueueData
 {
     for (g_device_queues.constSlice()) |it|
     {
@@ -826,9 +826,9 @@ pub fn wait_before_queue_present
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     queue: vk.Queue,
-    g_device_queues: *const vkt.QueueDataBacking,
+    g_device_queues: *const vkt.VkQueueDataBacking,
 )
-vkt.QueueData
+vkt.VkQueueData
 {
     const queue_data = get_queue_data(queue, g_device_queues);
     const fence_container = [1]vk.Fence
@@ -1192,11 +1192,11 @@ fn render_swapchain_display
     device: vk.Device,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    queue_data: vkt.QueueData,
+    queue_data: vkt.VkQueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_graphic_queue: *const ?vkt.QueueData,
+    g_graphic_queue: *const ?vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
 )
@@ -1636,11 +1636,11 @@ pub fn before_present
     device: vk.Device,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    queue_data: vkt.QueueData,
+    queue_data: vkt.VkQueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_graphic_queue: *const ?vkt.QueueData,
+    g_graphic_queue: *const ?vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
     label: []const u8,
