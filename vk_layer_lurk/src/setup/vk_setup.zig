@@ -746,8 +746,8 @@ pub fn device_map_queues
     p_create_info: *const vk.DeviceCreateInfo,
     physical_device: vk.PhysicalDevice,
     device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vkl.LayerInitWrapper,
     instance_wrapper: vkt.LayerInstanceWrapper,
     g_device_queues: *vkt.QueueDataBacking,
     g_graphic_queue: *?vkt.QueueData,
@@ -792,7 +792,7 @@ void
             var original_queue: vk.Queue = device_wrapper.getDeviceQueue(device, queue_family_index, j);
             data.queue = original_queue;
 
-            const set_dvc_loader_result = init_wrapper.pfn_set_device_loader_data(device, &original_queue);
+            const set_dvc_loader_result = set_device_loader_data_func(device, &original_queue);
             if (set_dvc_loader_result != vk.Result.success)
             {
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
@@ -851,8 +851,8 @@ vkt.QueueData
 fn get_overlay_draw
 (
     device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vkl.LayerInitWrapper,
     swapchain_data: *const vkt.SwapchainData,
     g_previous_draw_data: *?vkt.DrawData,
 )
@@ -900,7 +900,7 @@ vkt.DrawData
 
     // because for some reason this will mutate the address you give it...
     // but all subsequent calls need to be against the older address
-    const set_dvc_loader_result = init_wrapper.pfn_set_device_loader_data
+    const set_dvc_loader_result = set_device_loader_data_func
     (
         device,
         &command_buf_container[0],
@@ -1190,8 +1190,8 @@ void
 fn render_swapchain_display
 (
     device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vkl.LayerInitWrapper,
     queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
@@ -1205,7 +1205,7 @@ fn render_swapchain_display
     const imgui_draw_data = imgui_ui.get_draw_data();
     if (imgui_draw_data.TotalVtxCount < 1) return null;
 
-    var draw_data = get_overlay_draw(device, device_wrapper, init_wrapper, swapchain_data, g_previous_draw_data);
+    var draw_data = get_overlay_draw(device, set_device_loader_data_func, device_wrapper, swapchain_data, g_previous_draw_data);
 
     device_wrapper.resetCommandBuffer(draw_data.command_buffer, .{})
     catch @panic("Vulkan function call failed: Device.ResetCommandBuffer");
@@ -1634,8 +1634,8 @@ fn render_swapchain_display
 pub fn before_present
 (
     device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    init_wrapper: vkl.LayerInitWrapper,
     queue_data: vkt.QueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
@@ -1653,8 +1653,8 @@ pub fn before_present
         return render_swapchain_display
         (
             device,
+            set_device_loader_data_func,
             device_wrapper,
-            init_wrapper,
             queue_data,
             p_wait_semaphores,
             wait_semaphore_count,

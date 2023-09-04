@@ -116,8 +116,8 @@ callconv(vk.vulkan_call_conv) vk.Result
         p_create_info,
         physical_device,
         device_data.device,
+        device_data.set_device_loader_data_func,
         device_data.device_wrapper,
-        device_data.init_wrapper,
         vk_global_state.instance_wrapper.?,
         &device_data.device_queues,
         &device_data.graphic_queue,
@@ -295,8 +295,8 @@ callconv(vk.vulkan_call_conv) vk.Result
                     const maybe_draw_data = setup.before_present
                     (
                         device_data.device,
+                        device_data.set_device_loader_data_func,
                         device_data.device_wrapper,
-                        device_data.init_wrapper,
                         queue_data,
                         p_present_info.p_wait_semaphores,
                         p_present_info.wait_semaphore_count,
@@ -498,8 +498,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    const device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_tail().?;
-    return @ptrCast(@alignCast(device_data.init_wrapper.pfn_next_get_device_proc_addr(device, p_name)));
+    return @ptrCast(@alignCast(vk_global_state.instance_wrapper.?.getDeviceProcAddr(device, p_name)));
 }
 
 export fn VkLayerLurk_GetInstanceProcAddr

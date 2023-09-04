@@ -68,6 +68,30 @@ void
     catch @panic("Failed to load Vulkan Instance function table 2.");
 }
 
+fn search_device_create_info(p_create_info: *const vk.DeviceCreateInfo, func_type: c_int) *vkl.LayerDeviceCreateInfo
+{
+    var layer_create_info: ?*vkl.LayerDeviceCreateInfo = @ptrCast(@alignCast(@constCast(p_create_info.p_next)));
+
+    while
+    (
+        layer_create_info != null and
+        (
+            layer_create_info.?.s_type != vk.StructureType.loader_device_create_info or
+            layer_create_info.?.function != func_type
+        )
+    )
+    {
+        layer_create_info = @ptrCast(@alignCast(@constCast(layer_create_info.?.p_next)));
+    }
+
+    if(layer_create_info == null)
+    {
+        @panic("No loader instance create info");
+    }
+
+    return layer_create_info.?;
+}
+
 pub fn create_device_wrappers
 (
     physical_device: vk.PhysicalDevice,
@@ -77,7 +101,12 @@ pub fn create_device_wrappers
 )
 void
 {
-    const init_wrapper = vkl.LayerInitWrapper.init(p_create_info);
+    var layer_create_info = search_device_create_info(p_create_info, vkl.LayerFunction_LAYER_LINK_INFO);
+
+    vk_global_state.instance_wrapper.?.dispatch.vkGetDeviceProcAddr =
+        layer_create_info.u.p_layer_info.pfn_next_get_device_proc_addr;
+
+    layer_create_info.u.p_layer_info = layer_create_info.u.p_layer_info.p_next;
 
     const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
     (
@@ -91,18 +120,19 @@ void
     const device_wrapper = vkt.LayerDeviceWrapper.load
     (
         p_device.*,
-        init_wrapper.pfn_next_get_device_proc_addr,
+        vk_global_state.instance_wrapper.?.dispatch.vkGetDeviceProcAddr,
     )
     catch @panic("Failed to load Vulkan Device function table.");
 
+    var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
     vk_global_state.device_backing.push
     (
         vkt.DeviceData
         {
             .device = p_device.*,
+            .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
             .graphic_queue = null,
             .previous_draw_data = null,
-            .init_wrapper = init_wrapper,
             .device_wrapper = device_wrapper,
             .device_queues = vkt.QueueDataBacking.init(0) catch @panic("oom"),
             .swapchain_backing = vkt.SwapchainDataQueue.init(0) catch @panic("oom"),

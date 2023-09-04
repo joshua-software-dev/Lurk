@@ -60,9 +60,9 @@ pub const SwapchainData = struct
 pub const DeviceData = struct
 {
     device: vk.Device,
+    set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     graphic_queue: ?QueueData,
     previous_draw_data: ?DrawData,
-    init_wrapper: vkl.LayerInitWrapper,
     device_wrapper: LayerDeviceWrapper,
     device_queues: QueueDataBacking,
     swapchain_backing: SwapchainDataQueue
@@ -155,6 +155,7 @@ pub const LayerInstanceWrapper = vk.InstanceWrapper
         .createDevice = true,
         .destroyInstance = true,
         .enumerateDeviceExtensionProperties = true,
+        .getDeviceProcAddr = true,
         .getPhysicalDeviceMemoryProperties = true,
         .getPhysicalDeviceQueueFamilyProperties = true,
     },
