@@ -168,40 +168,44 @@ callconv(vk.vulkan_call_conv) vk.Result
     );
     if (result != vk.Result.success) return result;
 
-    var swapchain_entry = vk_global_state.swapchain_backing.getOrPut(p_swapchain.*) catch @panic("swapchain oom");
-    swapchain_entry.value_ptr.* = vkt.SwapchainData
-    {
-        .command_pool = null,
-        .descriptor_layout = null,
-        .descriptor_pool = null,
-        .descriptor_set = null,
-        .font_image_view = null,
-        .font_image = null,
-        .font_mem = null,
-        .font_sampler = null,
-        .font_uploaded = false,
-        .format = null,
-        .height = null,
-        .image_count = null,
-        .imgui_context = null,
-        .pipeline_layout = null,
-        .pipeline = null,
-        .render_pass = null,
-        .swapchain = swapchain_entry.key_ptr.*,
-        .upload_font_buffer_mem = null,
-        .upload_font_buffer = null,
-        .width = null,
-        .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
-        .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
-        .images = vkt.ImageBacking.init(0) catch @panic("oom"),
-    };
+    vk_global_state.swapchain_backing.push
+    (
+        vkt.SwapchainData
+        {
+            .command_pool = null,
+            .descriptor_layout = null,
+            .descriptor_pool = null,
+            .descriptor_set = null,
+            .font_image_view = null,
+            .font_image = null,
+            .font_mem = null,
+            .font_sampler = null,
+            .font_uploaded = false,
+            .format = null,
+            .height = null,
+            .image_count = null,
+            .imgui_context = null,
+            .pipeline_layout = null,
+            .pipeline = null,
+            .render_pass = null,
+            .swapchain = p_swapchain.*,
+            .upload_font_buffer_mem = null,
+            .upload_font_buffer = null,
+            .width = null,
+            .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
+            .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
+            .images = vkt.ImageBacking.init(0) catch @panic("oom"),
+        },
+    )
+    catch @panic("oom");
+    var swapchain_data = vk_global_state.swapchain_backing.peek_head();
 
     setup.setup_swapchain
     (
         device,
         vk_global_state.device_wrapper.?,
         p_create_info,
-        swapchain_entry.value_ptr,
+        swapchain_data.?,
         &vk_global_state.graphic_queue,
     );
 
@@ -226,13 +230,13 @@ callconv(vk.vulkan_call_conv) void
         return;
     }
 
-    if (vk_global_state.swapchain_backing.fetchRemove(swapchain)) |swapchain_data|
+    if (vk_global_state.swapchain_backing.pop()) |swapchain_data|
     {
         setup.destroy_swapchain
         (
             device,
             vk_global_state.device_wrapper.?,
-            @constCast(&swapchain_data.value),
+            @constCast(&swapchain_data),
             &vk_global_state.previous_draw_data,
         );
         vk_global_state.device_wrapper.?.destroySwapchainKHR(device, swapchain, p_allocator);
@@ -271,8 +275,10 @@ callconv(vk.vulkan_call_conv) vk.Result
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
                 var swapchain = p_present_info.p_swapchains[i];
-                if (vk_global_state.swapchain_backing.getPtr(swapchain)) |swapchain_data|
+                if (vk_global_state.swapchain_backing.peek_tail()) |swapchain_data|
                 {
+                    if (swapchain != swapchain_data.swapchain.?) return vk.Result.error_unknown;
+
                     const maybe_draw_data = setup.before_present
                     (
                         vk_global_state.persistent_device.?,
@@ -314,10 +320,6 @@ callconv(vk.vulkan_call_conv) vk.Result
                     {
                         final_result = chain_result;
                     }
-                }
-                else
-                {
-                    final_result = vk.Result.error_unknown;
                 }
             }
         }

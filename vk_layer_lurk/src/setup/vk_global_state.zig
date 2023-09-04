@@ -11,9 +11,7 @@ pub var persistent_device: ?vk.Device = null;
 pub var previous_draw_data: ?vkt.DrawData = null;
 
 pub var device_queues: vkt.QueueDataBacking = vkt.QueueDataBacking.init(0) catch @panic("oom");
-var buf: [1024*64]u8 = undefined;
-var fba = std.heap.FixedBufferAllocator.init(&buf);
-pub var swapchain_backing = vkt.SwapchainHashMapBacking.init(fba.allocator());
+pub var swapchain_backing: vkt.SwapchainDataQueue = vkt.SwapchainDataQueue.init(0) catch @panic("oom");
 
 // single global lock, for simplicity
 pub var wrappers_global_lock: std.Thread.Mutex = .{};

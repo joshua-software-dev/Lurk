@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const bqueue = @import("../bounded_queue.zig");
 const imgui_ui = @import("imgui_ui");
 
 const vk = @import("../vk.zig");
@@ -154,4 +155,4 @@ pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
 pub const QueueDataBacking = std.BoundedArray(QueueData, 256);
 pub const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
-pub const SwapchainHashMapBacking = std.hash_map.AutoHashMap(vk.SwapchainKHR, SwapchainData);
+pub const SwapchainDataQueue = bqueue.BoundedQueue(SwapchainData, 2);
