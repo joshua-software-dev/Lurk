@@ -77,7 +77,7 @@ pub fn create_device_wrappers
 )
 void
 {
-    vk_global_state.init_wrapper = vkl.LayerInitWrapper.init(p_create_info);
+    const init_wrapper = vkl.LayerInitWrapper.init(p_create_info);
 
     const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
     (
@@ -88,10 +88,25 @@ void
     );
     if (create_device_result != vk.Result.success) @panic("Vulkan function call failed: Instance.CreateDevice");
 
-    vk_global_state.device_wrapper = vkt.LayerDeviceWrapper.load
+    const device_wrapper = vkt.LayerDeviceWrapper.load
     (
         p_device.*,
-        vk_global_state.init_wrapper.?.pfn_next_get_device_proc_addr,
+        init_wrapper.pfn_next_get_device_proc_addr,
     )
     catch @panic("Failed to load Vulkan Device function table.");
+
+    vk_global_state.device_backing.push
+    (
+        vkt.DeviceData
+        {
+            .device = p_device.*,
+            .graphic_queue = null,
+            .previous_draw_data = null,
+            .init_wrapper = init_wrapper,
+            .device_wrapper = device_wrapper,
+            .device_queues = vkt.QueueDataBacking.init(0) catch @panic("oom"),
+            .swapchain_backing = vkt.SwapchainDataQueue.init(0) catch @panic("oom"),
+        }
+    )
+    catch @panic("oom");
 }

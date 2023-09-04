@@ -2,6 +2,7 @@ const std = @import("std");
 
 const bqueue = @import("../bounded_queue.zig");
 const imgui_ui = @import("imgui_ui");
+const vkl = @import("vk_layer_stubs.zig");
 
 const vk = @import("../vk.zig");
 
@@ -55,6 +56,16 @@ pub const SwapchainData = struct
     framebuffers: FramebufferBacking,
     image_views: ImageViewBacking,
     images: ImageBacking,
+};
+pub const DeviceData = struct
+{
+    device: vk.Device,
+    graphic_queue: ?QueueData,
+    previous_draw_data: ?DrawData,
+    init_wrapper: vkl.LayerInitWrapper,
+    device_wrapper: LayerDeviceWrapper,
+    device_queues: QueueDataBacking,
+    swapchain_backing: SwapchainDataQueue
 };
 
 pub const LayerBaseWrapper = vk.BaseWrapper
@@ -155,4 +166,5 @@ pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
 pub const QueueDataBacking = std.BoundedArray(QueueData, 256);
 pub const QueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
+pub const DeviceDataQueue = bqueue.BoundedQueue(DeviceData, 2);
 pub const SwapchainDataQueue = bqueue.BoundedQueue(SwapchainData, 2);
