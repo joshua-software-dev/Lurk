@@ -342,119 +342,6 @@ callconv(vk.vulkan_call_conv) vk.Result
     return final_result;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Enumeration functions
-
-export fn VkLayerLurk_EnumerateInstanceLayerProperties
-(
-    p_property_count: *u32,
-    p_properties: ?[*]vk.LayerProperties
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    // The c++ implementation checks that this pointer is not null, an
-    // unnecessary step as by vulkan convention it must be a valid pointer, so
-    // the check is removed here
-    p_property_count.* = 1;
-
-    if (p_properties) |props|
-    {
-        @memcpy
-        (
-            &props[0].layer_name,
-            @as(*[vk.MAX_DESCRIPTION_SIZE]u8, @ptrCast(@constCast(LAYER_NAME)))
-        );
-
-        @memcpy
-        (
-            &props[0].description,
-            @as(*[vk.MAX_DESCRIPTION_SIZE]u8, @ptrCast(@constCast(LAYER_DESC)))
-        );
-
-        props[0].implementation_version = 1;
-        props[0].spec_version = vk.API_VERSION_1_0;
-    }
-
-    return vk.Result.success;
-}
-
-export fn VkLayerLurk_EnumerateDeviceLayerProperties
-(
-    physical_device: vk.PhysicalDevice,
-    p_property_count: *u32,
-    p_properties: ?[*]vk.LayerProperties
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    _ = physical_device;
-    return VkLayerLurk_EnumerateInstanceLayerProperties(p_property_count, p_properties);
-}
-
-export fn VkLayerLurk_EnumerateInstanceExtensionProperties
-(
-    p_layer_name: ?[*:0]const u8,
-    p_property_count: *u32,
-    p_properties: ?[*]vk.ExtensionProperties
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    _ = p_properties;
-    if
-    (
-        p_layer_name == null or
-        !std.mem.eql(u8, std.mem.span(p_layer_name.?), LAYER_NAME)
-    )
-    {
-        return vk.Result.error_layer_not_present;
-    }
-
-    // The c++ implementation checks that this pointer is not null, which once
-    // again, cannot happen according to the API, and so the check is also
-    // removed here
-    //
-    // don't expose any extensions
-    p_property_count.* = 0;
-    return vk.Result.success;
-}
-
-export fn VkLayerLurk_EnumerateDeviceExtensionProperties
-(
-    physical_device: vk.PhysicalDevice,
-    p_layer_name: ?[*:0]const u8,
-    p_property_count: *u32,
-    p_properties: ?[*]vk.ExtensionProperties
-)
-callconv(vk.vulkan_call_conv) vk.Result
-{
-    // pass through any queries that aren't to us
-    if
-    (
-        p_layer_name == null or
-        !std.mem.eql(u8, std.mem.span(p_layer_name.?), LAYER_NAME)
-    )
-    {
-        if (physical_device == vk.PhysicalDevice.null_handle)
-        {
-            return vk.Result.success;
-        }
-
-        vk_global_state.wrappers_global_lock.lock();
-        defer vk_global_state.wrappers_global_lock.unlock();
-        const instance_data: *vkt.InstanceData = vk_global_state.instance_backing.peek_head().?;
-        return instance_data.instance_wrapper.dispatch.vkEnumerateDeviceExtensionProperties
-        (
-            physical_device,
-            p_layer_name,
-            p_property_count,
-            p_properties
-        );
-    }
-
-    // don't expose any extensions
-    p_property_count.* = 0;
-    return vk.Result.success;
-}
-
 export fn VkLayerLurk_GetDeviceProcAddr
 (
     device: vk.Device,
@@ -468,14 +355,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     if (std.mem.eql(u8, span_name, "vkGetDeviceProcAddr"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_GetDeviceProcAddr));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateDeviceLayerProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateDeviceLayerProperties));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateDeviceExtensionProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateDeviceExtensionProperties));
     }
     else if (std.mem.eql(u8, span_name, "vkCreateDevice"))
     {
@@ -521,14 +400,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     {
         return @ptrCast(@alignCast(&VkLayerLurk_GetInstanceProcAddr));
     }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateInstanceLayerProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateInstanceLayerProperties));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateInstanceExtensionProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateInstanceExtensionProperties));
-    }
     else if (std.mem.eql(u8, span_name, "vkCreateInstance"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_CreateInstance));
@@ -542,14 +413,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     if (std.mem.eql(u8, span_name, "vkGetDeviceProcAddr"))
     {
         return @ptrCast(@alignCast(&VkLayerLurk_GetDeviceProcAddr));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateDeviceLayerProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateDeviceLayerProperties));
-    }
-    else if (std.mem.eql(u8, span_name, "vkEnumerateDeviceExtensionProperties"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_EnumerateDeviceExtensionProperties));
     }
     else if (std.mem.eql(u8, span_name, "vkCreateDevice"))
     {
