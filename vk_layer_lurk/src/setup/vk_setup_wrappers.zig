@@ -11,7 +11,7 @@ pub fn create_instance_wrappers
     p_allocator: ?*const vk.AllocationCallbacks,
     p_instance: *vk.Instance,
 )
-void
+?*vkt.InstanceData
 {
     // Ensure this is a nullable pointer (?*) to allow stepping through the
     // chain of p_next
@@ -34,7 +34,7 @@ void
     if(layer_create_info == null)
     {
         // No loader instance create info
-        return;
+        return null;
     }
 
     // create non-null pointer variable to make further interactions with this
@@ -58,7 +58,7 @@ void
         p_allocator,
         p_instance,
     );
-    if (create_instance_result != vk.Result.success) return;
+    if (create_instance_result != vk.Result.success) return null;
 
     const instance_wrapper = vkt.LayerInstanceWrapper.load
     (
@@ -67,16 +67,19 @@ void
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
 
-    vk_global_state.instance_backing.put
-    (
-        p_instance.*,
-        vkt.InstanceData
-        {
-            .base_wrapper = base_wrapper,
-            .instance_wrapper = instance_wrapper,
-        },
-    )
-    catch @panic("oom");
+    var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom");
+    if (backing.found_existing)
+    {
+        @panic("Found an existing Instance with the same id when creating a new one");
+    }
+
+    backing.value_ptr.* = vkt.InstanceData
+    {
+        .base_wrapper = base_wrapper,
+        .instance_wrapper = instance_wrapper,
+    };
+
+    return backing.value_ptr;
 }
 
 fn search_device_create_info(p_create_info: *const vk.DeviceCreateInfo, func_type: c_int) *vkl.LayerDeviceCreateInfo
@@ -110,7 +113,7 @@ pub fn create_device_wrappers
     p_allocator: ?*const vk.AllocationCallbacks,
     p_device: *vk.Device
 )
-void
+*vkt.DeviceData
 {
     var layer_create_info = search_device_create_info(p_create_info, vkl.LayerFunction_LAYER_LINK_INFO);
     const get_device_proc_addr = layer_create_info.u.p_layer_info.pfn_next_get_device_proc_addr;
@@ -139,18 +142,23 @@ void
     catch @panic("Failed to load Vulkan Device function table.");
 
     var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
-    vk_global_state.device_backing.put
-    (
-        p_device.*,
-        vkt.DeviceData
-        {
-            .device = p_device.*,
-            .get_device_proc_addr_func = get_device_proc_addr,
-            .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
-            .graphic_queue = null,
-            .previous_draw_data = null,
-            .device_wrapper = device_wrapper,
-        }
-    )
-    catch @panic("oom");
+
+    const device = p_device.*;
+    var backing = vk_global_state.device_backing.getOrPut(device) catch @panic("oom");
+    if (backing.found_existing)
+    {
+        @panic("Found an existing Device with the same id when creating a new one");
+    }
+
+    backing.value_ptr.* = vkt.DeviceData
+    {
+        .device = device,
+        .get_device_proc_addr_func = get_device_proc_addr,
+        .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
+        .graphic_queue = null,
+        .previous_draw_data = null,
+        .device_wrapper = device_wrapper,
+    };
+
+    return backing.value_ptr;
 }

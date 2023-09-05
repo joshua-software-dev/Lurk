@@ -749,7 +749,7 @@ pub fn device_map_queues
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     instance_wrapper: vkt.LayerInstanceWrapper,
     device_wrapper: vkt.LayerDeviceWrapper,
-    g_vkqueues_map: *vkt.VkQueueDataMap,
+    g_vkqueues_map: *vkt.VkQueueDataHashMap,
     g_graphic_queue: *?vkt.VkQueueData,
 )
 void

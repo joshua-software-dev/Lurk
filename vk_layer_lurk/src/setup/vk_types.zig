@@ -166,16 +166,45 @@ pub const LayerInstanceWrapper = vk.InstanceWrapper
     },
 );
 
-pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
-pub const ImageBacking = std.BoundedArray(vk.Image, 256);
-pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
-pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
-pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 256);
+pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 32);
+pub const ImageBacking = std.BoundedArray(vk.Image, 32);
+pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 32);
+pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 32);
+pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 32);
 pub const VkQueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
-pub const DeviceDataMap = bqueue.BoundedArrayHashMap(vk.Device, DeviceData, 2);
-pub const InstanceDataMap = bqueue.BoundedArrayHashMap(vk.Instance, InstanceData, 2);
-pub const SwapchainDataMap = bqueue.BoundedArrayHashMap(vk.SwapchainKHR, SwapchainData, 32);
-pub const PhysicalDeviceMap = bqueue.BoundedArrayHashMap(vk.PhysicalDevice, vk.Instance, 16);
-pub const VkQueueDataMap = bqueue.BoundedArrayHashMap(vk.Queue, VkQueueData, 32);
-
+pub const DeviceDataHashMap = std.hash_map.HashMap
+(
+    vk.Device,
+    DeviceData,
+    std.hash_map.AutoContext(vk.Device),
+    99,
+);
+pub const InstanceDataHashMap = std.hash_map.HashMap
+(
+    vk.Instance,
+    InstanceData,
+    std.hash_map.AutoContext(vk.Instance),
+    99,
+);
+pub const SwapchainDataHashMap = std.hash_map.HashMap
+(
+    vk.SwapchainKHR,
+    SwapchainData,
+    std.hash_map.AutoContext(vk.SwapchainKHR),
+    99,
+);
+pub const PhyDevToInstanceHashMap = std.hash_map.HashMap
+(
+    vk.PhysicalDevice,
+    vk.Instance,
+    std.hash_map.AutoContext(vk.PhysicalDevice),
+    99,
+);
+pub const VkQueueDataHashMap = std.hash_map.HashMap
+(
+    vk.Queue,
+    VkQueueData,
+    std.hash_map.AutoContext(vk.Queue),
+    99,
+);

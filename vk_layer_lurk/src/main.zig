@@ -65,11 +65,10 @@ callconv(vk.vulkan_call_conv) vk.Result
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
 
-    vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
-    const instance = p_instance.*;
-    const instance_data: ?*vkt.InstanceData = vk_global_state.instance_backing.get(instance);
+    const instance_data = vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
     if (instance_data != null)
     {
+        const instance = p_instance.*;
         for (setup.map_physical_devices_to_instance(instance, instance_data.?.instance_wrapper)) |physical_device|
         {
             vk_global_state.physical_device_backing.put(physical_device, instance) catch @panic("oom");
@@ -94,10 +93,10 @@ callconv(vk.vulkan_call_conv) void
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
 
-    var instance_data: ?vkt.InstanceData = vk_global_state.instance_backing.get_and_remove(instance);
-    if (vk_global_state.instance_backing.length() == 0) disc.stop_discord_conn();
+    var instance_data = vk_global_state.instance_backing.fetchRemove(instance).?;
+    if (vk_global_state.instance_backing.count() == 0) disc.stop_discord_conn();
 
-    setup.destroy_instance(instance, instance_data.?.instance_wrapper);
+    setup.destroy_instance(instance, instance_data.value.instance_wrapper);
 }
 
 export fn VkLayerLurk_CreateDevice
@@ -113,10 +112,9 @@ callconv(vk.vulkan_call_conv) vk.Result
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
 
-    vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
-    var device_data: *vkt.DeviceData = vk_global_state.device_backing.get(p_device.*).?;
-    var instance = vk_global_state.physical_device_backing.get(physical_device).?.*;
-    var instance_data: *vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
+    var device_data = vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
+    const instance = vk_global_state.physical_device_backing.get(physical_device).?;
+    const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
 
     setup.get_physical_mem_props(physical_device, instance_data.instance_wrapper);
     setup.device_map_queues
@@ -146,7 +144,7 @@ callconv(vk.vulkan_call_conv) void
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
 
-    _ = vk_global_state.device_backing.get_and_remove(device);
+    _ = vk_global_state.device_backing.remove(device);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -164,7 +162,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Swapchain: " ++ LAYER_NAME, .{});
-    var device_data: *vkt.DeviceData = vk_global_state.device_backing.get(device).?;
+    var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(device).?;
 
     const result = device_data.device_wrapper.dispatch.vkCreateSwapchainKHR
     (
@@ -176,58 +174,51 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (result != vk.Result.success) return result;
 
     const swapchain = p_swapchain.*;
-    const existing = vk_global_state.swapchain_backing.get_and_remove(swapchain);
-    if (existing != null)
+    const backing = vk_global_state.swapchain_backing.getOrPut(swapchain) catch @panic("oom");
+    if (backing.found_existing)
     {
         setup.destroy_swapchain
         (
             device,
             device_data.device_wrapper,
-            @constCast(&existing.?),
+            backing.value_ptr,
             &device_data.previous_draw_data,
         );
     }
-
-    vk_global_state.swapchain_backing.put
-    (
-        swapchain,
-        vkt.SwapchainData
-        {
-            .command_pool = null,
-            .descriptor_layout = null,
-            .descriptor_pool = null,
-            .descriptor_set = null,
-            .device = device,
-            .font_image_view = null,
-            .font_image = null,
-            .font_mem = null,
-            .font_sampler = null,
-            .font_uploaded = false,
-            .format = null,
-            .height = null,
-            .image_count = null,
-            .imgui_context = null,
-            .pipeline_layout = null,
-            .pipeline = null,
-            .render_pass = null,
-            .swapchain = p_swapchain.*,
-            .upload_font_buffer_mem = null,
-            .upload_font_buffer = null,
-            .width = null,
-            .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
-            .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
-            .images = vkt.ImageBacking.init(0) catch @panic("oom"),
-        },
-    )
-    catch @panic("oom");
-    var swapchain_data = vk_global_state.swapchain_backing.get(p_swapchain.*);
+    backing.value_ptr.* = vkt.SwapchainData
+    {
+        .command_pool = null,
+        .descriptor_layout = null,
+        .descriptor_pool = null,
+        .descriptor_set = null,
+        .device = device,
+        .font_image_view = null,
+        .font_image = null,
+        .font_mem = null,
+        .font_sampler = null,
+        .font_uploaded = false,
+        .format = null,
+        .height = null,
+        .image_count = null,
+        .imgui_context = null,
+        .pipeline_layout = null,
+        .pipeline = null,
+        .render_pass = null,
+        .swapchain = p_swapchain.*,
+        .upload_font_buffer_mem = null,
+        .upload_font_buffer = null,
+        .width = null,
+        .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
+        .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
+        .images = vkt.ImageBacking.init(0) catch @panic("oom"),
+    };
 
     setup.setup_swapchain
     (
         device,
         device_data.device_wrapper,
         p_create_info,
-        swapchain_data.?,
+        backing.value_ptr,
         &device_data.graphic_queue,
     );
 
@@ -248,18 +239,18 @@ callconv(vk.vulkan_call_conv) void
 
     if (swapchain == .null_handle)
     {
-        var device_data: *vkt.DeviceData = vk_global_state.device_backing.get(device).?;
+        var device_data: vkt.DeviceData = vk_global_state.device_backing.get(device).?;
         device_data.device_wrapper.destroySwapchainKHR(device, swapchain, p_allocator);
         return;
     }
 
-    var swapchain_data: *vkt.SwapchainData = vk_global_state.swapchain_backing.get(swapchain).?;
-    var device_data: *vkt.DeviceData = vk_global_state.device_backing.get(swapchain_data.device).?;
+    var swapchain_data = vk_global_state.swapchain_backing.fetchRemove(swapchain).?;
+    var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(swapchain_data.value.device).?;
     setup.destroy_swapchain
     (
         device,
         device_data.device_wrapper,
-        swapchain_data,
+        @constCast(&swapchain_data.value),
         &device_data.previous_draw_data,
     );
     device_data.device_wrapper.destroySwapchainKHR(device, swapchain, p_allocator);
@@ -277,8 +268,8 @@ callconv(vk.vulkan_call_conv) vk.Result
     {
         vk_global_state.wrappers_global_lock.lock();
         defer vk_global_state.wrappers_global_lock.unlock();
-        const queue_data: *vkt.VkQueueData = vk_global_state.queue_backing.get(queue).?;
-        var device_data: *vkt.DeviceData = vk_global_state.device_backing.get(queue_data.device).?;
+        var queue_data: *vkt.VkQueueData = vk_global_state.queue_backing.getPtr(queue).?;
+        var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(queue_data.device).?;
 
         setup.wait_before_queue_present
         (
@@ -295,7 +286,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             var i: u32 = 0;
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
-                var swapchain_data: ?*vkt.SwapchainData = vk_global_state.swapchain_backing.get
+                var swapchain_data: ?*vkt.SwapchainData = vk_global_state.swapchain_backing.getPtr
                 (
                     p_present_info.p_swapchains[i],
                 );
@@ -391,7 +382,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    const device_data: *vkt.DeviceData = vk_global_state.device_backing.get(device).?;
+    const device_data: vkt.DeviceData = vk_global_state.device_backing.get(device).?;
     return @ptrCast(@alignCast(device_data.get_device_proc_addr_func(device, p_name)));
 }
 
@@ -449,6 +440,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    const instance_data: *vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
+    const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
     return @ptrCast(@alignCast(instance_data.base_wrapper.getInstanceProcAddr(instance, p_name)));
 }
