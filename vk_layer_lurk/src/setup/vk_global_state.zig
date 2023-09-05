@@ -5,7 +5,7 @@ const vkt = @import("vk_types.zig");
 const vk = @import("../vk.zig");
 
 
-var buf: [1024 * 256]u8 = undefined;
+var buf: [1024 * 128]u8 = undefined;
 var fba = std.heap.FixedBufferAllocator.init(&buf);
 
 // single global lock, for simplicity
