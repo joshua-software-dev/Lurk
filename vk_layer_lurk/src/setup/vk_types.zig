@@ -10,13 +10,11 @@ const vk = @import("../vk.zig");
 pub const DeviceData = struct
 {
     device: vk.Device,
-    get_device_proc_addr: vk.PfnGetDeviceProcAddr,
+    get_device_proc_addr_func: vk.PfnGetDeviceProcAddr,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     graphic_queue: ?VkQueueData,
     previous_draw_data: ?DrawData,
     device_wrapper: LayerDeviceWrapper,
-    device_queues: VkQueueDataBacking,
-    swapchain_backing: SwapchainDataQueue
 };
 pub const DrawData = struct
 {
@@ -46,6 +44,7 @@ pub const SwapchainData = struct
     descriptor_layout: ?vk.DescriptorSetLayout,
     descriptor_pool: ?vk.DescriptorPool,
     descriptor_set: ?vk.DescriptorSet,
+    device: vk.Device,
     font_image_view: ?vk.ImageView,
     font_image: ?vk.Image,
     font_mem: ?vk.DeviceMemory,
@@ -68,6 +67,7 @@ pub const SwapchainData = struct
 };
 pub const VkQueueData = struct
 {
+    device: vk.Device,
     queue_family_index: u32,
     queue_flags: vk.QueueFlags,
     queue: vk.Queue,
@@ -158,20 +158,24 @@ pub const LayerInstanceWrapper = vk.InstanceWrapper
 (
     vk.InstanceCommandFlags
     {
-        .createDevice = true,
         .destroyInstance = true,
         .enumerateDeviceExtensionProperties = true,
+        .enumeratePhysicalDevices = true,
         .getPhysicalDeviceMemoryProperties = true,
         .getPhysicalDeviceQueueFamilyProperties = true,
     },
 );
 
-pub const DeviceDataQueue = bqueue.BoundedQueue(DeviceData, 2);
 pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 pub const ImageBacking = std.BoundedArray(vk.Image, 256);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
-pub const InstanceDataQueue = bqueue.BoundedQueue(InstanceData, 2);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
-pub const SwapchainDataQueue = bqueue.BoundedQueue(SwapchainData, 2);
-pub const VkQueueDataBacking = std.BoundedArray(VkQueueData, 256);
+pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 256);
 pub const VkQueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
+
+pub const DeviceDataMap = bqueue.BoundedArrayHashMap(vk.Device, DeviceData, 2);
+pub const InstanceDataMap = bqueue.BoundedArrayHashMap(vk.Instance, InstanceData, 2);
+pub const SwapchainDataMap = bqueue.BoundedArrayHashMap(vk.SwapchainKHR, SwapchainData, 32);
+pub const PhysicalDeviceMap = bqueue.BoundedArrayHashMap(vk.PhysicalDevice, vk.Instance, 16);
+pub const VkQueueDataMap = bqueue.BoundedArrayHashMap(vk.Queue, VkQueueData, 32);
+

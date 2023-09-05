@@ -1,41 +1,61 @@
 const std = @import("std");
 
 
-pub fn BoundedQueue(comptime T: type, comptime buffer_capacity: usize) type
+pub fn BoundedArrayHashMap(comptime K: type, comptime V: type, comptime buffer_capacity: usize) type
 {
     return struct
     {
         const Self = @This();
-        const BoundedBackingArray = std.BoundedArray(T, buffer_capacity);
+        const KeyBackingArray = std.BoundedArray(K, buffer_capacity);
+        const ValueBackingArray = std.BoundedArray(V, buffer_capacity);
 
-        backing_buffer: BoundedBackingArray,
+        key_backing_buffer: KeyBackingArray,
+        value_backing_buffer: ValueBackingArray,
 
         pub fn init(initial_capacity: usize) !Self
         {
-            return Self { .backing_buffer = try BoundedBackingArray.init(initial_capacity) };
+            return Self
+            {
+                .key_backing_buffer = try KeyBackingArray.init(initial_capacity),
+                .value_backing_buffer = try ValueBackingArray.init(initial_capacity),
+            };
         }
 
-        pub fn push(self: *Self, item: T) !void
+        pub fn put(self: *Self, key: K, value: V) !void
         {
-            try self.backing_buffer.resize(self.backing_buffer.len);
-            try self.backing_buffer.insert(0, item);
+            for (self.key_backing_buffer.constSlice()) |k| if (k == key) return error.KeyAlreadyExists;
+
+            self.key_backing_buffer.appendAssumeCapacity(key);
+            self.value_backing_buffer.appendAssumeCapacity(value);
         }
 
-        pub fn pop(self: *Self) ?T
+        pub fn get(self: *Self, key: K) ?*V
         {
-            return self.backing_buffer.popOrNull();
+            for (self.key_backing_buffer.constSlice(), 0..) |k, i|
+            {
+                if (k == key) return &self.value_backing_buffer.slice()[i];
+            }
+
+            return null;
         }
 
-        pub fn peek_head(self: *Self) ?*T
+        pub fn get_and_remove(self: *Self, key: K) ?V
         {
-            if (self.backing_buffer.len < 1) return null;
-            return &self.backing_buffer.slice()[0];
+            for (self.key_backing_buffer.constSlice(), 0..) |k, i|
+            {
+                if (k == key)
+                {
+                    _ = self.key_backing_buffer.orderedRemove(i);
+                    return self.value_backing_buffer.orderedRemove(i);
+                }
+            }
+
+            return null;
         }
 
-        pub fn peek_tail(self: *Self) ?*T
+        pub fn length(self: *Self) usize
         {
-            if (self.backing_buffer.len < 1) return null;
-            return &self.backing_buffer.slice()[self.backing_buffer.len - 1];
+            return @intCast(self.key_backing_buffer.len);
         }
     };
 }

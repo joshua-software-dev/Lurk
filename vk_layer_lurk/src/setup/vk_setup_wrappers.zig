@@ -67,8 +67,9 @@ void
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
 
-    vk_global_state.instance_backing.push
+    vk_global_state.instance_backing.put
     (
+        p_instance.*,
         vkt.InstanceData
         {
             .base_wrapper = base_wrapper,
@@ -138,18 +139,17 @@ void
     catch @panic("Failed to load Vulkan Device function table.");
 
     var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
-    vk_global_state.device_backing.push
+    vk_global_state.device_backing.put
     (
+        p_device.*,
         vkt.DeviceData
         {
             .device = p_device.*,
-            .get_device_proc_addr = get_device_proc_addr,
+            .get_device_proc_addr_func = get_device_proc_addr,
             .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
             .graphic_queue = null,
             .previous_draw_data = null,
             .device_wrapper = device_wrapper,
-            .device_queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom"),
-            .swapchain_backing = vkt.SwapchainDataQueue.init(0) catch @panic("oom"),
         }
     )
     catch @panic("oom");

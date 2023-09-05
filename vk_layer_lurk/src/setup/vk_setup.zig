@@ -747,9 +747,9 @@ pub fn device_map_queues
     physical_device: vk.PhysicalDevice,
     device: vk.Device,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
-    device_wrapper: vkt.LayerDeviceWrapper,
     instance_wrapper: vkt.LayerInstanceWrapper,
-    g_device_queues: *vkt.VkQueueDataBacking,
+    device_wrapper: vkt.LayerDeviceWrapper,
+    g_vkqueues_map: *vkt.VkQueueDataMap,
     g_graphic_queue: *?vkt.VkQueueData,
 )
 void
@@ -768,22 +768,18 @@ void
         family_props.slice().ptr,
     );
 
-    var device_queue_index: u32 = 0;
     var i: u32 = 0;
     while (i < p_create_info.queue_create_info_count) : (i += 1)
     {
         const queue_family_index = p_create_info.p_queue_create_infos[i].queue_family_index;
         var j: u32 = 0;
-        while (j < p_create_info.p_queue_create_infos[i].queue_count) : ({j += 1; device_queue_index += 1;})
+        while (j < p_create_info.p_queue_create_infos[i].queue_count) : (j += 1)
         {
-            g_device_queues.resize(device_queue_index + 1)
-            catch @panic("VkQueueDataBacking buffer overflow");
-
-            var data = &g_device_queues.buffer[device_queue_index];
-            data.* = std.mem.zeroInit
+            var data = std.mem.zeroInit
             (
                 vkt.VkQueueData,
                 .{
+                    .device = device,
                     .queue_family_index = queue_family_index,
                     .queue_flags = family_props.buffer[queue_family_index].queue_flags,
                 },
@@ -798,27 +794,33 @@ void
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
             }
 
-            new_queue_data(data, device, device_wrapper, g_graphic_queue);
+            new_queue_data(&data, device, device_wrapper, g_graphic_queue);
+
+            g_vkqueues_map.put(data.queue, data)
+            catch @panic("VkQueueDataBacking buffer overflow");
         }
     }
 }
 
-/// The backing for this should likely be replaced with a hashmap, but the
-/// common case is that there is only 1 item in the buffer, so its somewhat
-/// moot at the moment.
-fn get_queue_data
+pub fn map_physical_devices_to_instance
 (
-    queue: vk.Queue,
-    g_device_queues: *const vkt.VkQueueDataBacking,
+    instance: vk.Instance,
+    instance_wrapper: vkt.LayerInstanceWrapper,
 )
-vkt.VkQueueData
+[]const vk.PhysicalDevice
 {
-    for (g_device_queues.constSlice()) |it|
-    {
-        if(it.queue == queue) return it;
-    }
+    var phy_device_count: u32 = 0;
+    _ = instance_wrapper.enumeratePhysicalDevices(instance, &phy_device_count, null)
+    catch @panic("Vulkan function call failed: Instance.PfnEnumeratePhysicalDevices 1");
 
-    @panic("Lookup failed for VkQueue<->VkDevice mapping");
+    var physical_device_backing = vkt.PhysicalDeviceBacking.init(0)
+    catch @panic("Failed to get backing buffer for PhysicalDevices");
+    physical_device_backing.resize(phy_device_count) catch @panic("PhysicalDevices buffer overflow");
+
+    _ = instance_wrapper.enumeratePhysicalDevices(instance, &phy_device_count, physical_device_backing.slice().ptr)
+    catch @panic("Vulkan function call failed: Instance.PfnEnumeratePhysicalDevices 2");
+
+    return physical_device_backing.constSlice();
 }
 
 pub fn wait_before_queue_present
@@ -826,11 +828,10 @@ pub fn wait_before_queue_present
     device: vk.Device,
     device_wrapper: vkt.LayerDeviceWrapper,
     queue: vk.Queue,
-    g_device_queues: *const vkt.VkQueueDataBacking,
+    queue_data: *const vkt.VkQueueData,
 )
-vkt.VkQueueData
+void
 {
-    const queue_data = get_queue_data(queue, g_device_queues);
     const fence_container = [1]vk.Fence
     {
         queue_data.fence,
@@ -844,8 +845,6 @@ vkt.VkQueueData
 
     _ = device_wrapper.waitForFences(device, 1, &fence_container, 0, std.math.maxInt(u64))
     catch @panic("Vulkan function call failed: Device.WaitForFences");
-
-    return queue_data;
 }
 
 fn get_overlay_draw
@@ -1192,7 +1191,7 @@ fn render_swapchain_display
     device: vk.Device,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    queue_data: vkt.VkQueueData,
+    queue_data: *const vkt.VkQueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
@@ -1636,7 +1635,7 @@ pub fn before_present
     device: vk.Device,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     device_wrapper: vkt.LayerDeviceWrapper,
-    queue_data: vkt.VkQueueData,
+    queue_data: *vkt.VkQueueData,
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
