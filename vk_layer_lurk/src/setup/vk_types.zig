@@ -10,6 +10,7 @@ const vk = @import("../vk.zig");
 pub const DeviceData = struct
 {
     device: vk.Device,
+    get_device_proc_addr: vk.PfnGetDeviceProcAddr,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     graphic_queue: ?VkQueueData,
     previous_draw_data: ?DrawData,
@@ -33,6 +34,11 @@ pub const DrawData = struct
     index_buffer: vk.Buffer,
     index_buffer_mem: vk.DeviceMemory,
     index_buffer_size: vk.DeviceSize,
+};
+pub const InstanceData = struct
+{
+    base_wrapper: LayerBaseWrapper,
+    instance_wrapper: LayerInstanceWrapper
 };
 pub const SwapchainData = struct
 {
@@ -155,7 +161,6 @@ pub const LayerInstanceWrapper = vk.InstanceWrapper
         .createDevice = true,
         .destroyInstance = true,
         .enumerateDeviceExtensionProperties = true,
-        .getDeviceProcAddr = true,
         .getPhysicalDeviceMemoryProperties = true,
         .getPhysicalDeviceQueueFamilyProperties = true,
     },
@@ -165,6 +170,7 @@ pub const DeviceDataQueue = bqueue.BoundedQueue(DeviceData, 2);
 pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 256);
 pub const ImageBacking = std.BoundedArray(vk.Image, 256);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 256);
+pub const InstanceDataQueue = bqueue.BoundedQueue(InstanceData, 2);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 256);
 pub const SwapchainDataQueue = bqueue.BoundedQueue(SwapchainData, 2);
 pub const VkQueueDataBacking = std.BoundedArray(VkQueueData, 256);

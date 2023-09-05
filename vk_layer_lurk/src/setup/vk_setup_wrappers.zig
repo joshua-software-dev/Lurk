@@ -42,7 +42,7 @@ void
     var final_lci: *vkl.LayerInstanceCreateInfo = layer_create_info.?;
 
     // use `vulkan-zig`'s handy dandy function table struct to save some function tables
-    vk_global_state.base_wrapper = vkt.LayerBaseWrapper.load
+    const base_wrapper = vkt.LayerBaseWrapper.load
     (
         final_lci.u.p_layer_info.pfn_next_get_instance_proc_addr,
     )
@@ -52,7 +52,7 @@ void
     final_lci.u.p_layer_info = final_lci.u.p_layer_info.p_next;
 
     // Create instance before loading instance function table
-    const create_instance_result = vk_global_state.base_wrapper.?.dispatch.vkCreateInstance
+    const create_instance_result = base_wrapper.dispatch.vkCreateInstance
     (
         p_create_info,
         p_allocator,
@@ -60,12 +60,22 @@ void
     );
     if (create_instance_result != vk.Result.success) return;
 
-    vk_global_state.instance_wrapper = vkt.LayerInstanceWrapper.load
+    const instance_wrapper = vkt.LayerInstanceWrapper.load
     (
         p_instance.*,
-        vk_global_state.base_wrapper.?.dispatch.vkGetInstanceProcAddr,
+        base_wrapper.dispatch.vkGetInstanceProcAddr,
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
+
+    vk_global_state.instance_backing.push
+    (
+        vkt.InstanceData
+        {
+            .base_wrapper = base_wrapper,
+            .instance_wrapper = instance_wrapper,
+        },
+    )
+    catch @panic("oom");
 }
 
 fn search_device_create_info(p_create_info: *const vk.DeviceCreateInfo, func_type: c_int) *vkl.LayerDeviceCreateInfo
@@ -102,13 +112,20 @@ pub fn create_device_wrappers
 void
 {
     var layer_create_info = search_device_create_info(p_create_info, vkl.LayerFunction_LAYER_LINK_INFO);
-
-    vk_global_state.instance_wrapper.?.dispatch.vkGetDeviceProcAddr =
-        layer_create_info.u.p_layer_info.pfn_next_get_device_proc_addr;
+    const get_device_proc_addr = layer_create_info.u.p_layer_info.pfn_next_get_device_proc_addr;
+    const get_inst_proc_addr = layer_create_info.u.p_layer_info.pfn_next_get_instance_proc_addr;
+    var create_device_func: vk.PfnCreateDevice = @ptrCast
+    (
+        get_inst_proc_addr
+        (
+            vk.Instance.null_handle,
+            vk.InstanceCommandFlags.cmdName(.createDevice),
+        ),
+    );
 
     layer_create_info.u.p_layer_info = layer_create_info.u.p_layer_info.p_next;
 
-    const create_device_result = vk_global_state.instance_wrapper.?.dispatch.vkCreateDevice
+    const create_device_result = create_device_func
     (
         physical_device,
         p_create_info,
@@ -117,11 +134,7 @@ void
     );
     if (create_device_result != vk.Result.success) @panic("Vulkan function call failed: Instance.CreateDevice");
 
-    const device_wrapper = vkt.LayerDeviceWrapper.load
-    (
-        p_device.*,
-        vk_global_state.instance_wrapper.?.dispatch.vkGetDeviceProcAddr,
-    )
+    const device_wrapper = vkt.LayerDeviceWrapper.load(p_device.*, get_device_proc_addr)
     catch @panic("Failed to load Vulkan Device function table.");
 
     var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
@@ -130,6 +143,7 @@ void
         vkt.DeviceData
         {
             .device = p_device.*,
+            .get_device_proc_addr = get_device_proc_addr,
             .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
             .graphic_queue = null,
             .previous_draw_data = null,

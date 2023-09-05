@@ -66,7 +66,8 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
 
     vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
-    if (vk_global_state.base_wrapper != null and vk_global_state.instance_wrapper != null)
+    const instance_data = vk_global_state.instance_backing.peek_head();
+    if (instance_data != null)
     {
         return vk.Result.success;
     }
@@ -84,14 +85,13 @@ callconv(vk.vulkan_call_conv) void
     _ = p_allocator;
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Instance: " ++ LAYER_NAME, .{});
 
-    disc.stop_discord_conn();
-
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    setup.destroy_instance(instance, vk_global_state.instance_wrapper.?);
 
-    vk_global_state.base_wrapper = null;
-    vk_global_state.instance_wrapper = null;
+    var instance_data: ?vkt.InstanceData = vk_global_state.instance_backing.pop();
+    if (vk_global_state.instance_backing.backing_buffer.len == 0) disc.stop_discord_conn();
+
+    setup.destroy_instance(instance, instance_data.?.instance_wrapper);
 }
 
 export fn VkLayerLurk_CreateDevice
@@ -109,8 +109,9 @@ callconv(vk.vulkan_call_conv) vk.Result
 
     vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
     var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_head().?;
+    var instance_data: *vkt.InstanceData = vk_global_state.instance_backing.peek_head().?;
 
-    setup.get_physical_mem_props(physical_device, vk_global_state.instance_wrapper.?);
+    setup.get_physical_mem_props(physical_device, instance_data.instance_wrapper);
     setup.device_map_queues
     (
         p_create_info,
@@ -118,7 +119,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         device_data.device,
         device_data.set_device_loader_data_func,
         device_data.device_wrapper,
-        vk_global_state.instance_wrapper.?,
+        instance_data.instance_wrapper,
         &device_data.device_queues,
         &device_data.graphic_queue,
     );
@@ -157,7 +158,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Swapchain: " ++ LAYER_NAME, .{});
-    var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_tail().?;
+    var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_head().?;
 
     const result = device_data.device_wrapper.dispatch.vkCreateSwapchainKHR
     (
@@ -224,7 +225,7 @@ callconv(vk.vulkan_call_conv) void
     defer vk_global_state.wrappers_global_lock.unlock();
     if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Swapchain: " ++ LAYER_NAME, .{});
 
-    var maybe_device_data: ?*vkt.DeviceData = vk_global_state.device_backing.peek_tail();
+    var maybe_device_data: ?*vkt.DeviceData = vk_global_state.device_backing.peek_head();
     if (maybe_device_data != null)
     {
         var device_data = maybe_device_data.?;
@@ -268,7 +269,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     {
         vk_global_state.wrappers_global_lock.lock();
         defer vk_global_state.wrappers_global_lock.unlock();
-        var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_tail().?;
+        var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_head().?;
 
         const queue_data = setup.wait_before_queue_present
         (
@@ -286,7 +287,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
                 var swapchain = p_present_info.p_swapchains[i];
-                var maybe_swapchain_data: ?*vkt.SwapchainData = device_data.swapchain_backing.peek_tail();
+                var maybe_swapchain_data: ?*vkt.SwapchainData = device_data.swapchain_backing.peek_head();
                 if (maybe_swapchain_data != null)
                 {
                     var swapchain_data = maybe_swapchain_data.?;
@@ -439,7 +440,8 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         vk_global_state.wrappers_global_lock.lock();
         defer vk_global_state.wrappers_global_lock.unlock();
-        return vk_global_state.instance_wrapper.?.dispatch.vkEnumerateDeviceExtensionProperties
+        const instance_data: *vkt.InstanceData = vk_global_state.instance_backing.peek_head().?;
+        return instance_data.instance_wrapper.dispatch.vkEnumerateDeviceExtensionProperties
         (
             physical_device,
             p_layer_name,
@@ -498,7 +500,8 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    return @ptrCast(@alignCast(vk_global_state.instance_wrapper.?.getDeviceProcAddr(device, p_name)));
+    var device_data: *vkt.DeviceData = vk_global_state.device_backing.peek_head().?;
+    return @ptrCast(@alignCast(device_data.get_device_proc_addr(device, p_name)));
 }
 
 export fn VkLayerLurk_GetInstanceProcAddr
@@ -571,5 +574,6 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
-    return @ptrCast(@alignCast(vk_global_state.base_wrapper.?.getInstanceProcAddr(instance, p_name)));
+    var instance_data: *vkt.InstanceData = vk_global_state.instance_backing.peek_head().?;
+    return @ptrCast(@alignCast(instance_data.base_wrapper.getInstanceProcAddr(instance, p_name)));
 }
