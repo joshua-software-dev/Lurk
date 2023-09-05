@@ -947,7 +947,7 @@ void
     var w: i32 = 0;
     var h: i32 = 0;
     const pixels = imgui_ui.setup_font_text_data(&w, &h) catch @panic("ImGui provided an invalid font size.");
-    const upload_size: u64 = @intCast(w * h * 4);
+    const upload_size: usize = @intCast(w * h * 4);
 
     const buffer_info = vk.BufferCreateInfo
     {
@@ -1648,7 +1648,13 @@ pub fn before_present
 {
     if (swapchain_data.image_count.? > 0)
     {
-        imgui_ui.draw_frame(swapchain_data.width.?, swapchain_data.height.?, swapchain_data.imgui_context.?, label);
+        imgui_ui.draw_frame
+        (
+            swapchain_data.width.?,
+            swapchain_data.height.?,
+            swapchain_data.imgui_context.?,
+            if (label.len > 0) label else "Waiting to connect..."
+        );
         return render_swapchain_display
         (
             device,

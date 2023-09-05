@@ -10,10 +10,10 @@ zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Doptimize=ReleaseSmall
 # https://github.com/jordansissel/fpm
 
 # ver=$(grep ".version" build.zig.zon | awk -F '"' '{print $2}')
-# fpm -f -t deb    -a x86    -p "vk_layer_lurk-$ver-x86.deb"            --version "$ver" lib=/usr/
-# fpm -f -t rpm    -a x86    -p "vk_layer_lurk-$ver-x86.rpm"            --version "$ver" lib=/usr/
-# fpm -f -t pacman -a x86    -p "vk_layer_lurk-$ver-x86.pkg.tar.zst"    --version "$ver" lib=/usr/
-# fpm -f -t tar    -a x86    -p "vk_layer_lurk-$ver-x86.tar.gz"         --version "$ver" lib=/usr/
+# fpm -f -t deb    -a x86_64 -p "vk_layer_lurk-$ver-x86.deb"            --version "$ver" lib32=/usr/
+# fpm -f -t rpm    -a x86_64 -p "vk_layer_lurk-$ver-x86.rpm"            --version "$ver" lib32=/usr/
+# fpm -f -t pacman -a x86_64 -p "vk_layer_lurk-$ver-x86.pkg.tar.zst"    --version "$ver" lib32=/usr/
+# fpm -f -t tar    -a x86_64 -p "vk_layer_lurk-$ver-x86.tar.gz"         --version "$ver" lib32=/usr/
 # fpm -f -t deb    -a x86_64 -p "vk_layer_lurk-$ver-x86_64.deb"         --version "$ver" lib=/usr/
 # fpm -f -t rpm    -a x86_64 -p "vk_layer_lurk-$ver-x86_64.rpm"         --version "$ver" lib=/usr/
 # fpm -f -t pacman -a x86_64 -p "vk_layer_lurk-$ver-x86_64.pkg.tar.zst" --version "$ver" lib=/usr/

@@ -114,25 +114,31 @@ pub fn build(b: *std.Build) void
     // running `zig build`).
     const install = b.addInstallArtifact(lib, .{});
     install.dest_dir = .prefix;
-    install.dest_sub_path = b.fmt("lib/{s}", .{ lib.out_filename });
+    switch (target.getCpuArch())
+    {
+        .x86 =>
+        {
+            install.dest_sub_path = b.fmt("lib32/{s}", .{ lib.out_filename });
+            b.installFile
+            (
+                "manifests/package/vk_layer_lurk_linux_x86_32.json",
+                "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_32.json"
+            );
+        },
+        .x86_64 =>
+        {
+            install.dest_sub_path = b.fmt("lib/{s}", .{ lib.out_filename });
+            b.installFile
+            (
+                "manifests/package/vk_layer_lurk_linux_x86_64.json",
+                "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_64.json"
+            );
+        },
+        else => @panic("Unsupported CPU architecture."),
+    }
 
     b.default_step.dependOn(&install.step);
     b.installFile("../LICENSE", "share/licenses/lurk/LICENSE");
-
-    switch (target.getCpuArch())
-    {
-        .x86 => b.installFile
-        (
-            "manifests/package/vk_layer_lurk_linux_x86_32.json",
-            "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_32.json"
-        ),
-        .x86_64 => b.installFile
-        (
-            "manifests/package/vk_layer_lurk_linux_x86_64.json",
-            "share/vulkan/implicit_layer.d/vk_layer_lurk_linux_x86_64.json"
-        ),
-        else => @panic("Unsupported CPU architecture."),
-    }
 
     b.installDirectory
     (
