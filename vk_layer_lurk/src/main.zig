@@ -50,6 +50,58 @@ const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
 
+// Create compile time hashmaps that specify which functions this layer intends
+// to hook into
+const DeviceRegistionFunctionMap = std.ComptimeStringMap
+(
+    vk.PfnVoidFunction,
+    .{
+        .{
+            vk.InstanceCommandFlags.cmdName(.getDeviceProcAddr),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_GetDeviceProcAddr)))
+        },
+        .{
+            vk.InstanceCommandFlags.cmdName(.createDevice),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_CreateDevice)))
+        },
+        .{
+            vk.DeviceCommandFlags.cmdName(.destroyDevice),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice)))
+        },
+        .{
+            vk.DeviceCommandFlags.cmdName(.createSwapchainKHR),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR)))
+        },
+        .{
+            vk.DeviceCommandFlags.cmdName(.destroySwapchainKHR),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_DestroySwapchainKHR)))
+        },
+        .{
+            vk.DeviceCommandFlags.cmdName(.queuePresentKHR),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR)))
+        },
+    },
+);
+
+const InstanceRegistionFunctionMap = std.ComptimeStringMap
+(
+    vk.PfnVoidFunction,
+    .{
+        .{
+            vk.BaseCommandFlags.cmdName(.getInstanceProcAddr),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_GetInstanceProcAddr)))
+        },
+        .{
+            vk.BaseCommandFlags.cmdName(.createInstance),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_CreateInstance)))
+        },
+        .{
+            vk.InstanceCommandFlags.cmdName(.destroyInstance),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_DestroyInstance)))
+        },
+    },
+);
+
 ///////////////////////////////////////////////////////////////////////////////
 // Layer init and shutdown
 
@@ -354,31 +406,8 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
 
-    // device chain functions we intercept
-    if (std.mem.eql(u8, span_name, "vkGetDeviceProcAddr"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_GetDeviceProcAddr));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCreateDevice"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CreateDevice));
-    }
-    else if (std.mem.eql(u8, span_name, "vkDestroyDevice"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR));
-    }
-    else if (std.mem.eql(u8, span_name, "vkDestroySwapchainKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_DestroySwapchainKHR));
-    }
-    else if (std.mem.eql(u8, span_name, "vkQueuePresentKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
-    }
+    const device_func = DeviceRegistionFunctionMap.get(span_name);
+    if (device_func != null) return device_func.?;
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
@@ -398,45 +427,11 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 
     const span_name = std.mem.span(p_name);
 
-    // instance chain functions we intercept
-    if (std.mem.eql(u8, span_name, "vkGetInstanceProcAddr"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_GetInstanceProcAddr));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCreateInstance"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CreateInstance));
-    }
-    else if (std.mem.eql(u8, span_name, "vkDestroyInstance"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_DestroyInstance));
-    }
+    const inst_func = InstanceRegistionFunctionMap.get(span_name);
+    if (inst_func != null) return inst_func.?;
 
-    // device chain functions we intercept
-    if (std.mem.eql(u8, span_name, "vkGetDeviceProcAddr"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_GetDeviceProcAddr));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCreateDevice"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CreateDevice));
-    }
-    else if (std.mem.eql(u8, span_name, "vkDestroyDevice"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice));
-    }
-    else if (std.mem.eql(u8, span_name, "vkCreateSwapchainKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_CreateSwapchainKHR));
-    }
-    else if (std.mem.eql(u8, span_name, "vkDestroySwapchainKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_DestroySwapchainKHR));
-    }
-    else if (std.mem.eql(u8, span_name, "vkQueuePresentKHR"))
-    {
-        return @ptrCast(@alignCast(&VkLayerLurk_QueuePresentKHR));
-    }
+    const device_func = DeviceRegistionFunctionMap.get(span_name);
+    if (device_func != null) return device_func.?;
 
     vk_global_state.wrappers_global_lock.lock();
     defer vk_global_state.wrappers_global_lock.unlock();
