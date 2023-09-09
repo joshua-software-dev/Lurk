@@ -37,28 +37,28 @@ pub const DiscordUser = struct
 };
 
 
-var SelfUserId: UserId = UserId.init(0) catch @panic("Failed to init SelfUserId");
-var CurrentChannel: DiscordChannel = DiscordChannel
-{
-    .channel_id = ChannelId.init(0) catch @panic("Failed to init CurrentChannel.channel_id"),
-    .guild_id = GuildId.init(0) catch @panic("Failed to init CurrentChannel.guild_id"),
-};
-
 pub const DiscordState = struct
 {
     const Self = @This();
     self_user_id: UserId,
-    current_channel: *DiscordChannel,
+    current_channel: DiscordChannel,
     arena: std.heap.ArenaAllocator,
     all_users: std.StringArrayHashMap(DiscordUser),
 
-    pub fn init(self: *Self, allocator: std.mem.Allocator) !void
+    pub fn init(allocator: std.mem.Allocator) !DiscordState
     {
-        self.self_user_id = SelfUserId;
-        self.current_channel = &CurrentChannel;
+        var arena = std.heap.ArenaAllocator.init(allocator);
 
-        self.arena = std.heap.ArenaAllocator.init(allocator);
-        self.all_users = std.StringArrayHashMap(DiscordUser).init(self.arena.allocator());
+        return .{
+            .self_user_id = try UserId.init(0),
+            .current_channel = DiscordChannel
+            {
+                .channel_id = try ChannelId.init(0),
+                .guild_id = try GuildId.init(0),
+            },
+            .arena = arena,
+            .all_users = std.StringArrayHashMap(DiscordUser).init(arena.allocator()),
+        };
     }
 
     pub fn deinit(self: *Self) void
@@ -79,19 +79,19 @@ pub const DiscordState = struct
             new_channel == null or
             (
                 new_channel != null and
-                self.current_channel.*.channel_id.len > 0 and
+                self.current_channel.channel_id.len > 0 and
                 (
                     std.mem.eql
                     (
                         u8,
-                        self.current_channel.*.channel_id.slice(),
+                        self.current_channel.channel_id.slice(),
                         new_channel.?.channel_id.slice()
                     )
                     and
                     std.mem.eql
                     (
                         u8,
-                        self.current_channel.*.guild_id.slice(),
+                        self.current_channel.guild_id.slice(),
                         new_channel.?.guild_id.slice()
                     )
                 )
@@ -101,13 +101,13 @@ pub const DiscordState = struct
             return;
         }
 
-        if (self.current_channel.*.channel_id.len > 0)
+        if (self.current_channel.channel_id.len > 0)
         {
-            try discord_conn.unsubscribe(.VOICE_STATE_CREATE, self.current_channel.*);
-            try discord_conn.unsubscribe(.VOICE_STATE_UPDATE, self.current_channel.*);
-            try discord_conn.unsubscribe(.VOICE_STATE_DELETE, self.current_channel.*);
-            try discord_conn.unsubscribe(.SPEAKING_START, self.current_channel.*);
-            try discord_conn.unsubscribe(.SPEAKING_STOP, self.current_channel.*);
+            try discord_conn.unsubscribe(.VOICE_STATE_CREATE, self.current_channel);
+            try discord_conn.unsubscribe(.VOICE_STATE_UPDATE, self.current_channel);
+            try discord_conn.unsubscribe(.VOICE_STATE_DELETE, self.current_channel);
+            try discord_conn.unsubscribe(.SPEAKING_START, self.current_channel);
+            try discord_conn.unsubscribe(.SPEAKING_STOP, self.current_channel);
         }
 
         if (new_channel != null)

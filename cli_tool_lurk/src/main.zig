@@ -22,6 +22,31 @@ pub const std_options = struct
     };
 };
 
+var conn: ?disc.DiscordWsConn = null;
+
+fn handle_signal(signal: c_int) callconv(.C) void
+{
+    std.log.scoped(.WS).info
+    (
+        "Received Signal: {d}|{s}",
+        .{
+            signal,
+            switch(signal)
+            {
+                std.os.linux.SIG.INT => "SIGINT",
+                std.os.linux.SIG.TERM => "SIGTERM",
+                else => "Unknown"
+            },
+        }
+    );
+
+    if (conn) |*c|
+    {
+        std.log.scoped(.WS).info("Closing connection...", .{});
+        c.close();
+    }
+}
+
 pub fn start_discord_ws_conn(outFile: []const u8) !void
 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -30,10 +55,33 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     const allocator = gpa.allocator();
     errdefer _ = gpa.detectLeaks();
 
-    var conn: disc.DiscordWsConn = undefined;
-    const connUri = try conn.init(allocator, 100);
-    defer conn.close();
-    errdefer conn.close();
+    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null, 100);
+    errdefer conn.?.close();
+    if (builtin.os.tag == .linux)
+    {
+        std.log.scoped(.WS).info("Setting up Linux close signal handlers...", .{});
+        try std.os.sigaction
+        (
+            std.os.linux.SIG.INT,
+            &std.os.Sigaction{
+                .handler = .{  .handler = handle_signal, },
+                .mask = std.os.empty_sigset,
+                .flags = 0,
+            },
+            null
+        );
+
+        try std.os.sigaction
+        (
+            std.os.linux.SIG.TERM,
+            &std.os.Sigaction{
+                .handler = .{  .handler = handle_signal, },
+                .mask = std.os.empty_sigset,
+                .flags = 0,
+            },
+            null
+        );
+    }
 
     var stdout: ?std.fs.File = null;
     if (builtin.os.tag == .windows)
@@ -41,29 +89,30 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
         stdout = std.io.getStdOut();
     }
 
-    std.log.scoped(.WS).info("Connection Success: {+/}", .{ connUri });
+    std.log.scoped(.WS).info("Connection Success: {+/}", .{ conn.?.connection_uri, });
 
     while (true)
     {
-        const success =
-            conn.recieve_next_msg()
-            catch |err|
-                if (err == std.net.Stream.ReadError.WouldBlock)
-                    true
-                else
-                    return err;
+        const success = conn.?.recieve_next_msg()
+            catch |err| switch (err)
+            {
+                std.net.Stream.ReadError.WouldBlock => true,
+                std.net.Stream.ReadError.NotOpenForReading => false,
+                std.net.Stream.ReadError.NotOpenForWriting => false,
+                else => return err
+            };
 
         if (!success) break;
 
         if (builtin.os.tag == .windows)
         {
-            try conn.state.write_users_data_to_write_stream_ascii(stdout.?.writer());
+            try conn.?.state.write_users_data_to_write_stream_ascii(stdout.?.writer());
         }
         else
         {
             const file = try std.fs.createFileAbsolute(outFile, .{ .lock = .exclusive });
             defer file.close();
-            try conn.state.write_users_data_to_write_stream_ascii(file.writer());
+            try conn.?.state.write_users_data_to_write_stream_ascii(file.writer());
         }
     }
 }

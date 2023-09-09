@@ -422,8 +422,11 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
-    // Internal logic makes connecting multiple times idempotent
-    disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
+    if (vk_global_state.device_backing.count() > 0)
+    {
+        // Internal logic makes connecting multiple times idempotent
+        disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
+    }
 
     const span_name = std.mem.span(p_name);
 

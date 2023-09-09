@@ -1,3 +1,5 @@
+const std = @import("std");
+
 
 pub const Command = enum
 {
@@ -44,6 +46,12 @@ pub const Event = enum
     ACTIVITY_JOIN,
     ACTIVITY_SPECTATE,
     ACTIVITY_JOIN_REQUEST,
+};
+
+pub const MessageBackingBuffer = union(enum)
+{
+    dynamic: std.ArrayList(u8),
+    fixed: []u8,
 };
 
 pub const Message = struct

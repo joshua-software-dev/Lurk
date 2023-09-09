@@ -25,10 +25,10 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     if (running) return;
     running = true;
 
-    const connUri = try conn.init(allocator, 100);
+    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null, 100);
     errdefer conn.close();
 
-    std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ connUri });
+    std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.connection_uri });
 
     background_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
 }

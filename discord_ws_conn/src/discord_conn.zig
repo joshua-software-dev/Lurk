@@ -1,6 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+const certs = @import("preload_ssl_certs.zig");
 const msgt = @import("message_types.zig");
 const state = @import("discord_state.zig");
 
@@ -13,90 +14,118 @@ const EXPECTED_API_VERSION = 1;
 const HOST = "127.0.0.1";
 const HTTP_API_URL = "https://streamkit.discord.com/overlay/token";
 const JSON_BUFFER_SIZE = 1024;
-const PORT = 6463;
-const PORT_RANGE = slice_from_int_range(u16, PORT, PORT + 10);
-const QUERY = "/?v=1&client_id=";
-const SCHEME = "ws://";
+const MSG_BUFFER_START_SIZE = 1024 * 64;
+const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
 
 const HTTP_API_URI =
     std.Uri.parse(HTTP_API_URL)
     catch @panic("Failed to parse HTTP API URL");
 const WS_API_URI =
-    std.Uri.parse(std.fmt.comptimePrint("{s}{s}:{d}{s}{s}", .{ SCHEME, HOST, PORT, QUERY, CLIENT_ID }))
+    std.Uri.parse(std.fmt.comptimePrint("ws://{s}:{d}/?v=1&client_id={s}", .{ HOST, PORT_RANGE[0], CLIENT_ID }))
     catch @panic("Failed to parse WS API URL");
 const ws_logger = std.log.scoped(.WS);
-
-var access_token = std.BoundedArray(u8, 32).init(0) catch @panic("Failed to init access_token");
-
-inline fn slice_from_int_range(comptime T: type, comptime start: comptime_int, comptime end: comptime_int) []const T
-{
-    const length = end - start;
-    var buffer: [length]T = undefined;
-
-    for (start..end, 0..) |it, index|
-    {
-        buffer[index] = it;
-    }
-    return &buffer;
-}
 
 pub const DiscordWsConn = struct
 {
     const Self = @This();
-    conn: ws.Connection,
-    fba: std.heap.FixedBufferAllocator,
-    long_lived_allocator: std.mem.Allocator,
-    buffer: [2 * 1024 * 1024]u8, // 2 MiB
+    access_token: std.BoundedArray(u8, 32),
+    allocator: std.mem.Allocator,
+    connection_closed: bool = false,
+    connection_uri: std.Uri,
+    msg_buffer: msgt.MessageBackingBuffer,
+    cert_bundle: std.crypto.Certificate.Bundle,
+    conn: ws.UnbufferedConnection,
     state: state.DiscordState,
 
-    pub fn init(self: *Self, allocator: std.mem.Allocator, timeoutMs: u32) !std.Uri
+    pub fn init
+    (
+        allocator: std.mem.Allocator,
+        bundle: ?std.crypto.Certificate.Bundle,
+        timeout_ms: u32,
+    )
+    !DiscordWsConn
     {
-        self.long_lived_allocator = allocator;
+        var final_uri = WS_API_URI;
 
-        self.state = undefined;
-        try self.state.init(self.long_lived_allocator);
+        return .{
+            .access_token = try std.BoundedArray(u8, 32).init(0),
+            .allocator = allocator,
+            .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
+            .connection_uri = final_uri,
+            .msg_buffer = .{ .dynamic = try std.ArrayList(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE), },
+            .conn = try connect(&final_uri, timeout_ms),
+            .state = try state.DiscordState.init(allocator),
+        };
+    }
 
-        self.fba = std.heap.FixedBufferAllocator.init(&self.buffer);
+    pub fn initMinimalAlloc
+    (
+        allocator: std.mem.Allocator,
+        bundle: ?std.crypto.Certificate.Bundle,
+        timeout_ms: u32,
+    )
+    !DiscordWsConn
+    {
+        var buf: [MSG_BUFFER_START_SIZE]u8 = undefined;
+        var final_uri = WS_API_URI;
 
-        var localUri = WS_API_URI;
+        return .{
+            .access_token = try std.BoundedArray(u8, 32).init(0),
+            .allocator = allocator,
+            .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
+            .connection_uri = final_uri,
+            .msg_buffer = .{ .fixed = &buf, },
+            .conn = try connect(&final_uri, timeout_ms),
+            .state = try state.DiscordState.init(allocator),
+        };
+    }
+
+    pub fn connect(final_uri: *std.Uri, timeout_ms: u32) !ws.UnbufferedConnection
+    {
         for (PORT_RANGE) |current_port|
         {
-            localUri.port.? = current_port;
-            self.conn = ws.connect
+            final_uri.port.? = current_port;
+            var buf: [256]u8 = undefined;
+            var conn = ws.connect_unbuffered
             (
-                self.long_lived_allocator,
-                localUri,
+                null,
+                final_uri.*,
                 &.{
-                    .{"Host", std.fmt.comptimePrint("{s}:{d}", .{ HOST, PORT })},
-                    .{"Origin", "https://streamkit.discord.com"}
+                    .{ "Host", try std.fmt.bufPrint(&buf, "{s}:{d}", .{ HOST, current_port, }) },
+                    .{ "Origin", "https://streamkit.discord.com" }
                 },
             )
             catch |err|
             {
                 if (err == error.ConnectionRefused)
                 {
-                    std.log.scoped(.WS).warn("Connection Failed: {+/}", .{ localUri });
+                    std.log.scoped(.WS).warn("Connection Failed: {+/}", .{ final_uri.* });
                 }
 
-                if (err == error.ConnectionRefused and current_port < PORT_RANGE[PORT_RANGE.len - 1]) continue;
+                if (err == error.ConnectionRefused and current_port < PORT_RANGE[PORT_RANGE.len - 2]) continue;
                 return err;
             };
 
             if (builtin.os.tag != .windows)
             {
-                try self.conn.setReadTimeout(timeoutMs);
+                try conn.setReadTimeout(timeout_ms);
             }
-            break;
+
+            return conn;
         }
 
-        return localUri;
+        unreachable;
     }
 
     pub fn close(self: *Self) void
     {
-        defer self.conn.deinit(self.long_lived_allocator);
-        defer self.state.deinit();
-        defer self.fba.reset();
+        if (!self.connection_closed)
+        {
+            self.connection_closed = true;
+            defer self.cert_bundle.deinit(self.allocator);
+            defer self.conn.deinit();
+            defer self.state.deinit();
+        }
     }
 
     pub fn send_ws_message(self: *Self, object: anytype, options: std.json.StringifyOptions) !void
@@ -120,7 +149,7 @@ pub const DiscordWsConn = struct
                 .cmd = @tagName(msgt.Command.AUTHENTICATE),
                 .args =
                 .{
-                    .access_token = access_token.constSlice()
+                    .access_token = self.access_token.constSlice()
                 },
                 .nonce = uuid.urn.serialize(uuid.v4.new())
             },
@@ -149,10 +178,34 @@ pub const DiscordWsConn = struct
     pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
     {
         {
-            var client = std.http.Client{ .allocator = self.fba.allocator() };
+            var auth_buf: [64]u8 = undefined;
+            var auth_stream = std.io.fixedBufferStream(&auth_buf);
+            try std.json.stringify(.{ .code = auth_code, }, .{}, auth_stream.writer());
+
+            // deinit unnecessary due to client.deinit calling it
+            var temp_bundle = std.crypto.Certificate.Bundle
+            {
+                .bytes = try self.cert_bundle.bytes.clone(self.allocator),
+            };
+
+            {
+                const now_sec = std.time.timestamp();
+                var iter = self.cert_bundle.map.iterator();
+                while (iter.next()) |it|
+                {
+                    try temp_bundle.parseCert(self.allocator, it.value_ptr.*, now_sec);
+                }
+            }
+
+            var client = std.http.Client
+            {
+                .allocator = self.allocator,
+                .ca_bundle = temp_bundle,
+                .next_https_rescan_certs = false,
+            };
             defer client.deinit();
 
-            var headers = std.http.Headers { .allocator = self.fba.allocator() };
+            var headers = std.http.Headers{ .allocator = self.allocator, };
             defer headers.deinit();
             try headers.append("Content-Type", "application/json");
 
@@ -167,12 +220,7 @@ pub const DiscordWsConn = struct
             defer req.deinit();
 
             try req.start();
-            try std.json.stringify
-            (
-                .{ .code = auth_code },
-                .{},
-                req.writer()
-            );
+            try req.writeAll(auth_stream.getWritten());
             try req.finish();
             try req.wait();
 
@@ -181,20 +229,20 @@ pub const DiscordWsConn = struct
                 return error.AuthFailed;
             }
 
-            var reqJsonReader = std.json.reader(self.fba.allocator(), req.reader());
-            defer reqJsonReader.deinit();
+            var req_json_reader = std.json.reader(self.allocator, req.reader());
+            defer req_json_reader.deinit();
 
             const tokenHolder = try std.json.parseFromTokenSource
             (
                 msgt.AccessTokenHolder,
-                self.fba.allocator(),
-                &reqJsonReader,
+                self.allocator,
+                &req_json_reader,
                 .{}
             );
             defer tokenHolder.deinit();
 
-            try access_token.resize(tokenHolder.value.access_token.len);
-            try access_token.replaceRange(0, tokenHolder.value.access_token.len, tokenHolder.value.access_token);
+            self.access_token.len = 0;
+            try self.access_token.appendSlice(tokenHolder.value.access_token);
         }
 
         try self.authenticate();
@@ -274,10 +322,14 @@ pub const DiscordWsConn = struct
 
     pub fn parse_channel_info(self: *Self, msg: []const u8) !?state.DiscordChannel
     {
+        _ = self;
+        var buf: [JSON_BUFFER_SIZE]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+
         const channelMsg = std.json.parseFromSlice
         (
             msgt.VoiceChannelSelectChannelData,
-            self.fba.allocator(),
+            fba.allocator(),
             msg,
             .{ .ignore_unknown_fields = true },
         )
@@ -290,7 +342,7 @@ pub const DiscordWsConn = struct
         const guildMsg = std.json.parseFromSlice
         (
             msgt.VoiceChannelSelectGuildData,
-            self.fba.allocator(),
+            fba.allocator(),
             msg,
             .{ .ignore_unknown_fields = true },
         )
@@ -321,9 +373,13 @@ pub const DiscordWsConn = struct
 
     pub fn parse_get_selected_voice_channel_dynamic(self: *Self, msg: []const u8) !?state.DiscordChannel
     {
+        _ = self;
+        var buf: [JSON_BUFFER_SIZE]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+
         var stream = std.io.fixedBufferStream(msg);
 
-        var json_reader = std.json.reader(self.fba.allocator(), stream.reader());
+        var json_reader = std.json.reader(fba.allocator(), stream.reader());
         defer json_reader.deinit();
 
         var channel_id: ?[]const u8 = null;
@@ -381,7 +437,8 @@ pub const DiscordWsConn = struct
 
     pub fn handle_message(self: *Self, msg: []const u8) !bool
     {
-        defer self.fba.reset();
+        var buf: [JSON_BUFFER_SIZE]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
 
         ws_logger.debug("raw message: {s}", .{ msg });
         var localMsg: msgt.Message = undefined;
@@ -389,7 +446,7 @@ pub const DiscordWsConn = struct
             const basicMsg = try std.json.parseFromSlice
             (
                 msgt.Message,
-                self.fba.allocator(),
+                fba.allocator(),
                 msg,
                 .{ .ignore_unknown_fields = true },
             );
@@ -400,6 +457,7 @@ pub const DiscordWsConn = struct
             localMsg.nonce = basicMsg.value.nonce;
         }
         ws_logger.debug("parsed message: {}", .{ localMsg });
+        fba.reset();
 
         switch (localMsg.cmd)
         {
@@ -413,7 +471,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.EventReadyData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -450,7 +508,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.VoiceUpdateUserInfoAndVoiceStateData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -484,7 +542,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.AuthSuccessData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -509,7 +567,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.VoiceSpeakingStartStopData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -532,7 +590,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.VoiceSpeakingStartStopData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -558,7 +616,7 @@ pub const DiscordWsConn = struct
                 {
                     .ERROR =>
                     {
-                        try access_token.resize(0);
+                        self.access_token.len = 0;
                         self.state.free_user_hashmap();
                         try self.authorize_stage_1();
                     },
@@ -568,7 +626,7 @@ pub const DiscordWsConn = struct
                             const dataMsg = try std.json.parseFromSlice
                             (
                                 msgt.AuthSuccessData,
-                                self.fba.allocator(),
+                                fba.allocator(),
                                 msg,
                                 .{ .ignore_unknown_fields = true },
                             );
@@ -597,7 +655,7 @@ pub const DiscordWsConn = struct
                     const dataMsg = try std.json.parseFromSlice
                     (
                         msgt.AuthCodeData,
-                        self.fba.allocator(),
+                        fba.allocator(),
                         msg,
                         .{ .ignore_unknown_fields = true },
                     );
@@ -619,7 +677,7 @@ pub const DiscordWsConn = struct
                     const dataMsg = try std.json.parseFromSlice
                     (
                         msgt.VoiceStateData,
-                        self.fba.allocator(),
+                        fba.allocator(),
                         msg,
                         .{ .ignore_unknown_fields = true },
                     );
@@ -638,16 +696,33 @@ pub const DiscordWsConn = struct
 
     pub fn recieve_next_msg(self: *Self) !bool
     {
-        ws_logger.debug("fixed buffer bytes in use: {d}", .{ self.fba.end_index });
-        defer ws_logger.debug("fixed buffer bytes remaining: {d}\n", .{ self.fba.end_index });
+        var msg = switch (self.msg_buffer)
+        {
+            .dynamic => |*d|
+            blk: {
+                d.clearRetainingCapacity();
+                break :blk try self.conn.receiveIntoWriter(d.writer(), 0);
+            },
+            .fixed => |*f| try self.conn.receiveIntoBuffer(f.*),
+        };
 
-        const msg = try self.conn.receive();
         switch (msg.type)
         {
             .text =>
             {
                 ws_logger.debug("attempting to handle message...", .{});
-                return try self.handle_message(msg.data);
+                switch (msg.data)
+                {
+                    .slice =>
+                    {
+                        return try self.handle_message(msg.data.slice);
+                    },
+                    .written => |write_length|
+                    {
+                        return try self.handle_message(self.msg_buffer.dynamic.items[0..write_length]);
+                    },
+                    else => return error.UnexpectedMessageDataType,
+                }
             },
             .ping =>
             {
@@ -662,7 +737,7 @@ pub const DiscordWsConn = struct
             },
             else =>
             {
-                ws_logger.debug("got {s}: {s}", .{ @tagName(msg.type), msg.data });
+                ws_logger.debug("got {s}: {any}", .{ @tagName(msg.type), msg.data });
                 return true;
             },
         }
