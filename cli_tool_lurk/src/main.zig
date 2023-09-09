@@ -98,7 +98,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
             {
                 std.net.Stream.ReadError.WouldBlock => true,
                 std.net.Stream.ReadError.NotOpenForReading => false,
-                std.net.Stream.ReadError.NotOpenForWriting => false,
+                std.net.Stream.WriteError.NotOpenForWriting => false,
                 else => return err
             };
 
