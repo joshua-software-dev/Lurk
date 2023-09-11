@@ -1,6 +1,9 @@
 #!/bin/bash
 
-[ -z "$1" ] && optimize="ReleaseSmall" || optimize="Debug"
+optimize="Debug"
+if [ "$1" = "safe" ]; then optimize="ReleaseSafe";
+elif [ "$1" = "small" ]; then optimize="ReleaseSmall";
+fi
 
 ver=$(grep ".version" build.zig.zon | awk -F '"' '{print $2}')
 

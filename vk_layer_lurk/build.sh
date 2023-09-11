@@ -1,7 +1,12 @@
 #!/bin/bash
 
-printf "zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Doptimize=ReleaseSmall\n"
-zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Doptimize=ReleaseSmall
+optimize="Debug"
+if [ "$1" = "safe" ]; then optimize="ReleaseSafe";
+elif [ "$1" = "small" ]; then optimize="ReleaseSmall";
+fi
+
+printf "zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Doptimize=$optimize\n"
+zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Doptimize=$optimize
 
 # printf "zig build -Dcpu=baseline -Dtarget=x86-linux-gnu -Doptimize=ReleaseSmall\n"
 # zig build -Dcpu=baseline -Dtarget=x86-linux-gnu -Doptimize=ReleaseSmall

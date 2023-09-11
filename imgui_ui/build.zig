@@ -65,7 +65,7 @@ pub fn build(b: *std.Build) void {
                 {
                     "-std=c++17",
                     "-fno-sanitize=undefined",
-                    "-ffunction-sections",
+                    "-fvisibility=hidden",
                 },
             }
         );

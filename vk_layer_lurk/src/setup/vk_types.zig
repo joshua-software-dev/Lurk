@@ -53,7 +53,7 @@ pub const SwapchainData = struct
     format: ?vk.Format,
     height: ?u32,
     image_count: ?u32,
-    imgui_context: ?*imgui_ui.ImGuiContext,
+    imgui_context: ?imgui_ui.ContextContainer,
     pipeline_layout: ?vk.PipelineLayout,
     pipeline: ?vk.Pipeline,
     render_pass: ?vk.RenderPass,

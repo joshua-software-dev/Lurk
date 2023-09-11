@@ -6,7 +6,12 @@ const cimgui = @import("cimgui.zig");
 
 pub const DrawIdx = cimgui.ImDrawIdx;
 pub const DrawVert = cimgui.ImDrawVert;
-pub const ImGuiContext = cimgui.ImGuiContext;
+
+pub const ContextContainer = struct
+{
+    im_context: [*c]cimgui.ImGuiContext,
+    im_io: [*c]cimgui.ImGuiIO,
+};
 
 const WindowPosition = enum
 {
@@ -16,26 +21,45 @@ const WindowPosition = enum
     BOTTOM_RIGHT,
 };
 
-
-pub fn setup_context(display_x_width: f32, display_y_height: f32) *cimgui.ImGuiContext
+pub fn get_current_context() [*c]cimgui.ImGuiContext
 {
-    var context_holder: *cimgui.ImGuiContext = @ptrCast(cimgui.igCreateContext(null));
+    return cimgui.igGetCurrentContext();
+}
 
-    cimgui.igSetCurrentContext(context_holder);
+pub fn set_current_context(ctx: [*c]cimgui.ImGuiContext) void
+{
+    cimgui.igSetCurrentContext(ctx);
+}
+
+pub fn create_context(display_x_width: f32, display_y_height: f32) ContextContainer
+{
+    var old_ctx = get_current_context();
+    set_current_context(null);
+
+    var font_atlas = cimgui.ImFontAtlas_ImFontAtlas();
+    var raw_context = cimgui.igCreateContext(font_atlas);
+    set_current_context(raw_context);
+
     cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
 
     const io = cimgui.igGetIO();
+    io.*.Fonts = font_atlas;
     io.*.IniFilename = null;
     io.*.DisplaySize = cimgui.ImVec2{ .x = display_x_width, .y = display_y_height, };
-    return context_holder;
+
+    set_current_context(old_ctx);
+
+    return .{
+        .im_context = raw_context,
+        .im_io = io,
+    };
 }
 
-pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
+pub fn setup_font_text_data(im_io: [*c]cimgui.ImGuiIO, x_width: *i32, y_height: *i32) ![*]u8
 {
-    const io = cimgui.igGetIO();
     var pixels: ?[*]u8 = undefined;
     var bpp: i32 = 0;
-    cimgui.ImFontAtlas_GetTexDataAsRGBA32(io.*.Fonts, @ptrCast(&pixels.?), x_width, y_height, &bpp);
+    cimgui.ImFontAtlas_GetTexDataAsRGBA32(im_io.*.Fonts, @ptrCast(&pixels.?), x_width, y_height, &bpp);
 
     if (pixels == null) return error.InvalidTexData
     else if (x_width.* < 1 or y_height.* < 1) return error.InvalidFontSize;
@@ -43,13 +67,12 @@ pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
     return pixels.?;
 }
 
-pub fn set_fonts_tex_ident(id: *anyopaque) void
+pub fn set_fonts_tex_ident(im_io: [*c]cimgui.ImGuiIO, id: *anyopaque) void
 {
-    const io = cimgui.igGetIO();
-    cimgui.ImFontAtlas_SetTexID(io.*.Fonts, @ptrCast(id));
+    cimgui.ImFontAtlas_SetTexID(im_io.*.Fonts, @ptrCast(id));
 }
 
-pub fn get_draw_data_draw_list(draw_data: *cimgui.ImDrawData) []const *cimgui.ImDrawList
+pub fn get_draw_data_draw_list(draw_data: cimgui.ImDrawData) []const [*c]cimgui.ImDrawList
 {
     const length: i32 = @intCast(draw_data.CmdLists.Size);
     return @ptrCast(draw_data.CmdLists.Data[0..(if (length > -1) @intCast(length) else 0)]);
@@ -73,19 +96,24 @@ pub fn get_draw_list_vertex_buffer(draw_list: cimgui.ImDrawList) []const cimgui.
     return draw_list.VtxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
 }
 
-pub fn destroy_context(context_holder: *cimgui.ImGuiContext) void
+pub fn destroy_context(im_context: [*c]cimgui.ImGuiContext) void
 {
-    cimgui.igDestroyContext(@ptrCast(context_holder));
+    var current_ctx = get_current_context();
+    var unset = im_context == current_ctx;
+
+    cimgui.igDestroyContext(im_context);
+    if (unset) set_current_context(null);
 }
 
 fn draw_frame_contents(label: []const u8) void
 {
+    cimgui.igSeparator();
+    cimgui.igText(label.ptr);
+
     if (builtin.mode == .Debug)
     {
         cimgui.igSeparator();
     }
-
-    cimgui.igText(label.ptr);
 }
 
 fn set_window_position
@@ -163,13 +191,11 @@ void
     }
 }
 
-pub fn draw_frame(display_x: u32, display_y: u32, context_holder: *cimgui.ImGuiContext, label: []const u8) void
+pub fn draw_frame(display_x: u32, display_y: u32, label: []const u8) void
 {
     const margin: f32 = 20;
 
-    cimgui.igSetCurrentContext(@ptrCast(context_holder));
     cimgui.igNewFrame();
-
     cimgui.igSetNextWindowBgAlpha(0);
 
     const window_size = cimgui.ImVec2{ .x = 400, .y = 300, };
@@ -199,7 +225,7 @@ pub fn draw_frame(display_x: u32, display_y: u32, context_holder: *cimgui.ImGuiC
     cimgui.igRender();
 }
 
-pub fn get_draw_data() *cimgui.ImDrawData
+pub fn get_draw_data() [*c]cimgui.ImDrawData
 {
     return cimgui.igGetDrawData();
 }
