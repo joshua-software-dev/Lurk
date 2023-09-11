@@ -51,7 +51,7 @@ pub const Event = enum
 pub const MessageBackingBuffer = union(enum)
 {
     dynamic: std.ArrayList(u8),
-    fixed: []u8,
+    fixed: std.ArrayListUnmanaged(u8),
 };
 
 pub const Message = struct

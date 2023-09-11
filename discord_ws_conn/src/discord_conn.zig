@@ -45,6 +45,7 @@ pub const DiscordWsConn = struct
     )
     !DiscordWsConn
     {
+        var buf = try std.ArrayList(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE);
         var final_uri = WS_API_URI;
 
         return .{
@@ -52,7 +53,7 @@ pub const DiscordWsConn = struct
             .allocator = allocator,
             .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
             .connection_uri = final_uri,
-            .msg_buffer = .{ .dynamic = try std.ArrayList(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE), },
+            .msg_buffer = .{ .dynamic = buf },
             .conn = try connect(&final_uri, timeout_ms),
             .state = try state.DiscordState.init(allocator),
         };
@@ -66,7 +67,7 @@ pub const DiscordWsConn = struct
     )
     !DiscordWsConn
     {
-        var buf: [MSG_BUFFER_START_SIZE]u8 = undefined;
+        var buf = try std.ArrayListUnmanaged(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE);
         var final_uri = WS_API_URI;
 
         return .{
@@ -74,7 +75,7 @@ pub const DiscordWsConn = struct
             .allocator = allocator,
             .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
             .connection_uri = final_uri,
-            .msg_buffer = .{ .fixed = &buf, },
+            .msg_buffer = .{ .fixed = buf },
             .conn = try connect(&final_uri, timeout_ms),
             .state = try state.DiscordState.init(allocator),
         };
@@ -123,6 +124,14 @@ pub const DiscordWsConn = struct
         {
             self.connection_closed = true;
             defer self.cert_bundle.deinit(self.allocator);
+            defer
+            {
+                switch (self.msg_buffer)
+                {
+                    .dynamic => |*d| d.deinit(),
+                    .fixed => |*f| f.deinit(self.allocator),
+                }
+            }
             defer self.conn.deinit();
             defer self.state.deinit();
         }
@@ -457,7 +466,6 @@ pub const DiscordWsConn = struct
             localMsg.nonce = basicMsg.value.nonce;
         }
         ws_logger.debug("parsed message: {}", .{ localMsg });
-        fba.reset();
 
         switch (localMsg.cmd)
         {
@@ -703,7 +711,11 @@ pub const DiscordWsConn = struct
                 d.clearRetainingCapacity();
                 break :blk try self.conn.receiveIntoWriter(d.writer(), 0);
             },
-            .fixed => |*f| try self.conn.receiveIntoBuffer(f.*),
+            .fixed => |*f|
+            blk: {
+                f.clearRetainingCapacity();
+                break :blk try self.conn.receiveIntoBuffer(f.allocatedSlice());
+            },
         };
 
         switch (msg.type)
@@ -713,13 +725,15 @@ pub const DiscordWsConn = struct
                 ws_logger.debug("attempting to handle message...", .{});
                 switch (msg.data)
                 {
-                    .slice =>
+                    .slice => |slice|
                     {
-                        return try self.handle_message(msg.data.slice);
+                        ws_logger.debug("msg is slice", .{});
+                        return try self.handle_message(slice);
                     },
                     .written => |write_length|
                     {
-                        return try self.handle_message(self.msg_buffer.dynamic.items[0..write_length]);
+                        ws_logger.debug("msg is writer", .{});
+                        return try self.handle_message(self.msg_buffer.dynamic.items[0..@truncate(write_length)]);
                     },
                     else => return error.UnexpectedMessageDataType,
                 }
