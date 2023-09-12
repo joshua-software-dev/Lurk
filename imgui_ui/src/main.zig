@@ -191,8 +191,10 @@ void
     }
 }
 
-pub fn draw_frame(display_x: u32, display_y: u32, label: []const u8) void
+pub fn draw_frame(draw_new_frame: bool, display_x: u32, display_y: u32, label: []const u8) void
 {
+    if (!draw_new_frame and get_draw_data() != null) return;
+
     const margin: f32 = 20;
 
     cimgui.igNewFrame();

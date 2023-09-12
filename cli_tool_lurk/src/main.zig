@@ -91,9 +91,10 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
 
     std.log.scoped(.WS).info("Connection Success: {+/}", .{ conn.?.connection_uri, });
 
+    const timeout = 0.5 * std.time.ns_per_ms;
     while (true)
     {
-        const success = conn.?.recieve_next_msg(500)
+        const success = conn.?.recieve_next_msg(timeout)
             catch |err| switch (err)
             {
                 std.net.Stream.ReadError.WouldBlock => true,

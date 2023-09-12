@@ -116,6 +116,8 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
+        errdefer vk_global_state.wrappers_global_lock.unlock();
+
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
 
         const instance_data = vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
@@ -147,6 +149,7 @@ callconv(vk.vulkan_call_conv) void
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
+        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         var instance_data = vk_global_state.instance_backing.fetchRemove(instance).?;
         if (vk_global_state.instance_backing.count() == 0) disc.stop_discord_conn();
@@ -167,9 +170,17 @@ export fn VkLayerLurk_CreateDevice
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
+    if (vk_global_state.device_backing.count() < 1)
+    {
+        // Internal logic makes connecting multiple times idempotent
+        disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
+    }
+
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
+        errdefer vk_global_state.wrappers_global_lock.unlock();
+
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
 
         var device_data = vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
@@ -206,6 +217,8 @@ callconv(vk.vulkan_call_conv) void
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
+        errdefer vk_global_state.wrappers_global_lock.unlock();
+
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
 
         _ = vk_global_state.device_backing.remove(device);
@@ -230,6 +243,8 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
+        errdefer vk_global_state.wrappers_global_lock.unlock();
+
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Swapchain: " ++ LAYER_NAME, .{});
         var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(device).?;
 
@@ -348,6 +363,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     {
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
+
         var queue_data: *vkt.VkQueueData = vk_global_state.queue_backing.getPtr(queue).?;
         var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(queue_data.device).?;
 
@@ -360,9 +376,6 @@ callconv(vk.vulkan_call_conv) vk.Result
         );
 
         {
-            disc.output_lock.lock();
-            defer disc.output_lock.unlock();
-
             var i: u32 = 0;
             while (i < p_present_info.swapchain_count) : (i += 1)
             {
@@ -388,9 +401,8 @@ callconv(vk.vulkan_call_conv) vk.Result
                     p_present_info.p_image_indices[i],
                     &device_data.graphic_queue,
                     &device_data.previous_draw_data,
-                    swapchain_data.?,
-                    disc.output_label,
-                );
+                    swapchain_data.?
+                ) catch @panic("Unexpected error while reading from discord connection");
 
                 var present_info = p_present_info.*;
                 if (maybe_draw_data) |draw_data|
@@ -454,12 +466,6 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
-    if (vk_global_state.device_backing.count() > 0)
-    {
-        // Internal logic makes connecting multiple times idempotent
-        disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
-    }
-
     const span_name = std.mem.span(p_name);
 
     const inst_func = InstanceRegistionFunctionMap.get(span_name);

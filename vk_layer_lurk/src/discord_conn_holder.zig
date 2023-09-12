@@ -10,71 +10,44 @@ const debug = switch (builtin.mode)
     else => false,
 };
 
-var background_thread: std.Thread = undefined;
-var conn: disc.DiscordWsConn = undefined;
-var output_buffer: [256*100]u8 = undefined;
-pub var output_label: []const u8 = "";
-pub var output_lock: std.Thread.Mutex = .{};
-var running = false;
-
+pub var conn: ?disc.DiscordWsConn = undefined;
+const timeout = 0.5 * std.time.ns_per_ms;
 
 pub fn start_discord_conn(allocator: std.mem.Allocator) !void
 {
     if (debug) return;
-
-    if (running) return;
-    running = true;
+    if (conn != null) return;
 
     conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null);
     errdefer conn.close();
 
-    std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.connection_uri });
-
-    background_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
+    std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.?.connection_uri });
 }
 
-pub fn handle_message_thread() !void
+pub fn handle_next_message() !bool
 {
-    while (running)
-    {
-        const success = conn.recieve_next_msg(500)
-            catch |err| switch (err)
-            {
-                std.net.Stream.ReadError.WouldBlock => true,
-                std.net.Stream.ReadError.NotOpenForReading => false,
-                std.net.Stream.WriteError.NotOpenForWriting => false,
-                else => return err
-            };
+    if (conn == null) return false;
 
-        if (!success) return error.DiscordMessageHandleFailure;
-
-        if (output_lock.tryLock())
+    _ = conn.?.recieve_next_msg(timeout)
+        catch |err| switch (err)
         {
-            defer output_lock.unlock();
+            std.net.Stream.ReadError.WouldBlock => return false,
+            else => return err
+        };
 
-            var stream = std.io.fixedBufferStream(&output_buffer);
-            var writter = stream.writer();
-            try conn.state.write_users_data_to_write_stream_ascii(writter);
-            _ = try writter.write("\x00");
-            output_label = stream.getWritten();
-        }
-    }
+    return true;
 }
 
 pub fn stop_discord_conn() void
 {
     if (debug) return;
+    if (conn == null)
+    {
+        std.log.scoped(.VKLURK).warn("Discord connection was not started, could not close.", .{});
+        return;
+    }
 
     std.log.scoped(.VKLURK).warn("Received shutdown command, attempting to close connection to discord...", .{});
-    running = false;
-    if (builtin.os.tag == .windows)
-    {
-        background_thread.detach();
-    }
-    else
-    {
-        background_thread.join();
-    }
-    conn.close();
+    conn.?.close();
     std.log.scoped(.VKLURK).warn("Connection closed.", .{});
 }

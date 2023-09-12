@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const disc = @import("../discord_conn_holder.zig");
 const embedded_shaders = @import("vk_embedded_shaders.zig");
 const imgui_ui = @import("imgui_ui");
 const vkh = @import("vk_helpers.zig");
@@ -1651,20 +1652,40 @@ pub fn before_present
     g_graphic_queue: *const ?vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
-    label: []const u8,
 )
-?vkt.DrawData
+!?vkt.DrawData
 {
     if (swapchain_data.image_count.? > 0)
     {
         const old_ctx = imgui_ui.get_current_context();
         imgui_ui.set_current_context(swapchain_data.imgui_context.?.im_context);
 
+        const new_data_available = disc.handle_next_message()
+            catch |err| switch (err)
+            {
+                std.net.Stream.ReadError.NotOpenForReading => return null,
+                std.net.Stream.WriteError.NotOpenForWriting => return null,
+                else => return err,
+            };
+
+        var label: []const u8 = "Waiting to connect...\x00";
+        if (new_data_available)
+        {
+            var output_buffer: [8192]u8 = undefined;
+            var stream = std.io.fixedBufferStream(&output_buffer);
+            var writer = stream.writer();
+            try disc.conn.?.state.write_users_data_to_write_stream_ascii(writer);
+            _ = try writer.write("\x00");
+            label = stream.getWritten();
+        }
+
+        // if no new data is available, the previous complete frame will be rendered again
         imgui_ui.draw_frame
         (
+            new_data_available,
             swapchain_data.width.?,
             swapchain_data.height.?,
-            if (label.len > 0) label else "Waiting to connect..."
+            label,
         );
 
         const draw_data = render_swapchain_display
