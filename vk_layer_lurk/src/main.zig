@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const disc = @import("discord_conn_holder.zig");
+const disch = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
@@ -49,6 +49,8 @@ const LAYER_NAME = "VK_LAYER_Lurk_" ++ switch (builtin.cpu.arch)
 const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
+
+const MAX_MEMORY_ALLOCATION = 1024 * 512;
 
 // Create compile time hashmaps that specify which functions this layer intends
 // to hook into
@@ -146,9 +148,14 @@ callconv(vk.vulkan_call_conv) void
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
         var instance_data = vk_global_state.instance_backing.fetchRemove(instance).?;
-        if (vk_global_state.instance_backing.count() == 0) disc.stop_discord_conn();
-
         setup.destroy_instance(instance, instance_data.value.instance_wrapper);
+
+        if (vk_global_state.instance_backing.count() == 0)
+        {
+            disch.stop_discord_conn();
+            std.heap.c_allocator.free(vk_global_state.heap_buf);
+        }
+
         return;
     }
 
@@ -167,7 +174,10 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.device_backing.count() < 1)
     {
         // Internal logic makes connecting multiple times idempotent
-        disc.start_discord_conn(std.heap.c_allocator) catch @panic("Failed to start discord connection.");
+        disch.start_discord_conn(vk_global_state.heap_fba.allocator())
+        catch @panic("Failed to start discord connection.");
+
+        std.log.scoped(.VKLURK).debug("Post connection alloc: {d}", .{ vk_global_state.heap_fba.end_index });
     }
 
     if (vk_global_state.wrappers_global_lock.tryLock())
@@ -497,6 +507,25 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
+    if (!vk_global_state.first_alloc_complete)
+    {
+        vk_global_state.first_alloc_complete = true;
+        vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
+        vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
+
+        var temp_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf[4096..]);
+        disch.alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator()) catch @panic("oom");
+        std.log.scoped(.VKLURK).debug("Post SSL bundle alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+
+        vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+        vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
+        vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+        vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
+        vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
+        vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
+        std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+    }
+
     const span_name = std.mem.span(p_name);
 
     const inst_func = InstanceRegistionFunctionMap.get(span_name);

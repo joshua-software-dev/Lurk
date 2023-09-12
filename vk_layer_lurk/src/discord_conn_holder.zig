@@ -10,15 +10,22 @@ const debug = switch (builtin.mode)
     else => false,
 };
 
+var bundle: ?std.crypto.Certificate.Bundle = null;
 pub var conn: ?disc.DiscordWsConn = undefined;
 const timeout = 0.5 * std.time.ns_per_ms;
+
+pub fn alloc_ssl_bundle(temp_allocator: std.mem.Allocator, final_allocator: std.mem.Allocator) !void
+{
+    if (debug) return;
+    bundle = try disc.preload_ssl_certs(temp_allocator, final_allocator);
+}
 
 pub fn start_discord_conn(allocator: std.mem.Allocator) !void
 {
     if (debug) return;
     if (conn != null) return;
 
-    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null);
+    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, bundle);
     errdefer conn.close();
 
     std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.?.connection_uri });
@@ -47,7 +54,7 @@ pub fn stop_discord_conn() void
         return;
     }
 
-    std.log.scoped(.VKLURK).warn("Received shutdown command, attempting to close connection to discord...", .{});
+    std.log.scoped(.VKLURK).warn("Received shutdown command, closing connection to discord...", .{});
     conn.?.close();
     std.log.scoped(.VKLURK).warn("Connection closed.", .{});
 }

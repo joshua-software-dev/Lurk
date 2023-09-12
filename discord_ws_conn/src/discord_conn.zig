@@ -50,7 +50,7 @@ pub const DiscordWsConn = struct
         return .{
             .access_token = try std.BoundedArray(u8, 32).init(0),
             .allocator = allocator,
-            .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
+            .cert_bundle = if (bundle) |*b| @constCast(b).* else try certs.preload_ssl_certs(allocator, allocator),
             .connection_uri = final_uri,
             .msg_buffer = .{ .dynamic = buf },
             .conn = try connect(&final_uri),
@@ -71,7 +71,7 @@ pub const DiscordWsConn = struct
         return .{
             .access_token = try std.BoundedArray(u8, 32).init(0),
             .allocator = allocator,
-            .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
+            .cert_bundle = if (bundle) |*b| @constCast(b).* else try certs.preload_ssl_certs(allocator, allocator),
             .connection_uri = final_uri,
             .msg_buffer = .{ .fixed = buf },
             .conn = try connect(&final_uri),

@@ -29,24 +29,29 @@ const CYBERTRUST_CERT_SUBJECT: []const u8 = &[_]u8
     0x54, 0x72, 0x75, 0x73, 0x74, 0x20, 0x52, 0x6f,
     0x6f, 0x74,
 };
-pub const MAX_CERT_BUNDLE_SIZE = 4096;
+pub const START_CERT_BUFFER_SIZE = 4096;
 
-pub fn preload_ssl_certs(allocator: std.mem.Allocator) !std.crypto.Certificate.Bundle
+pub fn preload_ssl_certs
+(
+    temp_allocator: std.mem.Allocator,
+    final_allocator: std.mem.Allocator,
+)
+!std.crypto.Certificate.Bundle
 {
-    var out_buffer = try std.BoundedArray(u8, MAX_CERT_BUNDLE_SIZE).init(0);
-    var out_indices: [2]u32 = [2]u32{ out_buffer.buffer.len, out_buffer.buffer.len, };
+    var out_buffer = try std.ArrayList(u8).initCapacity(temp_allocator, START_CERT_BUFFER_SIZE);
+    var out_indices: [2]u32 = [2]u32{ START_CERT_BUFFER_SIZE, START_CERT_BUFFER_SIZE, };
 
     {
         var temp_bundle = std.crypto.Certificate.Bundle{};
-        defer temp_bundle.deinit(allocator);
-        try temp_bundle.rescan(allocator);
+        defer temp_bundle.deinit(temp_allocator);
+        try temp_bundle.rescan(temp_allocator);
 
         var cf_cert_start = temp_bundle.find(CLOUDFLARE_CERT_SUBJECT);
         var ct_cert_start = temp_bundle.find(CYBERTRUST_CERT_SUBJECT);
 
         var val_it = temp_bundle.map.valueIterator();
-        var temp_list: []u32 = try allocator.dupe(u32, val_it.items[0..val_it.len]);
-        defer allocator.free(temp_list);
+        var temp_list: []u32 = try temp_allocator.dupe(u32, val_it.items[0..val_it.len]);
+        defer temp_allocator.free(temp_list);
         std.sort.block(u32, temp_list, {}, std.sort.asc(u32));
 
         if (cf_cert_start) |cf_start|
@@ -65,7 +70,7 @@ pub fn preload_ssl_certs(allocator: std.mem.Allocator) !std.crypto.Certificate.B
                     else
                         temp_bundle.bytes.items[cf_start..];
 
-                out_indices[0] = out_buffer.len;
+                out_indices[0] = @truncate(out_buffer.items.len);
                 try out_buffer.appendSlice(cf_cert_bytes);
             }
         }
@@ -86,23 +91,23 @@ pub fn preload_ssl_certs(allocator: std.mem.Allocator) !std.crypto.Certificate.B
                     else
                         temp_bundle.bytes.items[ct_start..];
 
-                out_indices[1] = out_buffer.len;
+                out_indices[1] = @truncate(out_buffer.items.len);
                 try out_buffer.appendSlice(ct_cert_bytes);
             }
         }
     }
 
     var final_bundle = std.crypto.Certificate.Bundle{};
-    try final_bundle.bytes.appendSlice(allocator, out_buffer.constSlice());
+    try final_bundle.bytes.appendSlice(final_allocator, out_buffer.items);
 
     const now_sec = std.time.timestamp();
-    if (out_indices[0] < out_buffer.buffer.len)
+    if (out_indices[0] < START_CERT_BUFFER_SIZE)
     {
-        try final_bundle.parseCert(allocator, out_indices[0], now_sec);
+        try final_bundle.parseCert(final_allocator, out_indices[0], now_sec);
     }
-    if (out_indices[1] < out_buffer.buffer.len)
+    if (out_indices[1] < START_CERT_BUFFER_SIZE)
     {
-        try final_bundle.parseCert(allocator, out_indices[1], now_sec);
+        try final_bundle.parseCert(final_allocator, out_indices[1], now_sec);
     }
 
     return final_bundle;
