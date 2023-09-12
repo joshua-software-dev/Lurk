@@ -177,22 +177,29 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
 
-        var device_data = vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
-        const instance: ?vk.Instance =
+        var device_data = vk_setup_wrappers.create_device_wrappers
+        (
+            physical_device,
+            p_create_info,
+            p_allocator,
+            p_device
+        );
+
+        const maybe_instance_data: ?vkt.InstanceData =
         blk: {
             var it = vk_global_state.instance_backing.iterator();
             while (it.next()) |kv|
             {
                 for (kv.value_ptr.physical_devices.constSlice()) |dev|
                 {
-                    if (dev == physical_device) break :blk kv.value_ptr.*.instance;
+                    if (dev == physical_device) break :blk kv.value_ptr.*;
                 }
             }
 
             break :blk null;
         };
 
-        const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance.?).?;
+        const instance_data = maybe_instance_data.?;
 
         setup.get_physical_mem_props(physical_device, instance_data.instance_wrapper);
         setup.device_map_queues
@@ -203,7 +210,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             device_data.set_device_loader_data_func,
             instance_data.instance_wrapper,
             device_data.device_wrapper,
-            &vk_global_state.queue_backing,
+            &device_data.queues,
             &device_data.graphic_queue,
         );
 
@@ -369,8 +376,27 @@ callconv(vk.vulkan_call_conv) vk.Result
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
-        var queue_data: *vkt.VkQueueData = vk_global_state.queue_backing.getPtr(queue).?;
-        var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(queue_data.device).?;
+        var maybe_device_data: ?*vkt.DeviceData = null;
+        var maybe_queue_data: ?*vkt.VkQueueData =
+        blk: {
+            var it = vk_global_state.device_backing.iterator();
+            while (it.next()) |kv|
+            {
+                for (kv.value_ptr.queues.slice()) |queue_data|
+                {
+                    if (queue_data.queue == queue)
+                    {
+                        maybe_device_data = @constCast(kv.value_ptr);
+                        break :blk @constCast(&queue_data);
+                    }
+                }
+            }
+
+            break :blk null;
+        };
+
+        var device_data = maybe_device_data.?;
+        var queue_data = maybe_queue_data.?;
 
         setup.wait_before_queue_present
         (

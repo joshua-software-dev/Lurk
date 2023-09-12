@@ -159,6 +159,7 @@ pub fn create_device_wrappers
         .get_device_proc_addr_func = get_device_proc_addr,
         .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
         .graphic_queue = null,
+        .queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom"),
         .previous_draw_data = null,
         .device_wrapper = device_wrapper,
     };

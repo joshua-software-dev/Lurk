@@ -13,6 +13,7 @@ pub const DeviceData = struct
     get_device_proc_addr_func: vk.PfnGetDeviceProcAddr,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     graphic_queue: ?VkQueueData,
+    queues: VkQueueDataBacking,
     previous_draw_data: ?DrawData,
     device_wrapper: LayerDeviceWrapper,
 };
@@ -173,6 +174,7 @@ pub const ImageBacking = std.BoundedArray(vk.Image, 32);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 32);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 32);
 pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 8);
+pub const VkQueueDataBacking = std.BoundedArray(VkQueueData, 8);
 pub const VkQueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
 pub const DeviceDataHashMap = std.hash_map.HashMap

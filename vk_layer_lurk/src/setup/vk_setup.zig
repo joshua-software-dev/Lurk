@@ -756,7 +756,7 @@ pub fn device_map_queues
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     instance_wrapper: vkt.LayerInstanceWrapper,
     device_wrapper: vkt.LayerDeviceWrapper,
-    g_vkqueues_map: *vkt.VkQueueDataHashMap,
+    g_queues: *vkt.VkQueueDataBacking,
     g_graphic_queue: *?vkt.VkQueueData,
 )
 void
@@ -782,7 +782,9 @@ void
         var j: u32 = 0;
         while (j < p_create_info.p_queue_create_infos[i].queue_count) : (j += 1)
         {
-            var data = std.mem.zeroInit
+            g_queues.resize(g_queues.len + 1) catch @panic("Failed to get backing buffer for device queues");
+            var data = &g_queues.buffer[g_queues.len - 1];
+            data.* = std.mem.zeroInit
             (
                 vkt.VkQueueData,
                 .{
@@ -801,10 +803,7 @@ void
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
             }
 
-            new_queue_data(&data, device, device_wrapper, g_graphic_queue);
-
-            g_vkqueues_map.put(data.queue, data)
-            catch @panic("VkQueueDataBacking buffer overflow");
+            new_queue_data(data, device, device_wrapper, g_graphic_queue);
         }
     }
 }
