@@ -60,9 +60,10 @@ pub fn create_instance_wrappers
     );
     if (create_instance_result != vk.Result.success) return null;
 
+    const instance = p_instance.*;
     const instance_wrapper = vkt.LayerInstanceWrapper.load
     (
-        p_instance.*,
+        instance,
         base_wrapper.dispatch.vkGetInstanceProcAddr,
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
@@ -75,8 +76,10 @@ pub fn create_instance_wrappers
 
     backing.value_ptr.* = vkt.InstanceData
     {
+        .instance = instance,
         .base_wrapper = base_wrapper,
         .instance_wrapper = instance_wrapper,
+        .physical_devices = vkt.PhysicalDeviceBacking.init(0) catch @panic("oom"),
     };
 
     return backing.value_ptr;

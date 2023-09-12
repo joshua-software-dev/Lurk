@@ -120,15 +120,9 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
 
-        const instance_data = vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance);
-        if (instance_data != null)
+        if (vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance)) |inst_data|
         {
-            const instance = p_instance.*;
-            for (setup.map_physical_devices_to_instance(instance, instance_data.?.instance_wrapper)) |physical_device|
-            {
-                vk_global_state.physical_device_backing.put(physical_device, instance) catch @panic("oom");
-            }
-
+            setup.map_physical_devices_to_instance(inst_data);
             return vk.Result.success;
         }
     }
@@ -184,8 +178,21 @@ callconv(vk.vulkan_call_conv) vk.Result
         if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
 
         var device_data = vk_setup_wrappers.create_device_wrappers(physical_device, p_create_info, p_allocator, p_device);
-        const instance = vk_global_state.physical_device_backing.get(physical_device).?;
-        const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
+        const instance: ?vk.Instance =
+        blk: {
+            var it = vk_global_state.instance_backing.iterator();
+            while (it.next()) |kv|
+            {
+                for (kv.value_ptr.physical_devices.constSlice()) |dev|
+                {
+                    if (dev == physical_device) break :blk kv.value_ptr.*.instance;
+                }
+            }
+
+            break :blk null;
+        };
+
+        const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance.?).?;
 
         setup.get_physical_mem_props(physical_device, instance_data.instance_wrapper);
         setup.device_map_queues
@@ -305,8 +312,6 @@ callconv(vk.vulkan_call_conv) vk.Result
             backing.value_ptr,
             &device_data.graphic_queue,
         );
-
-        std.log.scoped(.VKLURK).err("Create Swapchain is complete.", .{});
 
         return result;
     }

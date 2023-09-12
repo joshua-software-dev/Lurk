@@ -809,25 +809,21 @@ void
     }
 }
 
-pub fn map_physical_devices_to_instance
-(
-    instance: vk.Instance,
-    instance_wrapper: vkt.LayerInstanceWrapper,
-)
-[]const vk.PhysicalDevice
+pub fn map_physical_devices_to_instance(instance_data: *vkt.InstanceData) void
 {
     var phy_device_count: u32 = 0;
-    _ = instance_wrapper.enumeratePhysicalDevices(instance, &phy_device_count, null)
+    _ = instance_data.instance_wrapper.enumeratePhysicalDevices(instance_data.instance, &phy_device_count, null)
     catch @panic("Vulkan function call failed: Instance.PfnEnumeratePhysicalDevices 1");
 
-    var physical_device_backing = vkt.PhysicalDeviceBacking.init(0)
-    catch @panic("Failed to get backing buffer for PhysicalDevices");
-    physical_device_backing.resize(phy_device_count) catch @panic("PhysicalDevices buffer overflow");
+    instance_data.physical_devices.resize(phy_device_count) catch @panic("PhysicalDevices buffer overflow");
 
-    _ = instance_wrapper.enumeratePhysicalDevices(instance, &phy_device_count, physical_device_backing.slice().ptr)
+    _ = instance_data.instance_wrapper.enumeratePhysicalDevices
+    (
+        instance_data.instance,
+        &phy_device_count,
+        instance_data.physical_devices.slice().ptr,
+    )
     catch @panic("Vulkan function call failed: Instance.PfnEnumeratePhysicalDevices 2");
-
-    return physical_device_backing.constSlice();
 }
 
 pub fn wait_before_queue_present

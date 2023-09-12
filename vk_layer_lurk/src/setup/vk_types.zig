@@ -35,8 +35,10 @@ pub const DrawData = struct
 };
 pub const InstanceData = struct
 {
+    instance: vk.Instance,
     base_wrapper: LayerBaseWrapper,
-    instance_wrapper: LayerInstanceWrapper
+    instance_wrapper: LayerInstanceWrapper,
+    physical_devices: PhysicalDeviceBacking,
 };
 pub const SwapchainData = struct
 {
@@ -170,7 +172,7 @@ pub const FramebufferBacking = std.BoundedArray(vk.Framebuffer, 32);
 pub const ImageBacking = std.BoundedArray(vk.Image, 32);
 pub const ImageViewBacking = std.BoundedArray(vk.ImageView, 32);
 pub const PipelineStageFlagsBacking = std.BoundedArray(vk.PipelineStageFlags, 32);
-pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 32);
+pub const PhysicalDeviceBacking = std.BoundedArray(vk.PhysicalDevice, 8);
 pub const VkQueueFamilyPropsBacking = std.BoundedArray(vk.QueueFamilyProperties, 256);
 
 pub const DeviceDataHashMap = std.hash_map.HashMap
