@@ -25,7 +25,7 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     if (running) return;
     running = true;
 
-    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null, 100);
+    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null);
     errdefer conn.close();
 
     std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.connection_uri });
@@ -37,12 +37,14 @@ pub fn handle_message_thread() !void
 {
     while (running)
     {
-        const success = conn.recieve_next_msg()
-            catch |err|
-                if (err == std.net.Stream.ReadError.WouldBlock)
-                    true
-                else
-                    return err;
+        const success = conn.recieve_next_msg(500)
+            catch |err| switch (err)
+            {
+                std.net.Stream.ReadError.WouldBlock => true,
+                std.net.Stream.ReadError.NotOpenForReading => false,
+                std.net.Stream.WriteError.NotOpenForWriting => false,
+                else => return err
+            };
 
         if (!success) return error.DiscordMessageHandleFailure;
 

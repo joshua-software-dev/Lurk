@@ -41,7 +41,6 @@ pub const DiscordWsConn = struct
     (
         allocator: std.mem.Allocator,
         bundle: ?std.crypto.Certificate.Bundle,
-        timeout_ms: u32,
     )
     !DiscordWsConn
     {
@@ -54,7 +53,7 @@ pub const DiscordWsConn = struct
             .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
             .connection_uri = final_uri,
             .msg_buffer = .{ .dynamic = buf },
-            .conn = try connect(&final_uri, timeout_ms),
+            .conn = try connect(&final_uri),
             .state = try state.DiscordState.init(allocator),
         };
     }
@@ -63,7 +62,6 @@ pub const DiscordWsConn = struct
     (
         allocator: std.mem.Allocator,
         bundle: ?std.crypto.Certificate.Bundle,
-        timeout_ms: u32,
     )
     !DiscordWsConn
     {
@@ -76,12 +74,12 @@ pub const DiscordWsConn = struct
             .cert_bundle = if (bundle) |*bund| @constCast(bund).* else try certs.preload_ssl_certs(allocator),
             .connection_uri = final_uri,
             .msg_buffer = .{ .fixed = buf },
-            .conn = try connect(&final_uri, timeout_ms),
+            .conn = try connect(&final_uri),
             .state = try state.DiscordState.init(allocator),
         };
     }
 
-    pub fn connect(final_uri: *std.Uri, timeout_ms: u32) !ws.UnbufferedConnection
+    pub fn connect(final_uri: *std.Uri) !ws.UnbufferedConnection
     {
         for (PORT_RANGE) |current_port|
         {
@@ -106,11 +104,6 @@ pub const DiscordWsConn = struct
                 if (err == error.ConnectionRefused and current_port < PORT_RANGE[PORT_RANGE.len - 2]) continue;
                 return err;
             };
-
-            if (builtin.os.tag != .windows)
-            {
-                try conn.setReadTimeout(timeout_ms);
-            }
 
             return conn;
         }
@@ -702,19 +695,19 @@ pub const DiscordWsConn = struct
         return true;
     }
 
-    pub fn recieve_next_msg(self: *Self) !bool
+    pub fn recieve_next_msg(self: *Self, timeout_ns: u64) !bool
     {
         var msg = switch (self.msg_buffer)
         {
             .dynamic => |*d|
             blk: {
                 d.clearRetainingCapacity();
-                break :blk try self.conn.receiveIntoWriter(d.writer(), 0);
+                break :blk try self.conn.receiveIntoWriter(d.writer(), 0, timeout_ns);
             },
             .fixed => |*f|
             blk: {
                 f.clearRetainingCapacity();
-                break :blk try self.conn.receiveIntoBuffer(f.allocatedSlice());
+                break :blk try self.conn.receiveIntoBuffer(f.allocatedSlice(), timeout_ns);
             },
         };
 

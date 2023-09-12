@@ -55,7 +55,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     const allocator = gpa.allocator();
     errdefer _ = gpa.detectLeaks();
 
-    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null, 100);
+    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, null);
     errdefer conn.?.close();
     if (builtin.os.tag == .linux)
     {
@@ -93,7 +93,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
 
     while (true)
     {
-        const success = conn.?.recieve_next_msg()
+        const success = conn.?.recieve_next_msg(500)
             catch |err| switch (err)
             {
                 std.net.Stream.ReadError.WouldBlock => true,
