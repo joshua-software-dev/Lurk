@@ -36,18 +36,18 @@ pub const DiscordUser = struct
     // avatar_bytes: ?std.BoundedArray(u8, 1024*1024),
 };
 
-
 pub const DiscordState = struct
 {
     const Self = @This();
     self_user_id: UserId,
     current_channel: DiscordChannel,
-    arena: std.heap.ArenaAllocator,
-    all_users: std.StringArrayHashMap(DiscordUser),
+    allocator: std.mem.Allocator,
+    all_users: std.StringArrayHashMapUnmanaged(DiscordUser),
 
     pub fn init(allocator: std.mem.Allocator) !DiscordState
     {
-        var arena = std.heap.ArenaAllocator.init(allocator);
+        var user_map = std.StringArrayHashMapUnmanaged(DiscordUser){};
+        try user_map.ensureTotalCapacity(allocator, 128);
 
         return .{
             .self_user_id = try UserId.init(0),
@@ -56,20 +56,19 @@ pub const DiscordState = struct
                 .channel_id = try ChannelId.init(0),
                 .guild_id = try GuildId.init(0),
             },
-            .arena = arena,
-            .all_users = std.StringArrayHashMap(DiscordUser).init(arena.allocator()),
+            .allocator = allocator,
+            .all_users = user_map,
         };
     }
 
     pub fn deinit(self: *Self) void
     {
-        self.arena.deinit();
+        self.all_users.deinit(self.allocator);
     }
 
     pub fn free_user_hashmap(self: *Self) void
     {
-        _ = self.arena.reset(.free_all);
-        self.all_users = std.StringArrayHashMap(DiscordUser).init(self.arena.allocator());
+        self.all_users.clearRetainingCapacity();
     }
 
     pub fn set_channel(self: *Self, discord_conn: anytype, new_channel: ?DiscordChannel) !void
@@ -152,7 +151,7 @@ pub const DiscordState = struct
 
     pub fn parse_or_update_one_voice_state(self: *Self, voice_state: msgt.UserInfoAndVoiceState) !*DiscordUser
     {
-        var result = try self.all_users.getOrPut(voice_state.user.id);
+        var result = self.all_users.getOrPutAssumeCapacity(voice_state.user.id);
         if (!result.found_existing)
         {
             result.value_ptr.* = DiscordUser
@@ -231,11 +230,16 @@ pub const DiscordState = struct
 
     pub fn write_users_data_to_write_stream(self: *Self, writer: anytype) !void
     {
+        var alloc_buf: [256]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
         try writer.print("nickname                         | muted | speaking\n", .{});
 
         var it = self.all_users.iterator();
         while (it.next()) |kv|
         {
+            fba.reset();
+            var fba_a = fba.allocator();
+
             const user: DiscordUser = kv.value_ptr.*;
 
             var nickname_buffer = try Nickname.init(0);
@@ -260,12 +264,12 @@ pub const DiscordState = struct
                 {
                     var paddedNickname = try ziglyph.display_width.padRight
                     (
-                        self.arena.allocator(),
+                        fba_a,
                         nick.slice(),
                         32,
                         " "
                     );
-                    defer self.arena.allocator().free(paddedNickname);
+                    defer fba_a.free(paddedNickname);
 
                     try nickname_buffer.resize(paddedNickname.len);
                     try nickname_buffer.replaceRange(0, paddedNickname.len, paddedNickname);
