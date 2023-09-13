@@ -1,6 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+const blacklist = @import("blacklist_processes.zig");
 const disch = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
@@ -104,6 +105,29 @@ const InstanceRegistionFunctionMap = std.ComptimeStringMap
     },
 );
 
+const BlacklistRegistionFunctionMap = std.ComptimeStringMap
+(
+    vk.PfnVoidFunction,
+    .{
+        .{
+            vk.BaseCommandFlags.cmdName(.createInstance),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_CreateInstance)))
+        },
+        .{
+            vk.InstanceCommandFlags.cmdName(.destroyInstance),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_DestroyInstance)))
+        },
+        .{
+            vk.InstanceCommandFlags.cmdName(.createDevice),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_CreateDevice)))
+        },
+        .{
+            vk.DeviceCommandFlags.cmdName(.destroyDevice),
+            @as(vk.PfnVoidFunction, @ptrCast(@alignCast(&VkLayerLurk_DestroyDevice)))
+        },
+    },
+);
+
 ///////////////////////////////////////////////////////////////////////////////
 // Layer init and shutdown
 
@@ -124,7 +148,33 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         if (vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance)) |inst_data|
         {
-            setup.map_physical_devices_to_instance(inst_data);
+            if (!vk_global_state.first_alloc_complete)
+            {
+                vk_global_state.first_alloc_complete = true;
+                vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
+                vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
+
+                var temp_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf[4096..]);
+                disch.alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator()) catch @panic("oom");
+                std.log.scoped(.VKLURK).debug("Post SSL bundle alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+
+                vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
+                vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
+                vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
+                std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+            }
+
+            var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom");
+            if (backing.found_existing)
+            {
+                @panic("Found an existing Instance with the same id when creating a new one");
+            }
+            backing.value_ptr.* = inst_data;
+
+            setup.map_physical_devices_to_instance(backing.value_ptr);
             return vk.Result.success;
         }
     }
@@ -171,7 +221,11 @@ export fn VkLayerLurk_CreateDevice
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    if (vk_global_state.device_backing.count() < 1)
+    const proc_is_blacklisted =
+        blacklist.is_this_process_blacklisted()
+        catch @panic("Failed to validate process blacklist");
+
+    if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
     {
         // Internal logic makes connecting multiple times idempotent
         disch.start_discord_conn(vk_global_state.heap_fba.allocator())
@@ -486,9 +540,20 @@ export fn VkLayerLurk_GetDeviceProcAddr
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
+    const proc_is_blacklisted =
+        blacklist.is_this_process_blacklisted()
+        catch @panic("Failed to validate process blacklist");
 
-    const device_func = DeviceRegistionFunctionMap.get(span_name);
-    if (device_func != null) return device_func.?;
+    if (proc_is_blacklisted)
+    {
+        const bl_func = BlacklistRegistionFunctionMap.get(span_name);
+        if (bl_func != null) return bl_func.?;
+    }
+    else
+    {
+        const device_func = DeviceRegistionFunctionMap.get(span_name);
+        if (device_func != null) return device_func.?;
+    }
 
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
@@ -507,32 +572,38 @@ export fn VkLayerLurk_GetInstanceProcAddr
 )
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
-    if (!vk_global_state.first_alloc_complete)
-    {
-        vk_global_state.first_alloc_complete = true;
-        vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
-        vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
-
-        var temp_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf[4096..]);
-        disch.alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator()) catch @panic("oom");
-        std.log.scoped(.VKLURK).debug("Post SSL bundle alloc: {d}", .{ vk_global_state.heap_fba.end_index });
-
-        vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
-        vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
-        vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
-        vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
-        vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
-        vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
-        std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
-    }
-
     const span_name = std.mem.span(p_name);
+    const proc_is_blacklisted =
+        blacklist.is_this_process_blacklisted()
+        catch @panic("Failed to validate process blacklist");
 
-    const inst_func = InstanceRegistionFunctionMap.get(span_name);
-    if (inst_func != null) return inst_func.?;
+    if (proc_is_blacklisted)
+    {
+        if (!vk_global_state.first_alloc_complete)
+        {
+            // allocate much less memory for only the basics
+            vk_global_state.first_alloc_complete = true;
+            vk_global_state.heap_buf = std.heap.c_allocator.create([1024*20]u8) catch @panic("oom");
+            vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
-    const device_func = DeviceRegistionFunctionMap.get(span_name);
-    if (device_func != null) return device_func.?;
+            vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+            vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
+            vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+            vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
+            std.log.scoped(.VKLURK).debug("Post minimal backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+        }
+
+        const bl_func = BlacklistRegistionFunctionMap.get(span_name);
+        if (bl_func != null) return bl_func.?;
+    }
+    else
+    {
+        const inst_func = InstanceRegistionFunctionMap.get(span_name);
+        if (inst_func != null) return inst_func.?;
+
+        const device_func = DeviceRegistionFunctionMap.get(span_name);
+        if (device_func != null) return device_func.?;
+    }
 
     if (vk_global_state.wrappers_global_lock.tryLock())
     {

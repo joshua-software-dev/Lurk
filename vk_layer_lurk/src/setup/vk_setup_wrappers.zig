@@ -11,7 +11,7 @@ pub fn create_instance_wrappers
     p_allocator: ?*const vk.AllocationCallbacks,
     p_instance: *vk.Instance,
 )
-?*vkt.InstanceData
+?vkt.InstanceData
 {
     // Ensure this is a nullable pointer (?*) to allow stepping through the
     // chain of p_next
@@ -68,21 +68,13 @@ pub fn create_instance_wrappers
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
 
-    var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom");
-    if (backing.found_existing)
-    {
-        @panic("Found an existing Instance with the same id when creating a new one");
-    }
-
-    backing.value_ptr.* = vkt.InstanceData
+    return vkt.InstanceData
     {
         .instance = instance,
         .base_wrapper = base_wrapper,
         .instance_wrapper = instance_wrapper,
         .physical_devices = vkt.PhysicalDeviceBacking.init(0) catch @panic("oom"),
     };
-
-    return backing.value_ptr;
 }
 
 fn search_device_create_info(p_create_info: *const vk.DeviceCreateInfo, func_type: c_int) *vkl.LayerDeviceCreateInfo
