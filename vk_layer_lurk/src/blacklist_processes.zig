@@ -43,10 +43,9 @@ const BlacklistedProcessesMap = std.ComptimeStringMap
     },
 );
 
-fn get_process_name() ![]const u8
+fn get_process_name(buf: []u8) ![]const u8
 {
-    var buf: [1024]u8 = undefined;
-    var proc_name: []u8 = try std.fs.selfExePath(&buf);
+    var proc_name: []u8 = try std.fs.selfExePath(buf);
 
     const is_wine =
         std.mem.endsWith(u8, proc_name, "wine-preloader") or
@@ -55,7 +54,7 @@ fn get_process_name() ![]const u8
 
     const comm_file = try std.fs.openFileAbsolute("/proc/self/comm", .{});
     defer comm_file.close();
-    const read_num1 = try comm_file.readAll(&buf);
+    const read_num1 = try comm_file.readAll(buf);
     const possible_exe_name = std.mem.trim(u8, buf[0..read_num1], " \t\r\n");
     if (std.mem.endsWith(u8, possible_exe_name, ".exe")) return possible_exe_name;
 
@@ -94,8 +93,9 @@ pub fn is_this_process_blacklisted() !bool
 {
     if (stored_result != null) return stored_result.?;
 
-    const proc_name = try get_process_name();
-    std.log.scoped(.VKLURK).debug("proc_name: {s}", .{ proc_name });
+    var buf: [1024]u8 = undefined;
+    const proc_name = try get_process_name(@constCast(&buf));
     stored_result = BlacklistedProcessesMap.has(proc_name);
+    std.log.scoped(.VKLURK).debug("proc_name: {s} | in blacklist: {}", .{ proc_name, stored_result.? });
     return stored_result.?;
 }
