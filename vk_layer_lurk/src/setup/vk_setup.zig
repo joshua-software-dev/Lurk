@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const disc = @import("../discord_conn_holder.zig");
-const embedded_shaders = @import("vk_embedded_shaders.zig");
 const imgui_ui = @import("imgui_ui");
+const shaders = @import("../shaders/vk_shaders.zig");
 const vkh = @import("vk_helpers.zig");
 const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
@@ -21,16 +21,16 @@ void
     // Create shader modules
     const frag_info = vk.ShaderModuleCreateInfo
     {
-        .code_size = embedded_shaders.overlay_frag_spv.len * @sizeOf(u32),
-        .p_code = embedded_shaders.overlay_frag_spv.ptr,
+        .code_size = shaders.overlay_frag_spv.len * @sizeOf(u32),
+        .p_code = shaders.overlay_frag_spv.ptr,
     };
     const frag_module = device_wrapper.createShaderModule(device, &frag_info, null)
     catch @panic("Vulkan function call failed: Device.CreateShaderModule | frag shader");
 
     const vert_info = vk.ShaderModuleCreateInfo
     {
-        .code_size = embedded_shaders.overlay_vert_spv.len * @sizeOf(u32),
-        .p_code = embedded_shaders.overlay_vert_spv.ptr,
+        .code_size = shaders.overlay_vert_spv.len * @sizeOf(u32),
+        .p_code = shaders.overlay_vert_spv.ptr,
     };
     const vert_module = device_wrapper.createShaderModule(device, &vert_info, null)
     catch @panic("Vulkan function call failed: Device.CreateShaderModule | vert shader");
