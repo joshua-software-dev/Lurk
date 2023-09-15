@@ -1,0 +1,11 @@
+.{
+    .name = "gl_layer_lurk",
+    .version = "1.0.0",
+    .dependencies = .{
+        .zgl =
+        .{
+            .hash = "122079101336f0a641542a9b474203df86f96f600acd67517318acb2a1fbe5e0b6cb",
+            .url = "https://github.com/ziglibs/zgl/archive/81d6990d2849ffd2d082f6ae364a03cc0162ba7e.tar.gz",
+        },
+    },
+}
