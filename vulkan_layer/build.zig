@@ -73,10 +73,10 @@ pub fn build(b: *std.Build) void
     ) orelse false;
 
     const disc = discb.create_module(b, "deps/discord_ws_conn/", .{ .target = target, .optimize = optimize, });
-    const imgui_ui = b.anonymousDependency
+    const overlay_gui = b.anonymousDependency
     (
-        "deps/imgui_ui",
-        @import("deps/imgui_ui/build.zig"),
+        "deps/overlay_gui",
+        @import("deps/overlay_gui/build.zig"),
         .{
             .target = target,
             .optimize = optimize,
@@ -86,7 +86,7 @@ pub fn build(b: *std.Build) void
     const lib = b.addSharedLibrary
     (
         .{
-            .name = "vk_layer_lurk",
+            .name = "vulkan_layer_lurk",
             // In this case the main source file is merely a path, however, in more
             // complicated build scripts, this could be a generated file.
             .root_source_file = .{ .path = "src/main.zig" },
@@ -102,9 +102,9 @@ pub fn build(b: *std.Build) void
 
     lib.addModule("discord_ws_conn", disc);
 
-    lib.addIncludePath(.{ .path = "deps/imgui_ui/dep/cimgui.git/" });
-    lib.linkLibrary(imgui_ui.artifact("imgui_ui"));
-    lib.modules.put("imgui_ui", imgui_ui.module("imgui_ui")) catch @panic("fuck");
+    lib.addIncludePath(.{ .path = "deps/overlay_gui/dep/cimgui.git/" });
+    lib.linkLibrary(overlay_gui.artifact("overlay_gui"));
+    lib.modules.put("overlay_gui", overlay_gui.module("overlay_gui")) catch @panic("oom");
 
     lib.linkLibC();
     find_existing_or_generate_new_vulkan_bindings(b, lib, use_system_vulkan);
@@ -159,7 +159,7 @@ pub fn build(b: *std.Build) void
     b.installDirectory
     (
         .{
-            .source_dir = .{ .path = "deps/imgui_ui/third_party" },
+            .source_dir = .{ .path = "deps/overlay_gui/third_party" },
             .install_dir = .prefix,
             .install_subdir = "share/licenses/lurk/third_party"
         }

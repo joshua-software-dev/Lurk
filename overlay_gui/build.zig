@@ -74,7 +74,7 @@ pub fn build(b: *std.Build) void {
     const lib = b.addStaticLibrary
     (
         .{
-            .name = "imgui_ui",
+            .name = "overlay_gui",
             .root_source_file = .{ .path = "src/main.zig" },
             .target = target,
             .optimize = optimize,
@@ -85,7 +85,7 @@ pub fn build(b: *std.Build) void {
 
     _ = b.addModule
     (
-        "imgui_ui",
+        "overlay_gui",
         .{
             .source_file = .{ .path = "src/main.zig" },
         }

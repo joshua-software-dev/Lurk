@@ -60,18 +60,18 @@ pub fn build(b: *std.Build) void {
     }
     cimgui.linkLibC();
 
-    cimgui.addIncludePath(.{ .path = "../imgui_ui/deps/cimgui.git/" });
-    cimgui.addIncludePath(.{ .path = "../imgui_ui/deps/cimgui.git/imgui/" });
+    cimgui.addIncludePath(.{ .path = "../overlay_gui/deps/cimgui.git/" });
+    cimgui.addIncludePath(.{ .path = "../overlay_gui/deps/cimgui.git/imgui/" });
     cimgui.addIncludePath(.{ .path = "deps/imgui/" });
 
     const imguiSources = &[_][]const u8
     {
-        "../imgui_ui/deps/cimgui.git/cimgui.cpp",
-        "../imgui_ui/deps/cimgui.git/imgui/imgui.cpp",
-        "../imgui_ui/deps/cimgui.git/imgui/imgui_demo.cpp",
-        "../imgui_ui/deps/cimgui.git/imgui/imgui_draw.cpp",
-        "../imgui_ui/deps/cimgui.git/imgui/imgui_tables.cpp",
-        "../imgui_ui/deps/cimgui.git/imgui/imgui_widgets.cpp",
+        "../overlay_gui/deps/cimgui.git/cimgui.cpp",
+        "../overlay_gui/deps/cimgui.git/imgui/imgui.cpp",
+        "../overlay_gui/deps/cimgui.git/imgui/imgui_demo.cpp",
+        "../overlay_gui/deps/cimgui.git/imgui/imgui_draw.cpp",
+        "../overlay_gui/deps/cimgui.git/imgui/imgui_tables.cpp",
+        "../overlay_gui/deps/cimgui.git/imgui/imgui_widgets.cpp",
         "deps/imgui/imgui_impl_opengl3.cpp",
     };
     for (imguiSources) |src|
@@ -91,7 +91,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const lib = b.addSharedLibrary(.{
-        .name = "gl_layer_lurk",
+        .name = "opengl_layer_lurk",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/main.zig" },

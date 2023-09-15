@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const disc = @import("../discord_conn_holder.zig");
-const imgui_ui = @import("imgui_ui");
+const overlay_gui = @import("overlay_gui");
 const shaders = @import("../shaders/vk_shaders.zig");
 const vkh = @import("vk_helpers.zig");
 const vkl = @import("vk_layer_stubs.zig");
@@ -156,7 +156,7 @@ void
             vk.VertexInputBindingDescription,
             .{
                 .input_rate = .vertex,
-                .stride = @sizeOf(imgui_ui.DrawVert),
+                .stride = @sizeOf(overlay_gui.DrawVert),
             }
         ),
     };
@@ -167,21 +167,21 @@ void
             .location = 0,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = @offsetOf(imgui_ui.DrawVert, "pos"),
+            .offset = @offsetOf(overlay_gui.DrawVert, "pos"),
         },
         vk.VertexInputAttributeDescription
         {
             .location = 1,
             .binding = binding_desc[0].binding,
             .format = .r32g32_sfloat,
-            .offset = @offsetOf(imgui_ui.DrawVert, "uv"),
+            .offset = @offsetOf(overlay_gui.DrawVert, "uv"),
         },
         vk.VertexInputAttributeDescription
         {
             .location = 2,
             .binding = binding_desc[0].binding,
             .format = .r8g8b8a8_unorm,
-            .offset = @offsetOf(imgui_ui.DrawVert, "col"),
+            .offset = @offsetOf(overlay_gui.DrawVert, "col"),
         },
     };
 
@@ -303,7 +303,7 @@ void
 
     var h: i32 = 0;
     var w: i32 = 0;
-    _ = imgui_ui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
+    _ = overlay_gui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
     catch @panic("ImGui provided an invalid font size.");
 
     // Font image
@@ -414,14 +414,14 @@ void
     swapchain_data.width = p_create_info.image_extent.width;
     swapchain_data.format = p_create_info.image_format;
 
-    swapchain_data.imgui_context = imgui_ui.create_context
+    swapchain_data.imgui_context = overlay_gui.create_context
     (
         @floatFromInt(swapchain_data.width.?),
         @floatFromInt(swapchain_data.height.?),
     );
 
-    const old_ctx = imgui_ui.get_current_context();
-    imgui_ui.set_current_context(swapchain_data.imgui_context.?.im_context);
+    const old_ctx = overlay_gui.get_current_context();
+    overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
@@ -593,7 +593,7 @@ void
     swapchain_data.command_pool = device_wrapper.createCommandPool(device, &cmd_buffer_pool_info, null)
     catch @panic("Vulkan function call failed: Device.CreateCommandPool");
 
-    imgui_ui.set_current_context(old_ctx);
+    overlay_gui.set_current_context(old_ctx);
 }
 
 pub fn destroy_swapchain
@@ -701,7 +701,7 @@ void
         swapchain_data.upload_font_buffer_mem = null;
     }
 
-    _ = imgui_ui.destroy_context(swapchain_data.imgui_context.?.im_context);
+    _ = overlay_gui.destroy_context(swapchain_data.imgui_context.?.im_context);
 }
 
 pub fn destroy_instance
@@ -949,7 +949,7 @@ void
     var w: i32 = 0;
     var h: i32 = 0;
     const pixels =
-        imgui_ui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
+        overlay_gui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
         catch @panic("ImGui provided an invalid font size.");
 
     const upload_size: usize = @intCast(w * h * 4);
@@ -1140,7 +1140,7 @@ void
         &use_barrier,
     );
 
-    imgui_ui.set_fonts_tex_ident(swapchain_data.imgui_context.?.im_io, @ptrCast(&swapchain_data.font_image.?));
+    overlay_gui.set_fonts_tex_ident(swapchain_data.imgui_context.?.im_io, @ptrCast(&swapchain_data.font_image.?));
     swapchain_data.font_uploaded = true;
 }
 
@@ -1206,7 +1206,7 @@ fn render_swapchain_display
 )
 ?vkt.DrawData
 {
-    const imgui_draw_data = imgui_ui.get_draw_data();
+    const imgui_draw_data = overlay_gui.get_draw_data();
     if (imgui_draw_data == null or imgui_draw_data.*.TotalVtxCount < 1) return null;
 
     var draw_data = get_overlay_draw(device, set_device_loader_data_func, device_wrapper, swapchain_data, g_previous_draw_data);
@@ -1282,8 +1282,8 @@ fn render_swapchain_display
 
     device_wrapper.cmdBeginRenderPass(draw_data.command_buffer, &render_pass_info, .@"inline");
 
-    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalVtxCount)) * @sizeOf(imgui_ui.DrawVert);
-    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalIdxCount)) * @sizeOf(imgui_ui.DrawIdx);
+    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalVtxCount)) * @sizeOf(overlay_gui.DrawVert);
+    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalIdxCount)) * @sizeOf(overlay_gui.DrawIdx);
 
     if (draw_data.vertex_buffer_size < vertex_size)
     {
@@ -1313,7 +1313,7 @@ fn render_swapchain_display
         );
     }
 
-    var vertex_dst: [*]imgui_ui.DrawVert = @ptrCast
+    var vertex_dst: [*]overlay_gui.DrawVert = @ptrCast
     (
         @alignCast
         (
@@ -1329,7 +1329,7 @@ fn render_swapchain_display
         ),
     );
 
-    var index_dst: [*]imgui_ui.DrawIdx = @ptrCast
+    var index_dst: [*]overlay_gui.DrawIdx = @ptrCast
     (
         @alignCast
         (
@@ -1345,10 +1345,10 @@ fn render_swapchain_display
         ),
     );
 
-    for (imgui_ui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
+    for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
     {
-        const vertex_buf = imgui_ui.get_draw_list_vertex_buffer(cmd_list.*);
-        const index_buf = imgui_ui.get_draw_list_index_buffer(cmd_list.*);
+        const vertex_buf = overlay_gui.get_draw_list_vertex_buffer(cmd_list.*);
+        const index_buf = overlay_gui.get_draw_list_index_buffer(cmd_list.*);
         @memcpy(vertex_dst[0..vertex_buf.len], vertex_buf);
         @memcpy(index_dst[0..index_buf.len], index_buf);
         vertex_dst += vertex_buf.len;
@@ -1458,9 +1458,9 @@ fn render_swapchain_display
     {
         var vertex_offset: u32 = 0;
         var index_offset: u32 = 0;
-        for (imgui_ui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
+        for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
         {
-            for (imgui_ui.get_draw_list_command_buffer(cmd_list.*)) |cmd|
+            for (overlay_gui.get_draw_list_command_buffer(cmd_list.*)) |cmd|
             {
                 const x_pos: i32 = @intFromFloat(cmd.ClipRect.x - imgui_draw_data.*.DisplayPos.x);
                 const y_pos: i32 = @intFromFloat(cmd.ClipRect.y - imgui_draw_data.*.DisplayPos.y);
@@ -1495,7 +1495,7 @@ fn render_swapchain_display
                 index_offset += cmd.ElemCount;
             }
 
-            vertex_offset += @intCast(imgui_ui.get_draw_list_vertex_buffer(cmd_list.*).len);
+            vertex_offset += @intCast(overlay_gui.get_draw_list_vertex_buffer(cmd_list.*).len);
         }
     }
 
@@ -1652,8 +1652,8 @@ pub fn before_present
 {
     if (swapchain_data.image_count.? > 0)
     {
-        const old_ctx = imgui_ui.get_current_context();
-        imgui_ui.set_current_context(swapchain_data.imgui_context.?.im_context);
+        const old_ctx = overlay_gui.get_current_context();
+        overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
 
         const new_data_available = disc.handle_next_message()
             catch |err| switch (err)
@@ -1675,7 +1675,7 @@ pub fn before_present
         }
 
         // if no new data is available, the previous complete frame will be rendered again
-        imgui_ui.draw_frame
+        overlay_gui.draw_frame
         (
             new_data_available,
             swapchain_data.width.?,
@@ -1696,7 +1696,7 @@ pub fn before_present
             g_previous_draw_data,
             swapchain_data,
         );
-        imgui_ui.set_current_context(if (old_ctx == swapchain_data.imgui_context.?.im_context) null else old_ctx);
+        overlay_gui.set_current_context(if (old_ctx == swapchain_data.imgui_context.?.im_context) null else old_ctx);
         return draw_data;
     }
 

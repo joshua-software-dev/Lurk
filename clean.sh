@@ -4,15 +4,10 @@ SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
-rm -rf "cli_tool_lurk/zig-cache/"
-rm -rf "cli_tool_lurk/zig-out/"
+declare -a projects=("cli" "discord_ws_conn" "opengl_layer" "overlay_gui" "vulkan_layer")
 
-rm -rf "discord_ws_conn/zig-cache/"
-rm -rf "discord_ws_conn/zig-out/"
-
-rm -rf "imgui_ui/zig-cache/"
-rm -rf "imgui_ui/zig-out/"
-# rm -rf "imgui_ui/deps/"
-
-rm -rf "vk_layer_lurk/zig-cache/"
-rm -rf "vk_layer_lurk/zig-out/"
+for dir in "${projects[@]}"
+do
+    rm -rf "$dir/zig-cache"
+    rm -rf "$dir/zig-out"
+done

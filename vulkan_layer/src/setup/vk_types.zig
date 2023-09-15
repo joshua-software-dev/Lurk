@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const bqueue = @import("../bounded_queue.zig");
-const imgui_ui = @import("imgui_ui");
+const overlay_gui = @import("overlay_gui");
 const vkl = @import("vk_layer_stubs.zig");
 
 const vk = @import("../vk.zig");
@@ -56,7 +56,7 @@ pub const SwapchainData = struct
     format: ?vk.Format,
     height: ?u32,
     image_count: ?u32,
-    imgui_context: ?imgui_ui.ContextContainer,
+    imgui_context: ?overlay_gui.ContextContainer,
     pipeline_layout: ?vk.PipelineLayout,
     pipeline: ?vk.Pipeline,
     render_pass: ?vk.RenderPass,

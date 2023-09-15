@@ -1,5 +1,5 @@
 .{
-    .name = "vk_layer_lurk",
+    .name = "vulkan_layer_lurk",
     .version = "1.0.0",
     .dependencies = .{
         .uuid =

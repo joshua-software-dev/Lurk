@@ -1,4 +1,4 @@
 .{
-    .name = "imgui_ui",
+    .name = "overlay_gui",
     .version = "1.0.0",
 }

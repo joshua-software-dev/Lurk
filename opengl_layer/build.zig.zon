@@ -1,5 +1,5 @@
 .{
-    .name = "gl_layer_lurk",
+    .name = "opengl_layer_lurk",
     .version = "1.0.0",
     .dependencies = .{
         .zgl =
