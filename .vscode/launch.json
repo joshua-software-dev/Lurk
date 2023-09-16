@@ -5,73 +5,134 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb) Launch Layer",
+            "name": "(lldb|native) Launch Vulkan Layer",
             "type": "lldb",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "env": {
                 "ENABLE_LURK": "1",
                 "RADV_DEBUG": "llvm",
-                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vulkan_layer/manifests/debug",
                 "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
         },
         {
-            "name": "(lldb|radvdebug) Launch Layer",
+            "name": "(lldb|radvdebug) Launch Vulkan Layer",
             "type": "lldb",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "env": {
                 "ENABLE_LURK": "1",
                 "LD_LIBRARY_PATH": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}",
                 "RADV_DEBUG": "llvm",
-                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vulkan_layer/manifests/debug",
                 "VK_ICD_FILENAMES": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json",
                 "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
         },
         {
-            "name": "(lldb|swiftshader) Launch Layer",
+            "name": "(lldb|swiftshader) Launch Vulkan Layer",
             "type": "lldb",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "env": {
                 "ENABLE_LURK": "1",
-                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vk_layer_lurk/manifests/debug",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vulkan_layer/manifests/debug",
                 "VK_ICD_FILENAMES": "${workspaceFolder}/../swiftshader/Debug/Linux/vk_swiftshader_icd.json",
                 "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
                 "VK_LOADER_DEBUG": "all",
             },
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
+        },
+        {
+            "name": "(lldb|radvdebug) Launch Vulkan Layer w/ Cave Story",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "ENABLE_LURK": "1",
+                "MESA_LOADER_DRIVER_OVERRIDE": "zink",
+                "LD_LIBRARY_PATH": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vulkan_layer/manifests/debug",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*",
+                "VK_LOADER_DEBUG": "all",
+            },
+            "preLaunchTask": "build vulkan",
+        },
+        {
+            "name": "(lldb|radvdebug) Launch Vulkan Layer w/ DOOM 3",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/../RBDOOM-3-BFG/RBDoom3BFG",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "ENABLE_LURK": "1",
+                "LD_LIBRARY_PATH": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}",
+                "VK_ADD_LAYER_PATH": "${workspaceFolder}/vulkan_layer/manifests/debug:${workspaceFolder}/../realmesa/radvdebug/share/vulkan/explicit_layer.d",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json",
+                "VK_LOADER_LAYERS_ENABLE": "VK_LAYER_Lurk_*,VK_LAYER_MESA_overlay",
+                "VK_LOADER_DEBUG": "all",
+            },
+            "preLaunchTask": "build vulkan",
+        },
+        {
+            "name": "(lldb) Launch OpenGL Layer",
+            "type": "lldb",
+            "request": "launch",
+            "program": "/usr/bin/glxgears",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "ENABLE_LURK": "1",
+                "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+            },
+            "preLaunchTask": "build opengl",
+        },
+        {
+            "name": "(lldb) Launch OpenGL Layer w/ Cave Story",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "ENABLE_LURK": "1",
+                "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+            },
+            "preLaunchTask": "build opengl",
         },
         {
             "name": "(llvm) Launch CLI",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/cli_tool_lurk/zig-out/bin/lurk",
+            "program": "${workspaceFolder}/zig-out/bin/lurk_cli",
             "args": [],
-            "cwd": "${workspaceFolder}/cli_tool_lurk/",
+            "cwd": "${workspaceFolder}",
             "env": {},
             "preLaunchTask": "build cli",
         },
         {
-            "name": "(gdb) Launch Layer",
+            "name": "(gdb|native) Launch Vulkan Layer",
             "type": "cppdbg",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "ENABLE_LURK",
@@ -79,7 +140,7 @@
                 },
                 {
                     "name": "VK_ADD_LAYER_PATH",
-                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                    "value": "${workspaceFolder}/vulkan_layer/manifests/debug"
                 },
                 {
                     "name": "VK_LOADER_LAYERS_ENABLE",
@@ -96,7 +157,7 @@
             ],
             "externalConsole": false,
             "MIMode": "gdb",
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -106,13 +167,13 @@
             ]
         },
         {
-            "name": "(gdb|radvdebug) Launch Layer",
+            "name": "(gdb|radvdebug) Launch Vulkan Layer",
             "type": "cppdbg",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "ENABLE_LURK",
@@ -128,7 +189,7 @@
                 },
                 {
                     "name": "VK_ADD_LAYER_PATH",
-                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                    "value": "${workspaceFolder}/vulkan_layer/manifests/debug"
                 },
                 {
                     "name": "VK_ICD_FILENAMES",
@@ -145,7 +206,7 @@
             ],
             "externalConsole": false,
             "MIMode": "gdb",
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -155,13 +216,13 @@
             ]
         },
         {
-            "name": "(gdb|swiftshader) Launch Layer",
+            "name": "(gdb|swiftshader) Launch Vulkan Layer",
             "type": "cppdbg",
             "request": "launch",
             "program": "/usr/bin/vkcube",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/vk_layer_lurk/",
+            "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "ENABLE_LURK",
@@ -169,7 +230,7 @@
                 },
                 {
                     "name": "VK_ADD_LAYER_PATH",
-                    "value": "${workspaceFolder}/vk_layer_lurk/manifests/debug"
+                    "value": "${workspaceFolder}/vulkan_layer/manifests/debug"
                 },
                 {
                     "name": "VK_ICD_FILENAMES",
@@ -186,7 +247,167 @@
             ],
             "externalConsole": false,
             "MIMode": "gdb",
-            "preLaunchTask": "build layer",
+            "preLaunchTask": "build vulkan",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb|radvdebug) Launch Vulkan Layer w/ Cave Story",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "MESA_LOADER_DRIVER_OVERRIDE",
+                    "value": "zink"
+                },
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}"
+                },
+                {
+                    "name": "VK_ADD_LAYER_PATH",
+                    "value": "${workspaceFolder}/vulkan_layer/manifests/debug"
+                },
+                {
+                    "name": "VK_ICD_FILENAMES",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_ENABLE",
+                    "value": "VK_LAYER_Lurk_*"
+                },
+                {
+                    "name": "VK_LOADER_DEBUG",
+                    "value": "all"
+                },
+                {
+                    "name": "RADV_DEBUG",
+                    "value": "gdb"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build vulkan",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb|radvdebug) Launch Vulkan Layer w/ DOOM 3",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../RBDOOM-3-BFG/RBDoom3BFG",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}"
+                },
+                {
+                    "name": "VK_ADD_LAYER_PATH",
+                    "value": "${workspaceFolder}/vulkan_layer/manifests/debug:${workspaceFolder}/../realmesa/radvdebug/share/vulkan/explicit_layer.d"
+                },
+                {
+                    "name": "VK_ICD_FILENAMES",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/share/vulkan/icd.d/radeon_icd.x86_64.json"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_ENABLE",
+                    "value": "VK_LAYER_Lurk_*,VK_LAYER_MESA_overlay"
+                },
+                {
+                    "name": "VK_LOADER_DEBUG",
+                    "value": "all"
+                },
+                {
+                    "name": "RADV_DEBUG",
+                    "value": "gdb"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build vulkan",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch OpenGL Layer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/glxgears",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "LD_PRELOAD",
+                    "value": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build opengl",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch OpenGL Layer w/ Cave Story",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ENABLE_LURK",
+                    "value": "1"
+                },
+                {
+                    "name": "LD_PRELOAD",
+                    "value": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build opengl",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -199,10 +420,10 @@
             "name": "(gdb) Launch CLI",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/cli_tool_lurk/zig-out/bin/lurk",
+            "program": "${workspaceFolder}/zig-out/bin/lurk_cli",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/cli_tool_lurk/",
+            "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

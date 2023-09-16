@@ -1,4 +1,4 @@
-const vk = @import("../vk.zig");
+const vk = @import("vk");
 
 pub var physical_mem_props: ?vk.PhysicalDeviceMemoryProperties = null;
 

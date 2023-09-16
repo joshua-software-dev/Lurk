@@ -2,7 +2,7 @@ const vk_global_state = @import("vk_global_state.zig");
 const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
 
-const vk = @import("../vk.zig");
+const vk = @import("vk");
 
 
 pub fn create_instance_wrappers

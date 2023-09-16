@@ -54,10 +54,10 @@ pub fn dynamic_load_opengl(arb: bool) void
 
     const opengl_lib = hacks.original_dlopen_func_ptr.?("libGL.so.1", hacks.RTLD_LAZY);
 
-    GetProcAddress = @ptrCast(hacks.original_dlsym_func_ptr.?(opengl_lib, "glXGetProcAddress"));
+    GetProcAddress = @ptrCast(@alignCast(hacks.original_dlsym_func_ptr.?(opengl_lib, "glXGetProcAddress")));
     if (GetProcAddress == null) @panic("Failed to get glXGetProcAddress pointer");
 
-    GetProcAddressARB = @ptrCast(hacks.original_dlsym_func_ptr.?(opengl_lib, "glXGetProcAddressARB"));
+    GetProcAddressARB = @ptrCast(@alignCast(hacks.original_dlsym_func_ptr.?(opengl_lib, "glXGetProcAddressARB")));
     if (GetProcAddressARB == null) @panic("Failed to get glXGetProcAddressARB pointer");
 
     const manual_loader = if (arb) GetProcAddressARB.? else GetProcAddress.?;

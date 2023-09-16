@@ -4,7 +4,7 @@ const bqueue = @import("../bounded_queue.zig");
 const overlay_gui = @import("overlay_gui");
 const vkl = @import("vk_layer_stubs.zig");
 
-const vk = @import("../vk.zig");
+const vk = @import("vk");
 
 
 pub const DeviceData = struct

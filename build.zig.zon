@@ -13,10 +13,25 @@
             .hash = "1220b32a616236fd26f0e4f063f3f11f5c5b83943d1fd71c367cf0bdbebedbf42385",
             .url = "https://github.com/r4gus/uuid-zig/archive/945510cc585daaad62c83f485f80505480cbc9be.tar.gz",
         },
+        .vulkan_zig = .{
+            .url = "https://github.com/Snektron/vulkan-zig/archive/510c6b836b7b016572c43bd980abf4d643fdf066.tar.gz",
+            // https://multiformats.io/multihash/#sha2-256-256-bits-aka-sha256
+            // "1220" + sha256sum
+            // run zig build with a url and fake hash to cause zig to generate
+            // an error message with the expected hash, ex:
+            // .url = "https://whatever.com/file.tar.gz"
+            // .hash = "12200000000000000000000000000000000000000000000000000000000000000000"
+            .hash = "12205fcba4cd4d81ac268810e136218ed4a2eeef49f185b23fb37a71cabcc62d5a6a",
+        },
         .ws =
         .{
             .hash = "1220c8cb7a2de9ceb9088f5b080138c44c1d8d73e3d9070d90820bd08546110f3eda",
             .url = "https://github.com/joshua-software-dev/ws/archive/b13b9aea0c33c00ea974b0d97e6c903b72a659af.tar.gz",
+        },
+        .zgl =
+        .{
+            .hash = "122079101336f0a641542a9b474203df86f96f600acd67517318acb2a1fbe5e0b6cb",
+            .url = "https://github.com/ziglibs/zgl/archive/81d6990d2849ffd2d082f6ae364a03cc0162ba7e.tar.gz",
         },
         .ziglyph =
         .{

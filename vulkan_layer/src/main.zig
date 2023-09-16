@@ -2,13 +2,14 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const blacklist = @import("blacklist_processes.zig");
+const build_options = @import("vulkan_layer_build_options");
 const disch = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
 const vkt = @import("setup/vk_types.zig");
 
-const vk = @import("vk.zig");
+const vk = @import("vk");
 
 
 // Zig scoped logger set based on compile mode
@@ -45,7 +46,9 @@ const LAYER_NAME = "VK_LAYER_Lurk_" ++ switch (builtin.cpu.arch)
 {
     .x86 => "x86_32",
     .x86_64 => "x86_64",
-    else => @panic("Unsupported CPU architecture"),
+    .arm, .armeb => "arm32",
+    .aarch64, .aarch64_be, .aarch64_32 => "arm64",
+    else => if (!build_options.allow_any_arch) @panic("Unsupported CPU architecture"),
 };
 const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++

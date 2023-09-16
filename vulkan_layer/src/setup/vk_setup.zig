@@ -7,7 +7,7 @@ const vkh = @import("vk_helpers.zig");
 const vkl = @import("vk_layer_stubs.zig");
 const vkt = @import("vk_types.zig");
 
-const vk = @import("../vk.zig");
+const vk = @import("vk");
 
 
 fn setup_swapchain_data_pipeline

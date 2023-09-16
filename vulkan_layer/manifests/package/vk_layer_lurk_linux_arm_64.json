@@ -1,9 +1,9 @@
 {
   "file_format_version" : "1.0.0",
   "layer" : {
-    "name": "VK_LAYER_Lurk_x86_64",
+    "name": "VK_LAYER_Lurk_arm_64",
     "type": "GLOBAL",
-    "library_path": "..\\..\\..\\zig-out\\lib\\libvulkan_layer_lurk.dll",
+    "library_path": "/usr/lib64/libvulkan_layer_lurk.so",
     "api_version": "1.3.0",
     "implementation_version": "1",
     "description": "Lurk as a Vulkan Layer - https://github.com/joshua-software-dev/Lurk",

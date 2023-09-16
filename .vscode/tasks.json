@@ -4,27 +4,40 @@
         {
             "label": "build cli",
             "type": "shell",
-            "command": "zig build",
+            "command": "zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Dbuild_cli=true -Dbuild_gl=false -Dbuild_vk=false",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}/cli_tool_lurk/"
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "build opengl",
+            "type": "shell",
+            "command": "zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Dbuild_cli=false -Dbuild_gl=true -Dbuild_vk=false",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
             }
         },
 		{
-            "label": "build layer",
+            "label": "build vulkan",
             "type": "shell",
-            "command": "zig build",
+            "command": "zig build -Dcpu=baseline -Dtarget=x86_64-linux-gnu -Dbuild_cli=false -Dbuild_gl=false -Dbuild_vk=true",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}/vk_layer_lurk/"
+                "cwd": "${workspaceFolder}"
             }
         }
 	]

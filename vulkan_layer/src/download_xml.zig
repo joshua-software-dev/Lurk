@@ -126,7 +126,7 @@ fn fetch(step: *std.Build.Step, url: []const u8, destination_path: []const u8) !
 pub fn download_xml(self: *std.build.Step, progress: *std.Progress.Node) !void
 {
     _ = progress;
-    const xml_path = @as([]const u8, self.owner.pathFromRoot("src/vk.xml"));
+    const xml_path = @as([]const u8, self.owner.pathFromRoot("zig-cache/vk.xml"));
 
     var file_exists = true;
     std.fs.accessAbsolute(xml_path, .{}) catch { file_exists = false; };

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const vkt = @import("vk_types.zig");
 
-const vk = @import("../vk.zig");
+const vk = @import("vk");
 
 
 pub var first_alloc_complete = false;
