@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const bqueue = @import("../bounded_queue.zig");
 const overlay_gui = @import("overlay_gui");
 const vkl = @import("vk_layer_stubs.zig");
 

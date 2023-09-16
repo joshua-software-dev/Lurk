@@ -331,3 +331,32 @@ pub const DiscordState = struct
         }
     }
 };
+
+// might be useful at some point
+fn get_hash_map_required_bytes(comptime K: type, comptime V: type, comptime buffer_capacity: u32) usize
+{
+    const Header = struct {
+        values: [*]V,
+        keys: [*]K,
+        capacity: u32,
+    };
+
+    const header_align = @alignOf(Header);
+    const key_align = if (@sizeOf(K) == 0) 1 else @alignOf(K);
+    const val_align = if (@sizeOf(V) == 0) 1 else @alignOf(V);
+    const max_align = comptime @max(header_align, key_align, val_align);
+
+    const align_of_metadata = 1;
+    _ = align_of_metadata;
+    const size_of_metadata = 1;
+
+    const meta_size = @sizeOf(Header) + buffer_capacity * size_of_metadata;
+
+    const keys_start = std.mem.alignForward(usize, meta_size, key_align);
+    const keys_end = keys_start + buffer_capacity * @sizeOf(K);
+
+    const vals_start = std.mem.alignForward(usize, keys_end, val_align);
+    const vals_end = vals_start + buffer_capacity * @sizeOf(V);
+
+    return std.mem.alignForward(usize, vals_end, max_align);
+}
