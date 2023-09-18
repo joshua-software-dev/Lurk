@@ -242,6 +242,17 @@ void
     const gen_install = builder.addInstallFile(gen_cmd.addOutputFileArg("vk.zig"), "../zig-cache/vk.zig");
     gen_install.step.dependOn(&gen_cmd.step);
 
+    const zglslang_dep = builder.dependency("zware_glslang", args);
+    const zware_glslang = zglslang_dep.artifact("zware_glslang");
+
+    var found_frag_output = true;
+    std.fs.accessAbsolute(builder.pathFromRoot("vulkan_layer/src/shaders/lurk.frag.spv"), .{})
+    catch { found_frag_output = false; };
+
+    var found_vert_output = true;
+    std.fs.accessAbsolute(builder.pathFromRoot("vulkan_layer/src/shaders/lurk.vert.spv"), .{})
+    catch { found_vert_output = false; };
+
     const vulkan_layer = builder.addSharedLibrary
     (
         .{
@@ -255,6 +266,40 @@ void
     if (args.target.getCpuArch() == .x86)
     {
         vulkan_layer.link_z_notext = true;
+    }
+
+    if (!found_frag_output)
+    {
+        const frag_shader_compile = builder.addRunArtifact(zware_glslang);
+        frag_shader_compile.addArgs
+        (
+            &[_][]const u8
+            {
+                "--quiet",
+                "-V",
+                "-o",
+                "vulkan_layer/src/shaders/lurk.frag.spv",
+                "vulkan_layer/src/shaders/lurk.frag.glsl",
+            }
+        );
+        vulkan_layer.step.dependOn(&frag_shader_compile.step);
+    }
+
+    if (!found_vert_output)
+    {
+        const vert_shader_compile = builder.addRunArtifact(zware_glslang);
+        vert_shader_compile.addArgs
+        (
+            &[_][]const u8
+            {
+                "--quiet",
+                "-V",
+                "-o",
+                "vulkan_layer/src/shaders/lurk.vert.spv",
+                "vulkan_layer/src/shaders/lurk.vert.glsl",
+            }
+        );
+        vulkan_layer.step.dependOn(&vert_shader_compile.step);
     }
 
     vulkan_layer.step.dependOn(&gen_install.step);

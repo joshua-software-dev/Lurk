@@ -38,5 +38,10 @@
             .hash = "12203f350e5cd707acfc46980614c928e90b41f86cf2cbc926888293e6f5b63ad9f1",
             .url = "https://github.com/jecolon/ziglyph/archive/1201bf393a9c8ae4e1564d01e4e4d9377e2c89de.tar.gz",
         },
+        .zware_glslang =
+        .{
+            .hash = "122039dde34cb4ca371fd60d9a5fcb296fa3d69b006b256677531554f8107a519e5c",
+            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/b804abb43f42acd7ac8f388059366c191ebee80f.tar.gz",
+        }
     },
 }

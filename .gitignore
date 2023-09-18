@@ -4,8 +4,7 @@ zig-cache/*
 zig-out
 zig-out/
 zig-out/*
-vk_layer_lurk/src/vk.xml
-vk_layer_lurk/src/vk.zig
+vulkan_layer/src/shaders/*.spv
 *.deb
 *.pkg.tar.zst
 *.rpm

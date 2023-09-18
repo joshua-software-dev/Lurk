@@ -13,3 +13,4 @@ do
 done
 
 rm -rf lurk_overlay-*.zst
+rm vulkan_layer/src/shaders/*.spv
