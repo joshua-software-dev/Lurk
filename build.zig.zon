@@ -40,8 +40,8 @@
         },
         .zware_glslang =
         .{
-            .hash = "122039dde34cb4ca371fd60d9a5fcb296fa3d69b006b256677531554f8107a519e5c",
-            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/b804abb43f42acd7ac8f388059366c191ebee80f.tar.gz",
+            .hash = "1220d49a6cc817308ad1dac53c8456aff6d21d51cd0a1256c083df851def66d7aa71",
+            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/512a632a1d8f3deccd93cf963f8c823dce92eaae.tar.gz",
         }
     },
 }
