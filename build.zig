@@ -270,35 +270,65 @@ void
 
     if (!found_frag_output)
     {
+        const file =
+            std.fs.openFileAbsolute(builder.pathFromRoot("vulkan_layer/src/shaders/lurk.frag.glsl"), .{})
+            catch @panic("Failed to read lurk.frag.glsl");
+        const file_bytes = file.readToEndAlloc(builder.allocator, 4096) catch @panic("oom");
+        defer builder.allocator.free(file_bytes);
+
         const frag_shader_compile = builder.addRunArtifact(zware_glslang);
+        var new_stdio = std.ArrayList(std.Build.Step.Run.StdIo.Check)
+            .initCapacity(builder.allocator, 1) catch @panic("oom");
+        new_stdio.appendAssumeCapacity(.{ .expect_term = .{ .Exited = 0 }});
+
+        frag_shader_compile.setStdIn(.{ .bytes = builder.allocator.dupe(u8, file_bytes) catch @panic("oom") });
+        frag_shader_compile.stdio = .{ .check = new_stdio };
         frag_shader_compile.addArgs
         (
             &[_][]const u8
             {
                 "--quiet",
+                "--stdin",
                 "-V",
+                "-S",
+                "frag",
                 "-o",
                 "vulkan_layer/src/shaders/lurk.frag.spv",
-                "vulkan_layer/src/shaders/lurk.frag.glsl",
             }
         );
+
         vulkan_layer.step.dependOn(&frag_shader_compile.step);
     }
 
     if (!found_vert_output)
     {
+        const file =
+            std.fs.openFileAbsolute(builder.pathFromRoot("vulkan_layer/src/shaders/lurk.vert.glsl"), .{})
+            catch @panic("Failed to read lurk.vert.glsl");
+        const file_bytes = file.readToEndAlloc(builder.allocator, 4096) catch @panic("oom");
+        defer builder.allocator.free(file_bytes);
+
         const vert_shader_compile = builder.addRunArtifact(zware_glslang);
+        var new_stdio = std.ArrayList(std.Build.Step.Run.StdIo.Check)
+            .initCapacity(builder.allocator, 1) catch @panic("oom");
+        new_stdio.appendAssumeCapacity(.{ .expect_term = .{ .Exited = 0 }});
+
+        vert_shader_compile.setStdIn(.{ .bytes = builder.allocator.dupe(u8, file_bytes) catch @panic("oom") });
+        vert_shader_compile.stdio = .{ .check = new_stdio };
         vert_shader_compile.addArgs
         (
             &[_][]const u8
             {
                 "--quiet",
+                "--stdin",
                 "-V",
+                "-S",
+                "vert",
                 "-o",
                 "vulkan_layer/src/shaders/lurk.vert.spv",
-                "vulkan_layer/src/shaders/lurk.vert.glsl",
             }
         );
+
         vulkan_layer.step.dependOn(&vert_shader_compile.step);
     }
 
