@@ -2,8 +2,14 @@ const std = @import("std");
 const gl_load = @import("gl_load.zig");
 const hacks = @import("dlsym_hacks.zig");
 
-const cimgui = @import("cimgui.zig");
+const overlay_gui = @import("overlay_gui");
 const zgl = @import("zgl");
+
+
+const MAX_MEMORY_ALLOCATION = 1024 * 512;
+var heap_buf: []u8 = undefined;
+var heap_fba: std.heap.FixedBufferAllocator = undefined;
+var imgui_context: ?overlay_gui.ContextContainer = null;
 
 
 export fn dlsym(handle: ?*anyopaque, name: [*c]const u8) ?*anyopaque
@@ -91,44 +97,54 @@ export fn glXMakeCurrent(dpy: ?*anyopaque, drawable: ?*anyopaque, ctx: ?*anyopaq
     return gl_load.MakeCurrent.?(dpy, drawable, ctx);
 }
 
-var imgui_loaded = false;
-var our_imgui_context: [*c]cimgui.ImGuiContext = null;
 export fn glXSwapBuffers(dpy: ?*anyopaque, drawable: ?*anyopaque) void
 {
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    if (gl_load.GetCurrentContext.?() != null and !imgui_loaded)
+    if (gl_load.GetCurrentContext.?() != null and imgui_context == null)
     {
-        std.log.scoped(.GLLOAD).debug("Started the imgui stuffs", .{});
-        imgui_loaded = true;
-        const prev_imgui_ctx = cimgui.igGetCurrentContext();
-        our_imgui_context = cimgui.igCreateContext(null);
-        const io = cimgui.igGetIO();
+        const proc_is_blacklisted = false;
+        if (!proc_is_blacklisted)
+        {
+            heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
+            heap_fba = std.heap.FixedBufferAllocator.init(heap_buf);
 
-        var viewport: [4]i32 = undefined;
-        zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
+            var temp_fba = std.heap.FixedBufferAllocator.init(heap_buf[4096..]);
+            overlay_gui
+                .disch
+                .alloc_ssl_bundle(temp_fba.allocator(), heap_fba.allocator())
+                catch @panic("oom");
 
-        io.*.IniFilename = null;
-        io.*.DisplaySize = cimgui.ImVec2{ .x = @floatFromInt(viewport[2]), .y = @floatFromInt(viewport[3]), };
+            // Internal logic makes connecting multiple times idempotent
+            overlay_gui.disch.start_discord_conn(heap_fba.allocator())
+            catch @panic("Failed to start discord connection.");
 
-        _ = gl_load.ImGui_ImplOpenGL3_Init(null);
-        var current_texture: [1]i32 = undefined;
-        zgl.binding.getIntegerv(zgl.binding.TEXTURE_BINDING_2D, current_texture[0..]);
+            var viewport: [4]i32 = undefined;
+            zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
 
-        cimgui.igSetCurrentContext(prev_imgui_ctx);
-        std.log.scoped(.GLLOAD).debug("Finished the imgui stuffs", .{});
+            imgui_context = overlay_gui.create_context(@floatFromInt(viewport[2]), @floatFromInt(viewport[3]));
+
+            const old_ctx = overlay_gui.get_current_context();
+            overlay_gui.set_current_context(imgui_context.?.im_context);
+            defer overlay_gui.set_current_context(old_ctx);
+
+            _ = gl_load.ImGui_ImplOpenGL3_Init(null);
+            var current_texture: [1]i32 = undefined;
+            zgl.binding.getIntegerv(zgl.binding.TEXTURE_BINDING_2D, current_texture[0..]);
+        }
     }
 
-    const prev_imgui_ctx = cimgui.igGetCurrentContext();
-    cimgui.igSetCurrentContext(our_imgui_context);
+    var viewport: [4]i32 = undefined;
+    zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
+
+    const old_ctx = overlay_gui.get_current_context();
+    overlay_gui.set_current_context(imgui_context.?.im_context);
 
     gl_load.ImGui_ImplOpenGL3_NewFrame();
-    cimgui.igNewFrame();
-    cimgui.igSeparator();
-    cimgui.igSeparator();
-    cimgui.igSeparator();
-    cimgui.igRender();
-    gl_load.ImGui_ImplOpenGL3_RenderDrawData(cimgui.igGetDrawData());
-    cimgui.igSetCurrentContext(prev_imgui_ctx);
+    overlay_gui
+        .draw_frame(imgui_context.?.im_io, @intCast(viewport[2]), @intCast(viewport[3]))
+        catch @panic("Unexpected error while drawing frame");
+    gl_load.ImGui_ImplOpenGL3_RenderDrawData(overlay_gui.get_draw_data());
+    overlay_gui.set_current_context(old_ctx);
 
     gl_load.SwapBuffers.?(dpy, drawable);
 }

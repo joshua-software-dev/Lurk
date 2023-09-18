@@ -217,20 +217,13 @@ void
     }
 }
 
-pub fn draw_frame(display_x: u32, display_y: u32) !void
+pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
 {
-    const new_data_available = disch.handle_next_message()
-        catch |err| switch (err)
-        {
-            std.net.Stream.ReadError.NotOpenForReading => return,
-            std.net.Stream.WriteError.NotOpenForWriting => return,
-            else => return err,
-        };
-
-    if (!new_data_available and get_draw_data() != null) return;
+    _ = try disch.handle_next_message();
 
     const margin: f32 = 20;
 
+    io.*.DisplaySize = cimgui.ImVec2{ .x = @floatFromInt(display_x), .y = @floatFromInt(display_y), };
     cimgui.igNewFrame();
     cimgui.igSetNextWindowBgAlpha(0);
 

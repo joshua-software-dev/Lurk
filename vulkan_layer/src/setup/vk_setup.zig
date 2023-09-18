@@ -1653,7 +1653,12 @@ pub fn before_present
     {
         const old_ctx = overlay_gui.get_current_context();
         overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
-        try overlay_gui.draw_frame(swapchain_data.width.?, swapchain_data.height.?);
+        try overlay_gui.draw_frame
+        (
+            swapchain_data.imgui_context.?.im_io,
+            swapchain_data.width.?,
+            swapchain_data.height.?,
+        );
 
         const draw_data = render_swapchain_display
         (

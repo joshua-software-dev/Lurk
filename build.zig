@@ -96,7 +96,8 @@ fn build_opengl_layer
 (
     builder: *std.Build,
     allow_any_arch: bool,
-    cimgui: *std.Build.Step.Compile,
+    overlay_gui_lib: *std.Build.Step.Compile,
+    overlay_gui_mod: *std.Build.Module,
     zgl_dep: *std.Build.Dependency,
     args: anytype,
 )
@@ -155,8 +156,9 @@ void
         opengl_layer.link_z_notext = true;
     }
 
-    opengl_layer.linkLibrary(cimgui);
     opengl_layer.linkLibrary(elfhacks);
+    opengl_layer.linkLibrary(overlay_gui_lib);
+    opengl_layer.addModule("overlay_gui", overlay_gui_mod);
     opengl_layer.addModule("zgl", zgl_dep.module("zgl"));
 
     const target_info = std.zig.system.NativeTargetInfo.detect(args.target) catch @panic("Failed to get target info");
@@ -595,7 +597,10 @@ pub fn build(b: *std.Build) void {
         }
     );
 
-    if (should_build_opengl) build_opengl_layer(b, allow_any_arch, cimgui, zgl_dep.?, build_args);
+    if (should_build_opengl)
+    {
+        build_opengl_layer(b, allow_any_arch, overlay_gui_lib, overlay_gui_mod, zgl_dep.?, build_args);
+    }
     if (should_build_vulkan)
     {
         build_vulkan_layer
