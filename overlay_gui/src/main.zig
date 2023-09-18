@@ -2,6 +2,8 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const cimgui = @import("cimgui.zig");
+const disc = @import("discord_ws_conn");
+pub const disch = @import("discord_conn_holder.zig");
 
 
 pub const DrawIdx = cimgui.ImDrawIdx;
@@ -105,10 +107,34 @@ pub fn destroy_context(im_context: [*c]cimgui.ImGuiContext) void
     if (unset) set_current_context(null);
 }
 
-fn draw_frame_contents(label: []const u8) void
+fn draw_frame_contents() void
 {
+    var alloc_buf: [256]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
+    _ = fba;
+
     cimgui.igSeparator();
-    cimgui.igText(label.ptr);
+
+    if (disch.conn) |*conn|
+    {
+        var it = conn.state.all_users.iterator();
+        while (it.next()) |kv|
+        {
+            const user: *disc.DiscordUser = kv.value_ptr;
+            if (user.muted)
+            {
+                cimgui.igTextColored(.{ .x = 1, .y = 0, .z = 0, .w = 1 }, user.nickname.?.constSlice().ptr);
+            }
+            else if(user.speaking)
+            {
+                cimgui.igTextColored(.{ .x = 0, .y = 1, .z = 0, .w = 1 }, user.nickname.?.constSlice().ptr);
+            }
+            else
+            {
+                cimgui.igText(user.nickname.?.constSlice().ptr);
+            }
+        }
+    }
 
     if (builtin.mode == .Debug)
     {
@@ -191,9 +217,17 @@ void
     }
 }
 
-pub fn draw_frame(draw_new_frame: bool, display_x: u32, display_y: u32, label: []const u8) void
+pub fn draw_frame(display_x: u32, display_y: u32) !void
 {
-    if (!draw_new_frame and get_draw_data() != null) return;
+    const new_data_available = disch.handle_next_message()
+        catch |err| switch (err)
+        {
+            std.net.Stream.ReadError.NotOpenForReading => return,
+            std.net.Stream.WriteError.NotOpenForWriting => return,
+            else => return err,
+        };
+
+    if (!new_data_available and get_draw_data() != null) return;
 
     const margin: f32 = 20;
 
@@ -219,7 +253,7 @@ pub fn draw_frame(draw_new_frame: bool, display_x: u32, display_y: u32, label: [
         )
     )
     {
-        draw_frame_contents(label);
+        draw_frame_contents();
     }
 
     cimgui.igEnd();

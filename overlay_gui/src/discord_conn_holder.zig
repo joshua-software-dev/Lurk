@@ -11,7 +11,7 @@ const debug = switch (builtin.mode)
 };
 
 var bundle: ?std.crypto.Certificate.Bundle = null;
-pub var conn: ?disc.DiscordWsConn = undefined;
+pub var conn: ?disc.DiscordWsConn = null;
 const timeout = 0.5 * std.time.ns_per_ms;
 
 pub fn alloc_ssl_bundle(temp_allocator: std.mem.Allocator, final_allocator: std.mem.Allocator) !void

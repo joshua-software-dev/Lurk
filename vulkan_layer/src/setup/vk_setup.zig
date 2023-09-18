@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const disc = @import("../discord_conn_holder.zig");
 const overlay_gui = @import("overlay_gui");
 const shaders = @import("../shaders/vk_shaders.zig");
 const vkh = @import("vk_helpers.zig");
@@ -1654,34 +1653,7 @@ pub fn before_present
     {
         const old_ctx = overlay_gui.get_current_context();
         overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
-
-        const new_data_available = disc.handle_next_message()
-            catch |err| switch (err)
-            {
-                std.net.Stream.ReadError.NotOpenForReading => return null,
-                std.net.Stream.WriteError.NotOpenForWriting => return null,
-                else => return err,
-            };
-
-        var label: []const u8 = "Waiting to connect...\x00";
-        if (new_data_available)
-        {
-            var output_buffer: [8192]u8 = undefined;
-            var stream = std.io.fixedBufferStream(&output_buffer);
-            var writer = stream.writer();
-            try disc.conn.?.state.write_users_data_to_write_stream_ascii(writer);
-            _ = try writer.write("\x00");
-            label = stream.getWritten();
-        }
-
-        // if no new data is available, the previous complete frame will be rendered again
-        overlay_gui.draw_frame
-        (
-            new_data_available,
-            swapchain_data.width.?,
-            swapchain_data.height.?,
-            label,
-        );
+        try overlay_gui.draw_frame(swapchain_data.width.?, swapchain_data.height.?);
 
         const draw_data = render_swapchain_display
         (

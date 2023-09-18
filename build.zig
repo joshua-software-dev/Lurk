@@ -194,8 +194,8 @@ fn build_vulkan_layer
 (
     builder: *std.Build,
     allow_any_arch: bool,
-    disc: *std.Build.Module,
     overlay_gui_lib: *std.Build.Step.Compile,
+    overlay_gui_mod: *std.Build.Module,
     vk_zig_dep: *std.Build.Dependency,
     zglslang_dep: *std.Build.Dependency,
     use_system_vulkan: bool,
@@ -336,13 +336,11 @@ void
     const vulkan_mod = builder.addModule("vk", .{ .source_file = .{ .path = "zig-cache/vk.zig" } });
     vulkan_layer.addModule("vk", vulkan_mod);
 
-    vulkan_layer.addModule("discord_ws_conn", disc);
     vulkan_layer.addModule("vulkan_layer_build_options", options.createModule());
 
     vulkan_layer.addIncludePath(.{ .path = "overlay_gui/dep/cimgui/" });
     vulkan_layer.linkLibrary(overlay_gui_lib);
-    const overlay_gui = builder.addModule("overlay_gui", .{ .source_file = .{ .path = "overlay_gui/src/main.zig" } });
-    vulkan_layer.addModule("overlay_gui", overlay_gui);
+    vulkan_layer.addModule("overlay_gui", overlay_gui_mod);
 
     vulkan_layer.linkLibC();
 
@@ -569,7 +567,7 @@ pub fn build(b: *std.Build) void {
         }
     );
 
-    const overlay_gui = b.addStaticLibrary
+    const overlay_gui_lib = b.addStaticLibrary
     (
         .{
             .name = "overlay_gui",
@@ -578,13 +576,24 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }
     );
-    overlay_gui.force_pic = true;
+    overlay_gui_lib.force_pic = true;
     if (target.getCpuArch() == .x86)
     {
-        overlay_gui.link_z_notext = true;
+        overlay_gui_lib.link_z_notext = true;
     }
-    overlay_gui.addIncludePath(.{ .path = "overlay_gui/deps/cimgui/" });
-    overlay_gui.linkLibrary(cimgui);
+    overlay_gui_lib.addIncludePath(.{ .path = "overlay_gui/deps/cimgui/" });
+    overlay_gui_lib.linkLibrary(cimgui);
+
+    const overlay_gui_mod = b.addModule
+    (
+        "overlay_gui",
+        .{
+            .source_file = .{ .path = "overlay_gui/src/main.zig" },
+            .dependencies = &.{
+                .{ .name = "discord_ws_conn", .module = disc },
+            }
+        }
+    );
 
     if (should_build_opengl) build_opengl_layer(b, allow_any_arch, cimgui, zgl_dep.?, build_args);
     if (should_build_vulkan)
@@ -593,8 +602,8 @@ pub fn build(b: *std.Build) void {
         (
             b,
             allow_any_arch,
-            disc,
-            overlay_gui,
+            overlay_gui_lib,
+            overlay_gui_mod,
             vk_dep.?,
             zglslang_dep.?,
             use_system_vulkan,

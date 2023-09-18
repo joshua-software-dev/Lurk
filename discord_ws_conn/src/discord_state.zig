@@ -203,8 +203,8 @@ pub const DiscordState = struct
         result.value_ptr.*.volume = @intFromFloat(voice_state.volume);
 
         result.value_ptr.*.nickname = try std.BoundedArray(u8, MAX_NICKNAME_LENGTH).init(0);
-        try result.value_ptr.*.nickname.?.resize(voice_state.nick.len);
-        try result.value_ptr.*.nickname.?.replaceRange(0, voice_state.nick.len, voice_state.nick);
+        try result.value_ptr.*.nickname.?.appendSlice(voice_state.nick);
+        try result.value_ptr.*.nickname.?.append('\x00');
 
         result.value_ptr.*.avatar_id = null;
         if (voice_state.user.avatar) |avatar|

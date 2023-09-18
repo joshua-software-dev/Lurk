@@ -3,12 +3,12 @@ const std = @import("std");
 
 const blacklist = @import("blacklist_processes.zig");
 const build_options = @import("vulkan_layer_build_options");
-const disch = @import("discord_conn_holder.zig");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
 const vk_setup_wrappers = @import("setup/vk_setup_wrappers.zig");
 const vkt = @import("setup/vk_types.zig");
 
+const overlay_gui = @import("overlay_gui");
 const vk = @import("vk");
 
 
@@ -158,7 +158,10 @@ callconv(vk.vulkan_call_conv) vk.Result
                 vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
                 var temp_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf[4096..]);
-                disch.alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator()) catch @panic("oom");
+                overlay_gui
+                    .disch
+                    .alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator())
+                    catch @panic("oom");
                 std.log.scoped(.VKLURK).debug("Post SSL bundle alloc: {d}", .{ vk_global_state.heap_fba.end_index });
 
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
@@ -205,7 +208,7 @@ callconv(vk.vulkan_call_conv) void
 
         if (vk_global_state.instance_backing.count() == 0)
         {
-            disch.stop_discord_conn();
+            overlay_gui.disch.stop_discord_conn();
             std.heap.c_allocator.free(vk_global_state.heap_buf);
         }
 
@@ -231,7 +234,7 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
     {
         // Internal logic makes connecting multiple times idempotent
-        disch.start_discord_conn(vk_global_state.heap_fba.allocator())
+        overlay_gui.disch.start_discord_conn(vk_global_state.heap_fba.allocator())
         catch @panic("Failed to start discord connection.");
 
         std.log.scoped(.VKLURK).debug("Post connection alloc: {d}", .{ vk_global_state.heap_fba.end_index });
