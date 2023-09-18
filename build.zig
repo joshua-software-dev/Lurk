@@ -197,6 +197,7 @@ fn build_vulkan_layer
     disc: *std.Build.Module,
     overlay_gui_lib: *std.Build.Step.Compile,
     vk_zig_dep: *std.Build.Dependency,
+    zglslang_dep: *std.Build.Dependency,
     use_system_vulkan: bool,
     args: anytype,
 )
@@ -242,7 +243,6 @@ void
     const gen_install = builder.addInstallFile(gen_cmd.addOutputFileArg("vk.zig"), "../zig-cache/vk.zig");
     gen_install.step.dependOn(&gen_cmd.step);
 
-    const zglslang_dep = builder.dependency("zware_glslang", args);
     const zware_glslang = zglslang_dep.artifact("zware_glslang");
 
     var found_frag_output = true;
@@ -477,6 +477,12 @@ pub fn build(b: *std.Build) void {
         zgl_dep = b.dependency("zgl", .{});
     }
 
+    var zglslang_dep: ?*std.Build.Dependency = null;
+    if (should_build_vulkan)
+    {
+        zglslang_dep = b.dependency("zware_glslang", build_args);
+    }
+
     const uuid_dep = b.dependency("uuid", build_args);
     const ws_dep = b.dependency("ws", build_args);
     const ziglyph_dep = b.dependency("ziglyph", build_args);
@@ -553,7 +559,17 @@ pub fn build(b: *std.Build) void {
     if (should_build_opengl) build_opengl_layer(b, allow_any_arch, cimgui, zgl_dep.?, build_args);
     if (should_build_vulkan)
     {
-        build_vulkan_layer(b, allow_any_arch, disc, overlay_gui, vk_dep.?, use_system_vulkan, build_args);
+        build_vulkan_layer
+        (
+            b,
+            allow_any_arch,
+            disc,
+            overlay_gui,
+            vk_dep.?,
+            zglslang_dep.?,
+            use_system_vulkan,
+            build_args,
+        );
     }
 
     b.installFile("LICENSE", "share/licenses/lurk/LICENSE");
