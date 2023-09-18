@@ -43,6 +43,7 @@ pub fn preload_ssl_certs
 
     {
         var temp_bundle = std.crypto.Certificate.Bundle{};
+        try temp_bundle.map.ensureUnusedCapacityContext(temp_allocator, 256, .{ .cb = &temp_bundle });
         defer temp_bundle.deinit(temp_allocator);
         try temp_bundle.rescan(temp_allocator);
 
