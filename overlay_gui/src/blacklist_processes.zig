@@ -96,6 +96,6 @@ pub fn is_this_process_blacklisted() !bool
     var buf: [1024]u8 = undefined;
     const proc_name = try get_process_name(@constCast(&buf));
     stored_result = BlacklistedProcessesMap.has(proc_name);
-    std.log.scoped(.VKLURK).debug("proc_name: {s} | in blacklist: {}", .{ proc_name, stored_result.? });
+    std.log.scoped(.OVERLAY).debug("proc_name: {s} | in blacklist: {}", .{ proc_name, stored_result.? });
     return stored_result.?;
 }

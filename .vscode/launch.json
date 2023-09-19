@@ -55,7 +55,7 @@
             "preLaunchTask": "build vulkan",
         },
         {
-            "name": "(lldb|radvdebug) Launch Vulkan Layer w/ Cave Story",
+            "name": "(lldb|radvdebug) Launch Vulkan Layer w/ Cave Story Zink",
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
@@ -97,7 +97,6 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
-                "ENABLE_LURK": "1",
                 "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
             },
             "preLaunchTask": "build opengl",
@@ -110,8 +109,22 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
-                "ENABLE_LURK": "1",
                 "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+            },
+            "preLaunchTask": "build opengl",
+        },
+        {
+            "name": "(lldb) Launch OpenGL Layer w/ Cave Story Zink",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "LD_LIBRARY_PATH": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}",
+                "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so",
+                "MESA_LOADER_DRIVER_OVERRIDE": "zink",
+                "VK_LOADER_LAYERS_DISABLE": "VK_LAYER_Lurk_*",
             },
             "preLaunchTask": "build opengl",
         },
@@ -257,7 +270,7 @@
             ]
         },
         {
-            "name": "(gdb|radvdebug) Launch Vulkan Layer w/ Cave Story",
+            "name": "(gdb|radvdebug) Launch Vulkan Layer w/ Cave Story Zink",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
@@ -368,10 +381,6 @@
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
-                    "name": "ENABLE_LURK",
-                    "value": "1"
-                },
-                {
                     "name": "LD_PRELOAD",
                     "value": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
                 },
@@ -397,12 +406,45 @@
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
-                    "name": "ENABLE_LURK",
-                    "value": "1"
+                    "name": "LD_PRELOAD",
+                    "value": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+                },
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build opengl",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch OpenGL Layer w/ Cave Story Zink",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../../cavestory/doukutsu-rs",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/../realmesa/radvdebug/lib64:${LD_LIBRARY_PATH}"
                 },
                 {
                     "name": "LD_PRELOAD",
                     "value": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
+                },
+                {
+                    "name": "MESA_LOADER_DRIVER_OVERRIDE",
+                    "value": "zink"
+                },
+                {
+                    "name": "VK_LOADER_LAYERS_DISABLE",
+                    "value": "VK_LAYER_Lurk_*"
                 },
             ],
             "externalConsole": false,

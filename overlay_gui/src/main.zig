@@ -1,6 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+pub const blacklist = @import("blacklist_processes.zig");
 const cimgui = @import("cimgui.zig");
 const disc = @import("discord_ws_conn");
 pub const disch = @import("discord_conn_holder.zig");

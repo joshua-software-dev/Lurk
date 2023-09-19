@@ -1,7 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const blacklist = @import("blacklist_processes.zig");
 const build_options = @import("vulkan_layer_build_options");
 const setup = @import("setup/vk_setup.zig");
 const vk_global_state = @import("setup/vk_global_state.zig");
@@ -18,6 +17,14 @@ pub const std_options = struct
     pub const log_scope_levels: []const std.log.ScopeLevel =
     &[_]std.log.ScopeLevel
     {
+        .{
+            .scope = .OVERLAY,
+            .level = switch (builtin.mode)
+            {
+                .Debug => .debug,
+                else => .info,
+            }
+        },
         .{
             .scope = .VKLURK,
             .level = switch (builtin.mode)
@@ -228,7 +235,7 @@ export fn VkLayerLurk_CreateDevice
 callconv(vk.vulkan_call_conv) vk.Result
 {
     const proc_is_blacklisted =
-        blacklist.is_this_process_blacklisted()
+        overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
@@ -547,7 +554,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
     const proc_is_blacklisted =
-        blacklist.is_this_process_blacklisted()
+        overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (proc_is_blacklisted)
@@ -580,7 +587,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
     const proc_is_blacklisted =
-        blacklist.is_this_process_blacklisted()
+        overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (proc_is_blacklisted)

@@ -23,6 +23,14 @@ pub const std_options = struct
             }
         },
         .{
+            .scope = .OVERLAY,
+            .level = switch (builtin.mode)
+            {
+                .Debug => .debug,
+                else => .info,
+            }
+        },
+        .{
             .scope = .WS,
             .level = switch (builtin.mode)
             {
@@ -79,12 +87,32 @@ var heap_fba: std.heap.FixedBufferAllocator = undefined;
 var imgui_ref_count: i32 = 0;
 var imgui_context: ?overlay_gui.ContextContainer = null;
 
+var is_using_zink: ?bool = null;
 
 fn process_is_blacklisted() bool
 {
-    // TODO: Implement a way for both the GL Layer and the VK Layer to share
-    // code for this
-    return false;
+    if (gl_load.opengl_load_complete and is_using_zink == null)
+    {
+        const renderer = zgl.getString(.renderer);
+        if (renderer == null)
+        {
+            std.log.scoped(.GLLURK).warn("Failed to get opengl renderer name, continuing may fail.", .{});
+            is_using_zink = false;
+        }
+        else if (std.mem.indexOf(u8, renderer.?, "zink") != null)
+        {
+            // Prefer using the vulkan layer instead of gl when running under zink
+            is_using_zink = true;
+        }
+        else
+        {
+            is_using_zink = false;
+        }
+    }
+
+    if (is_using_zink != null and is_using_zink.?) return true;
+    return overlay_gui.blacklist.is_this_process_blacklisted()
+        catch @panic("Failed to validate process blacklist");
 }
 
 fn create_imgui_context() void
@@ -177,9 +205,7 @@ export fn glXGetProcAddressARB(procedure_name: [*c]const u8) ?*anyopaque
 
 export fn glXCreateContext(dpy: ?*anyopaque, vis: ?*anyopaque, share_list: ?*anyopaque, arg_direct: i32) ?*anyopaque
 {
-    std.log.scoped(.GLLURK).debug("glXCreateContext called", .{});
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    std.log.scoped(.GLLURK).debug("glXCreateContext finished loading procedures", .{});
 
     const result = gl_load.CreateContext.?(dpy, vis, share_list, arg_direct);
     if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
@@ -196,9 +222,7 @@ export fn glXCreateContextAttribs
 )
 ?*anyopaque
 {
-    std.log.scoped(.GLLURK).debug("glXCreateContextAttribs called", .{});
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    std.log.scoped(.GLLURK).debug("glXCreateContextAttribs finished loading procedures", .{});
 
     const result = gl_load.CreateContextAttribs.?(dpy, config, share_context, direct, attrib_list);
     if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
@@ -215,9 +239,7 @@ export fn glXCreateContextAttribsARB
 )
 ?*anyopaque
 {
-    std.log.scoped(.GLLURK).debug("glXCreateContextAttribsARB called", .{});
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    std.log.scoped(.GLLURK).debug("glXCreateContextAttribsARB finished loading procedures", .{});
 
     const result = gl_load.CreateContextAttribsARB.?(dpy, config, share_context, direct, arg_attrib_list);
     if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
