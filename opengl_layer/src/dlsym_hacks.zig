@@ -71,32 +71,35 @@ pub var original_dlsym_func_ptr: ?*fn (?*anyopaque, [*c]const u8) align(8) callc
 
 pub fn get_original_func_ptrs() !void
 {
-    std.log.scoped(.HACKS).info("Hooking dlopen and dlsym...", .{});
+    std.log.scoped(.GLLURK).debug("Hooking dlopen and dlsym...", .{});
 
-    var libdl: eh_obj_t = undefined;
-    if (eh_find_obj(&libdl, "*libdl.so*") > 0) // error
+    const dlls_to_try = [_][]const u8{ "*libdl.so*", "*libc.so*", "*libc.*.so*" };
+    for (dlls_to_try) |dll|
     {
-        if (eh_find_obj(&libdl, "*libc.so*") > 0) // error
+        var libdl: eh_obj_t = undefined;
+        if (eh_find_obj(&libdl, dll.ptr) > 0) // error
         {
-            return error.CouldNotHook;
+            continue;
         }
+
+        original_dlopen_func_ptr = undefined;
+        if (eh_find_sym(&libdl, "dlopen", @ptrCast(&original_dlopen_func_ptr.?)) > 0) // error
+        {
+            original_dlopen_func_ptr = null;
+        }
+
+        original_dlsym_func_ptr = undefined;
+        if (eh_find_sym(&libdl, "dlsym", @ptrCast(&original_dlsym_func_ptr.?)) > 0) // error
+        {
+            original_dlsym_func_ptr = null;
+        }
+        _ = eh_destroy_obj(&libdl);
+
+        if (original_dlopen_func_ptr != null and original_dlsym_func_ptr != null) break;
     }
 
-    original_dlopen_func_ptr = undefined;
-    if (eh_find_sym(&libdl, "dlopen", @ptrCast(&original_dlopen_func_ptr.?)) > 0) // error
-    {
-        original_dlopen_func_ptr = null;
-        return error.DlOpenNotFound;
-    }
-
-    original_dlsym_func_ptr = undefined;
-    if (eh_find_sym(&libdl, "dlsym", @ptrCast(&original_dlsym_func_ptr.?)) > 0) // error
-    {
-        original_dlsym_func_ptr = null;
-        return error.DlSymNotFound;
-    }
-
-    _ = eh_destroy_obj(&libdl);
+    if (original_dlopen_func_ptr == null) return error.FailedToFindDlopen;
+    if (original_dlsym_func_ptr == null) return error.FailedToFindDlsym;
 }
 
 

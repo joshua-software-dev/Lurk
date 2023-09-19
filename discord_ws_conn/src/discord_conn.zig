@@ -216,7 +216,7 @@ pub const DiscordWsConn = struct
                 .POST,
                 HTTP_API_URI,
                 headers,
-                std.http.Client.Options { .max_redirects = 10 }
+                .{ .max_redirects = 10 }
             );
             req.transfer_encoding = .chunked;
             defer req.deinit();

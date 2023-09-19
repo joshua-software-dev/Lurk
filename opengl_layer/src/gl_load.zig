@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const hacks = @import("dlsym_hacks.zig");
 
 const zgl = @import("zgl");
@@ -49,6 +51,7 @@ fn load_pointer_table(arb: bool, name: [:0]const u8) ?zgl.binding.FunctionPointe
 
 pub fn dynamic_load_opengl(arb: bool) void
 {
+    std.log.scoped(.GLLURK).debug("Something loaded our OpenGL functions", .{});
     if (opengl_load_complete) @panic("Tried to dlopen opengl more than once!");
     if (!hacks.functions_loaded) @panic("Bad load order!");
 
@@ -101,4 +104,5 @@ pub fn dynamic_load_opengl(arb: bool) void
 
     zgl.loadExtensions(arb, load_pointer_table) catch @panic("Failed to load opengl context");
     opengl_load_complete = true;
+    std.log.scoped(.GLLURK).debug("Finished loading our OpenGL functions", .{});
 }
