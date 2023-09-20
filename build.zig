@@ -155,7 +155,12 @@ void
     {
         opengl_layer.link_z_notext = true;
     }
-    opengl_layer.strip = true;
+
+    if (args.optimize != .Debug)
+    {
+        opengl_layer.strip = true;
+    }
+
     opengl_layer.link_function_sections = true;
     opengl_layer.link_gc_sections = true;
     opengl_layer.link_z_relro = true;
@@ -273,7 +278,12 @@ void
     {
         vulkan_layer.link_z_notext = true;
     }
-    vulkan_layer.strip = true;
+
+    if (args.optimize != .Debug)
+    {
+        vulkan_layer.strip = true;
+    }
+
     vulkan_layer.link_function_sections = true;
     vulkan_layer.link_gc_sections = true;
     vulkan_layer.link_z_relro = true;
