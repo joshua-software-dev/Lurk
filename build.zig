@@ -199,6 +199,7 @@ void
             .install_subdir = "share/licenses/lurk/third_party"
         }
     );
+    builder.installFile("opengl_layer/scripts/lurkgl", "bin/lurkgl");
 }
 
 fn build_vulkan_layer
@@ -434,6 +435,7 @@ void
             .install_subdir = "share/licenses/lurk/third_party"
         }
     );
+    builder.installFile("vulkan_layer/scripts/lurkvk", "bin/lurkvk");
 }
 
 // Although this function looks imperative, note that its job is to

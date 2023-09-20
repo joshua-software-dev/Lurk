@@ -1,0 +1,2 @@
+#!/bin/sh
+env ENABLE_LURK=1 VK_ADD_LAYER_PATH="$VK_ADD_LAYER_PATH:/usr/share/vulkan/implicit_layer.d" VK_LOADER_LAYERS_ENABLE="$VK_LOADER_LAYERS_ENABLE,VK_LAYER_Lurk_*" "$@"

@@ -1,0 +1,2 @@
+#!/bin/sh
+env LD_PRELOAD="$LD_PRELOAD:/usr/lib/libopengl_layer_lurk.so" "$@"
