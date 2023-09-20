@@ -53,7 +53,12 @@ pub fn dynamic_load_opengl(arb: bool) void
 {
     std.log.scoped(.GLLURK).debug("Something loaded our OpenGL functions", .{});
     if (opengl_load_complete) @panic("Tried to dlopen opengl more than once!");
-    if (!hacks.functions_loaded) @panic("Bad load order!");
+
+    if (!hacks.functions_loaded)
+    {
+        std.log.scoped(.GLLURK).warn("dlsym was not hooked, trying to hook from opengl loader", .{});
+        hacks.get_original_func_ptrs() catch @panic("Failed to hook dlopen/dlsym");
+    }
 
     const opengl_lib = hacks.original_dlopen_func_ptr.?("libGL.so.1", hacks.RTLD_LAZY);
 
