@@ -8,6 +8,7 @@ const vk = @import("vk");
 
 pub const DeviceData = struct
 {
+    device_id: u32,
     device: vk.Device,
     physical_device: vk.PhysicalDevice,
     get_device_proc_addr_func: vk.PfnGetDeviceProcAddr,
@@ -36,6 +37,7 @@ pub const DrawData = struct
 };
 pub const InstanceData = struct
 {
+    instance_id: u32,
     instance: vk.Instance,
     base_wrapper: LayerBaseWrapper,
     instance_wrapper: LayerInstanceWrapper,
@@ -43,6 +45,7 @@ pub const InstanceData = struct
 };
 pub const SwapchainData = struct
 {
+    swapchain_id: u32,
     command_pool: ?vk.CommandPool,
     descriptor_layout: ?vk.DescriptorSetLayout,
     descriptor_pool: ?vk.DescriptorPool,

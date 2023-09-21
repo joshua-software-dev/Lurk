@@ -14,3 +14,7 @@ pub var wrappers_global_lock: std.Thread.Mutex = .{};
 pub var device_backing: vkt.DeviceDataHashMap = undefined;
 pub var instance_backing: vkt.InstanceDataHashMap = undefined;
 pub var swapchain_backing: vkt.SwapchainDataHashMap = undefined;
+
+pub var device_ref_count: u32 = 0;
+pub var instance_ref_count: u32 = 0;
+pub var swapchain_ref_count: u32 = 0;

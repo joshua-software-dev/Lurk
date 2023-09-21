@@ -68,8 +68,12 @@ pub fn create_instance_wrappers
     )
     catch @panic("Failed to load Vulkan Instance function table 2.");
 
+    std.log.scoped(.VKLURK).debug("Current Instance Ref: {d}", .{ vk_global_state.instance_ref_count });
+    vk_global_state.instance_ref_count += 1;
+    std.log.scoped(.VKLURK).debug("New Instance Ref: {d}|{d}", .{ vk_global_state.instance_ref_count, instance });
     return vkt.InstanceData
     {
+        .instance_id = vk_global_state.instance_ref_count,
         .instance = instance,
         .base_wrapper = base_wrapper,
         .instance_wrapper = instance_wrapper,
@@ -145,8 +149,12 @@ pub fn create_device_wrappers
         @panic("Found an existing Device with the same id when creating a new one");
     }
 
+    std.log.scoped(.VKLURK).debug("Current Device Ref: {d}", .{ vk_global_state.device_ref_count });
+    vk_global_state.device_ref_count += 1;
+    std.log.scoped(.VKLURK).debug("New Device Ref: {d}|{d}", .{ vk_global_state.device_ref_count, device });
     backing.value_ptr.* = vkt.DeviceData
     {
+        .device_id = vk_global_state.device_ref_count,
         .device = device,
         .physical_device = physical_device,
         .get_device_proc_addr_func = get_device_proc_addr,

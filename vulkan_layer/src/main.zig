@@ -61,7 +61,7 @@ const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
 
-const MAX_MEMORY_ALLOCATION = 1024 * 512;
+const MAX_MEMORY_ALLOCATION = 1024 * 512; // bytes
 
 // Create compile time hashmaps that specify which functions this layer intends
 // to hook into
@@ -154,7 +154,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
-        if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Instance: " ++ LAYER_NAME, .{});
+        std.log.scoped(.VKLURK).debug("Create Instance: {d}" ++ LAYER_NAME, .{ p_instance.* });
 
         if (vk_setup_wrappers.create_instance_wrappers(p_create_info, p_allocator, p_instance)) |inst_data|
         {
@@ -203,7 +203,7 @@ export fn VkLayerLurk_DestroyInstance
 callconv(vk.vulkan_call_conv) void
 {
     _ = p_allocator;
-    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Instance: " ++ LAYER_NAME, .{});
+    std.log.scoped(.VKLURK).debug("Destroy Instance: " ++ LAYER_NAME, .{});
 
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
@@ -211,6 +211,14 @@ callconv(vk.vulkan_call_conv) void
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
         var instance_data = vk_global_state.instance_backing.fetchRemove(instance).?;
+        std.log.scoped(.VKLURK).debug
+        (
+            "Destroyed Instance ID: {d}|{d}",
+            .{
+                instance_data.value.instance_id,
+                instance_data.value.instance
+            }
+        );
         setup.destroy_instance(instance, instance_data.value.instance_wrapper);
 
         if (vk_global_state.instance_backing.count() == 0)
@@ -252,7 +260,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
-        if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Device: " ++ LAYER_NAME, .{});
+        std.log.scoped(.VKLURK).debug("Create Device: {d}" ++ LAYER_NAME, .{ p_device.* });
 
         var device_data = vk_setup_wrappers.create_device_wrappers
         (
@@ -309,9 +317,12 @@ callconv(vk.vulkan_call_conv) void
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
-        if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
+        std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
 
-        _ = vk_global_state.device_backing.remove(device);
+        if (vk_global_state.device_backing.fetchRemove(device)) |dev|
+        {
+            std.log.scoped(.VKLURK).debug("Destroyed Device ID: {d}|{d}", .{ dev.value.device_id, dev.value.device });
+        }
         return;
     }
 
@@ -335,7 +346,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         defer vk_global_state.wrappers_global_lock.unlock();
         errdefer vk_global_state.wrappers_global_lock.unlock();
 
-        if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Create Swapchain: " ++ LAYER_NAME, .{});
+        std.log.scoped(.VKLURK).debug("Create Swapchain: {d}" ++ LAYER_NAME, .{ p_swapchain.* });
         var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(device).?;
 
         const result = device_data.device_wrapper.dispatch.vkCreateSwapchainKHR
@@ -351,6 +362,11 @@ callconv(vk.vulkan_call_conv) vk.Result
         const backing = vk_global_state.swapchain_backing.getOrPut(swapchain) catch @panic("oom");
         if (backing.found_existing)
         {
+            std.log.scoped(.VKLURK).warn
+            (
+                "A new instance was requested with the same memory address as an existing one.",
+                .{}
+            );
             setup.destroy_swapchain
             (
                 device,
@@ -359,8 +375,20 @@ callconv(vk.vulkan_call_conv) vk.Result
                 &device_data.previous_draw_data,
             );
         }
+
+        std.log.scoped(.VKLURK).debug("Current Swapchain Ref: {d}", .{ vk_global_state.swapchain_ref_count });
+        vk_global_state.swapchain_ref_count += 1;
+        std.log.scoped(.VKLURK).debug
+        (
+            "New Swapchain Ref: {d}|{d}",
+            .{
+                vk_global_state.swapchain_ref_count,
+                swapchain,
+            },
+        );
         backing.value_ptr.* = vkt.SwapchainData
         {
+            .swapchain_id = vk_global_state.swapchain_ref_count,
             .command_pool = null,
             .descriptor_layout = null,
             .descriptor_pool = null,
@@ -417,7 +445,7 @@ callconv(vk.vulkan_call_conv) void
     }
     defer if (lock_success) vk_global_state.wrappers_global_lock.unlock();
 
-    if (builtin.mode == .Debug) std.log.scoped(.VKLURK).debug("Destroy Swapchain: " ++ LAYER_NAME, .{});
+    std.log.scoped(.VKLURK).debug("Destroy Swapchain: " ++ LAYER_NAME, .{});
 
     if (swapchain == .null_handle)
     {
@@ -427,6 +455,14 @@ callconv(vk.vulkan_call_conv) void
     }
 
     var swapchain_data = vk_global_state.swapchain_backing.fetchRemove(swapchain).?;
+    std.log.scoped(.VKLURK).debug
+    (
+        "Destroyed Swapchain ID: {d}|{d}",
+        .{
+            swapchain_data.value.swapchain_id,
+            swapchain_data.value.swapchain.?
+        },
+    );
     var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(swapchain_data.value.device).?;
     setup.destroy_swapchain
     (
