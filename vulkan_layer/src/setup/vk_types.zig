@@ -39,7 +39,7 @@ pub const InstanceData = struct
 {
     instance_id: u32,
     instance: vk.Instance,
-    base_wrapper: LayerBaseWrapper,
+    get_inst_proc_addr_func_ptr: vk.PfnGetInstanceProcAddr,
     instance_wrapper: LayerInstanceWrapper,
     physical_devices: PhysicalDeviceBacking,
 };
@@ -80,14 +80,6 @@ pub const VkQueueData = struct
     fence: vk.Fence,
 };
 
-pub const LayerBaseWrapper = vk.BaseWrapper
-(
-    vk.BaseCommandFlags
-    {
-        .createInstance = true,
-        .getInstanceProcAddr = true,
-    },
-);
 pub const LayerDeviceWrapper = vk.DeviceWrapper
 (
     vk.DeviceCommandFlags

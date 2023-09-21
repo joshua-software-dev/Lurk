@@ -1147,8 +1147,14 @@ void
         .usage = usage,
         .sharing_mode = .exclusive,
     };
-    buffer.* = device_wrapper.createBuffer(device, &buffer_info, null)
-    catch @panic("Vulkan function call failed: Device.CreateBuffer");
+    const create_buffer_result = device_wrapper.dispatch.vkCreateBuffer
+    (
+        device,
+        &buffer_info,
+        null,
+        buffer,
+    );
+    if (create_buffer_result != vk.Result.success) @panic("Vulkan function call failed: Device.CreateBuffer");
 
     const req = device_wrapper.getBufferMemoryRequirements(device, buffer.*);
     const alloc_info = vk.MemoryAllocateInfo
@@ -1161,8 +1167,13 @@ void
             req.memory_type_bits,
         ),
     };
-    buffer_mem.* = device_wrapper.allocateMemory(device, &alloc_info, null)
-    catch @panic("Vulkan function call failed: Device.AllocateMemory");
+    const alloc_mem_result = device_wrapper.dispatch.vkAllocateMemory(
+        device,
+        &alloc_info,
+        null,
+        buffer_mem,
+    );
+    if (alloc_mem_result != vk.Result.success) @panic("Vulkan function call failed: Device.AllocateMemory");
 
     device_wrapper.bindBufferMemory(device, buffer.*, buffer_mem.*, 0)
     catch @panic("Vulkan function call failed: Device.BindBufferMemory");

@@ -661,7 +661,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
     {
         defer vk_global_state.wrappers_global_lock.unlock();
         const instance_data: vkt.InstanceData = vk_global_state.instance_backing.get(instance).?;
-        return @ptrCast(@alignCast(instance_data.base_wrapper.getInstanceProcAddr(instance, p_name)));
+        return @ptrCast(@alignCast(instance_data.get_inst_proc_addr_func_ptr(instance, p_name)));
     }
 
     @panic("Failed to get global vtable lock");
