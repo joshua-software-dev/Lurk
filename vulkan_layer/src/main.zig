@@ -378,7 +378,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             .pipeline_layout = null,
             .pipeline = null,
             .render_pass = null,
-            .swapchain = p_swapchain.*,
+            .swapchain = swapchain,
             .upload_font_buffer_mem = null,
             .upload_font_buffer = null,
             .width = null,
