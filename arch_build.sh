@@ -14,7 +14,7 @@ fpm -f -t pacman -a x86_64 -p "lurk_overlay-$ver-x86_64.pkg.tar.zst" --version "
 
 rm -rf zig-out/
 printf "zig build -Dcpu=baseline -Dtarget=x86-linux-gnu -Doptimize=$optimize\n"
-zig build -Dcpu=baseline -Dtarget=x86-linux-gnu -Doptimize=$optimize
+zig build -Dcpu=baseline -Dtarget=x86-linux-gnu -Doptimize=$optimize -Dbuild_cli=false
 rm -rf zig-out/bin/
 rm -rf zig-out/share/licenses
 fpm -f -t pacman -a x86_64 -p "lurk_overlay-$ver-x86.pkg.tar.zst"    --version "$ver" --name lib32-lurk_overlay lib32=/usr/

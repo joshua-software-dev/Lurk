@@ -530,7 +530,8 @@ pub fn build(b: *std.Build) void {
     var zglslang_dep: ?*std.Build.Dependency = null;
     if (should_build_vulkan)
     {
-        zglslang_dep = b.dependency("zware_glslang", build_args);
+        // build with debug for faster build times
+        zglslang_dep = b.dependency("zware_glslang", .{ .optimize = .Debug });
     }
 
     const uuid_dep = b.dependency("uuid", build_args);
