@@ -148,6 +148,7 @@ pub fn create_device_wrappers
     backing.value_ptr.* = vkt.DeviceData
     {
         .device = device,
+        .physical_device = physical_device,
         .get_device_proc_addr_func = get_device_proc_addr,
         .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
         .graphic_queue = null,

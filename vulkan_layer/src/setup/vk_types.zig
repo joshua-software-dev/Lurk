@@ -9,6 +9,7 @@ const vk = @import("vk");
 pub const DeviceData = struct
 {
     device: vk.Device,
+    physical_device: vk.PhysicalDevice,
     get_device_proc_addr_func: vk.PfnGetDeviceProcAddr,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
     graphic_queue: ?*VkQueueData,

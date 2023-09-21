@@ -329,6 +329,7 @@ void
         .allocation_size = font_image_req.size,
         .memory_type_index = vkh.vk_memory_type
         (
+            device,
             vk.MemoryPropertyFlags{ .device_local_bit = true, },
             font_image_req.memory_type_bits
         ),
@@ -951,6 +952,7 @@ void
         .allocation_size = upload_buffer_req.size,
         .memory_type_index = vkh.vk_memory_type
         (
+            device,
             vk.MemoryPropertyFlags{ .host_visible_bit = true, },
             upload_buffer_req.memory_type_bits
         ),
@@ -1152,7 +1154,12 @@ void
     const alloc_info = vk.MemoryAllocateInfo
     {
         .allocation_size = req.size,
-        .memory_type_index = vkh.vk_memory_type(vk.MemoryPropertyFlags{ .host_visible_bit = true, }, req.memory_type_bits),
+        .memory_type_index = vkh.vk_memory_type
+        (
+            device,
+            vk.MemoryPropertyFlags{ .host_visible_bit = true, },
+            req.memory_type_bits,
+        ),
     };
     buffer_mem.* = device_wrapper.allocateMemory(device, &alloc_info, null)
     catch @panic("Vulkan function call failed: Device.AllocateMemory");

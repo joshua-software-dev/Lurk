@@ -278,7 +278,6 @@ callconv(vk.vulkan_call_conv) vk.Result
 
         const instance_data = maybe_instance_data.?;
 
-        setup.get_physical_mem_props(physical_device, instance_data.instance_wrapper);
         setup.device_map_queues
         (
             p_create_info,
