@@ -599,7 +599,7 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
         {
             // allocate much less memory for only the basics
             vk_global_state.first_alloc_complete = true;
-            vk_global_state.heap_buf = std.heap.c_allocator.create([1024*20]u8) catch @panic("oom");
+            vk_global_state.heap_buf = std.heap.c_allocator.create([1024*64]u8) catch @panic("oom");
             vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
             vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
