@@ -394,7 +394,7 @@ callconv(vk.vulkan_call_conv) vk.Result
             device_data.device_wrapper,
             p_create_info,
             backing.value_ptr,
-            &device_data.graphic_queue,
+            device_data.graphic_queue.?,
         );
 
         return result;
@@ -507,10 +507,14 @@ callconv(vk.vulkan_call_conv) vk.Result
                     p_present_info.p_wait_semaphores,
                     p_present_info.wait_semaphore_count,
                     p_present_info.p_image_indices[i],
-                    &device_data.graphic_queue,
+                    device_data.graphic_queue.?,
                     &device_data.previous_draw_data,
                     swapchain_data.?
-                ) catch @panic("Unexpected error while reading from discord connection");
+                ) catch |err|
+                {
+                    std.log.scoped(.VKLURK).err("{any}", .{ err });
+                    return final_result;
+                };
 
                 var present_info = p_present_info.*;
                 if (maybe_draw_data) |draw_data|

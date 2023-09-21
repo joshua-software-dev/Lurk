@@ -405,7 +405,7 @@ pub fn setup_swapchain
     device_wrapper: vkt.LayerDeviceWrapper,
     p_create_info: *const vk.SwapchainCreateInfoKHR,
     swapchain_data: *vkt.SwapchainData,
-    g_graphic_queue: *const ?vkt.VkQueueData,
+    g_graphic_queue: *const vkt.VkQueueData,
 )
 void
 {
@@ -587,7 +587,7 @@ void
     const cmd_buffer_pool_info = vk.CommandPoolCreateInfo
     {
         .flags = vk.CommandPoolCreateFlags{ .reset_command_buffer_bit = true, },
-        .queue_family_index = g_graphic_queue.*.?.queue_family_index,
+        .queue_family_index = g_graphic_queue.queue_family_index,
     };
     swapchain_data.command_pool = device_wrapper.createCommandPool(device, &cmd_buffer_pool_info, null)
     catch @panic("Vulkan function call failed: Device.CreateCommandPool");
@@ -714,39 +714,6 @@ void
     _ = instance_wrapper;
 }
 
-pub fn get_physical_mem_props
-(
-    physical_device: vk.PhysicalDevice,
-    instance_wrapper: vkt.LayerInstanceWrapper,
-)
-void
-{
-    vkh.physical_mem_props = instance_wrapper.getPhysicalDeviceMemoryProperties(physical_device);
-}
-
-fn new_queue_data
-(
-    data: *vkt.VkQueueData,
-    device: vk.Device,
-    device_wrapper: vkt.LayerDeviceWrapper,
-    g_graphic_queue: *?vkt.VkQueueData,
-)
-void
-{
-    // Fence synchronizing access to queries on that queue.
-    const fence_info = vk.FenceCreateInfo
-    {
-        .flags = vk.FenceCreateFlags{ .signaled_bit = true, },
-    };
-    data.fence = device_wrapper.createFence(device, &fence_info, null)
-    catch @panic("Vulkan function call failed: Device.CreateFence");
-
-    if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true,}))
-    {
-        g_graphic_queue.* = data.*;
-    }
-}
-
 pub fn device_map_queues
 (
     p_create_info: *const vk.DeviceCreateInfo,
@@ -756,7 +723,7 @@ pub fn device_map_queues
     instance_wrapper: vkt.LayerInstanceWrapper,
     device_wrapper: vkt.LayerDeviceWrapper,
     g_queues: *vkt.VkQueueDataBacking,
-    g_graphic_queue: *?vkt.VkQueueData,
+    g_graphic_queue: *?*vkt.VkQueueData,
 )
 void
 {
@@ -783,26 +750,35 @@ void
         {
             g_queues.resize(g_queues.len + 1) catch @panic("Failed to get backing buffer for device queues");
             var data = &g_queues.buffer[g_queues.len - 1];
-            data.* = std.mem.zeroInit
-            (
-                vkt.VkQueueData,
-                .{
-                    .device = device,
-                    .queue_family_index = queue_family_index,
-                    .queue_flags = family_props.buffer[queue_family_index].queue_flags,
-                },
-            );
 
-            var original_queue: vk.Queue = device_wrapper.getDeviceQueue(device, queue_family_index, j);
-            data.queue = original_queue;
-
-            const set_dvc_loader_result = set_device_loader_data_func(device, &original_queue);
+            const queue = device_wrapper.getDeviceQueue(device, queue_family_index, j);
+            const set_dvc_loader_result = set_device_loader_data_func(device, @intFromEnum(queue));
             if (set_dvc_loader_result != vk.Result.success)
             {
                 @panic("Vulkan function call failed: Stubs.PfnSetDeviceLoaderData");
             }
 
-            new_queue_data(data, device, device_wrapper, g_graphic_queue);
+            // Fence synchronizing access to queries on that queue.
+            const fence_info = vk.FenceCreateInfo
+            {
+                .flags = vk.FenceCreateFlags{ .signaled_bit = true, },
+            };
+            const fence = device_wrapper.createFence(device, &fence_info, null)
+            catch @panic("Vulkan function call failed: Device.CreateFence");
+
+            data.* = vkt.VkQueueData
+            {
+                .device = device,
+                .queue_family_index = queue_family_index,
+                .queue_flags = family_props.buffer[queue_family_index].queue_flags,
+                .queue = queue,
+                .fence = fence,
+            };
+
+            if (data.queue_flags.contains(vk.QueueFlags{ .graphics_bit = true, }))
+            {
+                g_graphic_queue.* = data;
+            }
         }
     }
 }
@@ -895,15 +871,12 @@ vkt.DrawData
         &command_buf_container,
     )
     catch @panic("Vulkan function call failed: Device.AllocateCommandBuffers");
-    // its important to make sure to save the address of the buffer early
     draw_data.command_buffer = command_buf_container[0];
 
-    // because for some reason this will mutate the address you give it...
-    // but all subsequent calls need to be against the older address
     const set_dvc_loader_result = set_device_loader_data_func
     (
         device,
-        &command_buf_container[0],
+        @intFromEnum(draw_data.command_buffer),
     );
     if (set_dvc_loader_result != vk.Result.success)
     {
@@ -1199,7 +1172,7 @@ fn render_swapchain_display
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_graphic_queue: *const ?vkt.VkQueueData,
+    g_graphic_queue: *const vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
 )
@@ -1252,7 +1225,7 @@ fn render_swapchain_display
                 .old_layout = .present_src_khr,
                 .new_layout = .color_attachment_optimal,
                 .src_queue_family_index = queue_data.queue_family_index,
-                .dst_queue_family_index = g_graphic_queue.*.?.queue_family_index,
+                .dst_queue_family_index = g_graphic_queue.queue_family_index,
                 .image = swapchain_data.images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
                 {
@@ -1500,7 +1473,7 @@ fn render_swapchain_display
 
     device_wrapper.cmdEndRenderPass(draw_data.command_buffer);
 
-    if (queue_data.queue_family_index != g_graphic_queue.*.?.queue_family_index)
+    if (g_graphic_queue.queue_family_index != queue_data.queue_family_index)
     {
         const imb_container = [1]vk.ImageMemoryBarrier
         {
@@ -1510,7 +1483,7 @@ fn render_swapchain_display
                 .dst_access_mask = vk.AccessFlags{ .color_attachment_write_bit = true, },
                 .old_layout = .present_src_khr,
                 .new_layout = .present_src_khr,
-                .src_queue_family_index = g_graphic_queue.*.?.queue_family_index,
+                .src_queue_family_index = g_graphic_queue.queue_family_index,
                 .dst_queue_family_index = queue_data.queue_family_index,
                 .image = swapchain_data.images.get(image_index),
                 .subresource_range = vk.ImageSubresourceRange
@@ -1541,7 +1514,7 @@ fn render_swapchain_display
     device_wrapper.endCommandBuffer(draw_data.command_buffer)
     catch @panic("Vulkan function call failed: Device.EndCommandBuffer");
 
-    if (wait_semaphore_count == 0 and queue_data.queue != g_graphic_queue.*.?.queue)
+    if (wait_semaphore_count == 0 and g_graphic_queue.queue != queue_data.queue)
     {
         const stages_wait_container = [1]vk.PipelineStageFlags
         {
@@ -1588,7 +1561,7 @@ fn render_swapchain_display
             },
         };
 
-        device_wrapper.queueSubmit(g_graphic_queue.*.?.queue, 1, &submit_info_container2, draw_data.fence)
+        device_wrapper.queueSubmit(g_graphic_queue.queue, 1, &submit_info_container2, draw_data.fence)
         catch @panic("Vulkan function call failed: Device.QueueSubmit 2");
     }
     else
@@ -1627,7 +1600,7 @@ fn render_swapchain_display
             },
         };
 
-        device_wrapper.queueSubmit(g_graphic_queue.*.?.queue, 1, &submit_info_container, draw_data.fence)
+        device_wrapper.queueSubmit(g_graphic_queue.queue, 1, &submit_info_container, draw_data.fence)
         catch @panic("Vulkan function call failed: Device.QueueSubmit");
     }
 
@@ -1643,7 +1616,7 @@ pub fn before_present
     p_wait_semaphores: ?[*]const vk.Semaphore,
     wait_semaphore_count: u32,
     image_index: u32,
-    g_graphic_queue: *const ?vkt.VkQueueData,
+    g_graphic_queue: *const vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
 )

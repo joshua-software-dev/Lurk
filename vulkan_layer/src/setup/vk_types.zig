@@ -11,7 +11,7 @@ pub const DeviceData = struct
     device: vk.Device,
     get_device_proc_addr_func: vk.PfnGetDeviceProcAddr,
     set_device_loader_data_func: vkl.PfnSetDeviceLoaderData,
-    graphic_queue: ?VkQueueData,
+    graphic_queue: ?*VkQueueData,
     queues: VkQueueDataBacking,
     previous_draw_data: ?DrawData,
     device_wrapper: LayerDeviceWrapper,
