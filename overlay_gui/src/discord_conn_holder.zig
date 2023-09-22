@@ -6,7 +6,7 @@ const disc = @import("discord_ws_conn");
 
 const debug = switch (builtin.mode)
 {
-    .Debug => false,
+    .Debug => true,
     else => false,
 };
 
