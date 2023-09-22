@@ -1136,7 +1136,7 @@ void
         device_wrapper.destroyBuffer(device, buffer.*, null);
     }
 
-    if (buffer_mem.* != .null_handle)
+    if (@intFromEnum(buffer_mem.*) > 0)
     {
         device_wrapper.freeMemory(device, buffer_mem.*, null);
     }

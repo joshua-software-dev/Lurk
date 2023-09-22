@@ -152,7 +152,6 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         std.log.scoped(.VKLURK).debug("Create Instance: {d}" ++ LAYER_NAME, .{ p_instance.* });
 
@@ -164,12 +163,18 @@ callconv(vk.vulkan_call_conv) vk.Result
                 vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
                 vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
-                vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.device_backing =
+                    vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
                 vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
-                vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+
+                vk_global_state.instance_backing =
+                    vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
                 vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
-                vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
+
+                vk_global_state.swapchain_backing =
+                    vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
                 vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
+
                 std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
             }
 
@@ -201,7 +206,6 @@ callconv(vk.vulkan_call_conv) void
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         var instance_data = vk_global_state.instance_backing.fetchRemove(instance).?;
         std.log.scoped(.VKLURK).debug
@@ -218,6 +222,9 @@ callconv(vk.vulkan_call_conv) void
         {
             overlay_gui.disch.stop_discord_conn();
             std.heap.c_allocator.free(vk_global_state.heap_buf);
+            vk_global_state.heap_buf = undefined;
+            vk_global_state.heap_fba = undefined;
+            vk_global_state.first_alloc_complete = false;
         }
 
         return;
@@ -239,19 +246,18 @@ callconv(vk.vulkan_call_conv) vk.Result
         overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
-    if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
-    {
-        // Internal logic makes connecting multiple times idempotent
-        overlay_gui.disch.start_discord_conn(vk_global_state.heap_fba.allocator())
-        catch @panic("Failed to start discord connection.");
-
-        std.log.scoped(.VKLURK).debug("Post connection alloc: {d}", .{ vk_global_state.heap_fba.end_index });
-    }
-
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
+
+        if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
+        {
+            // Internal logic makes connecting multiple times idempotent
+            overlay_gui.disch.start_discord_conn(vk_global_state.heap_fba.allocator())
+            catch @panic("Failed to start discord connection.");
+
+            std.log.scoped(.VKLURK).debug("Post connection alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+        }
 
         std.log.scoped(.VKLURK).debug("Create Device: {d}" ++ LAYER_NAME, .{ p_device.* });
 
@@ -308,7 +314,6 @@ callconv(vk.vulkan_call_conv) void
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         std.log.scoped(.VKLURK).debug("Destroy Device: " ++ LAYER_NAME, .{});
 
@@ -337,7 +342,6 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         std.log.scoped(.VKLURK).debug("Create Swapchain: {d}" ++ LAYER_NAME, .{ p_swapchain.* });
         var device_data: *vkt.DeviceData = vk_global_state.device_backing.getPtr(device).?;
@@ -479,7 +483,6 @@ callconv(vk.vulkan_call_conv) vk.Result
     if (vk_global_state.wrappers_global_lock.tryLock())
     {
         defer vk_global_state.wrappers_global_lock.unlock();
-        errdefer vk_global_state.wrappers_global_lock.unlock();
 
         var maybe_device_data: ?*vkt.DeviceData = null;
         var maybe_queue_data: ?*vkt.VkQueueData =
