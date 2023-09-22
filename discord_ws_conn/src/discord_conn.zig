@@ -693,6 +693,8 @@ pub const DiscordWsConn = struct
                             if (dataMsg.value.data) |data|
                             {
                                 ws_logger.debug("update: {s} {s}", .{ data.nick, data.user.id });
+                                self.state.all_users_lock.lock();
+                                defer self.state.all_users_lock.unlock();
                                 new_user = try self.state.parse_or_update_one_voice_state(dataMsg.value.data.?);
                             }
                             else

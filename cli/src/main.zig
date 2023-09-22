@@ -43,6 +43,7 @@ fn handle_signal(signal: c_int) callconv(.C) void
     if (conn) |*c|
     {
         std.log.scoped(.WS).info("Closing connection...", .{});
+        c.state.all_users_lock.lock();
         c.close();
     }
 }

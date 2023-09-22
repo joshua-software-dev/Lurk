@@ -30,8 +30,8 @@
         },
         .ws =
         .{
-            .hash = "1220c8cb7a2de9ceb9088f5b080138c44c1d8d73e3d9070d90820bd08546110f3eda",
-            .url = "https://github.com/joshua-software-dev/ws/archive/b13b9aea0c33c00ea974b0d97e6c903b72a659af.tar.gz",
+            .hash = "1220e464dc9803090b7f21cf0b0a804ed973f60499040a846bf2acadc6d433ad9720",
+            .url = "https://github.com/joshua-software-dev/ws/archive/dc7ed00f2733d95617f956a1ece33b47386304a9.tar.gz",
         },
         .zgl =
         .{

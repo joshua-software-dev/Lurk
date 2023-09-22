@@ -41,13 +41,16 @@ pub const DiscordState = struct
     const Self = @This();
     self_user_id: UserId,
     current_channel: DiscordChannel,
-    allocator: std.mem.Allocator,
+    backing_allocator: std.mem.Allocator,
+    arena: std.heap.ArenaAllocator,
+    all_users_lock: std.Thread.Mutex,
     all_users: std.StringArrayHashMapUnmanaged(DiscordUser),
 
     pub fn init(allocator: std.mem.Allocator) !DiscordState
     {
+        var arena = std.heap.ArenaAllocator.init(allocator);
         var user_map = std.StringArrayHashMapUnmanaged(DiscordUser){};
-        try user_map.ensureTotalCapacity(allocator, 128);
+        try user_map.ensureTotalCapacity(arena.allocator(), 128);
 
         return .{
             .self_user_id = try UserId.init(0),
@@ -56,18 +59,24 @@ pub const DiscordState = struct
                 .channel_id = try ChannelId.init(0),
                 .guild_id = try GuildId.init(0),
             },
-            .allocator = allocator,
+            .backing_allocator = allocator,
+            .arena = arena,
+            .all_users_lock = .{},
             .all_users = user_map,
         };
     }
 
     pub fn deinit(self: *Self) void
     {
-        self.all_users.deinit(self.allocator);
+        self.all_users.deinit(self.arena.allocator());
+        self.arena.deinit();
     }
 
     pub fn free_user_hashmap(self: *Self) void
     {
+        self.all_users_lock.lock();
+        defer self.all_users_lock.unlock();
+
         self.all_users.clearRetainingCapacity();
     }
 
@@ -137,6 +146,7 @@ pub const DiscordState = struct
             .replaceRange(0, new_channel.?.guild_id.len, new_channel.?.guild_id.slice());
     }
 
+    /// Must acquire mutex to use safely
     pub fn get_user_self(self: *Self) ?DiscordUser
     {
         if (self.self_user_id == null) return null;
@@ -149,6 +159,7 @@ pub const DiscordState = struct
         return null;
     }
 
+    /// Must acquire mutex to use safely
     pub fn parse_or_update_one_voice_state(self: *Self, voice_state: msgt.UserInfoAndVoiceState) !*DiscordUser
     {
         var result = self.all_users.getOrPutAssumeCapacity(voice_state.user.id);
@@ -217,8 +228,12 @@ pub const DiscordState = struct
         return result.value_ptr;
     }
 
+    /// Must acquire mutex to use safely
     pub fn parse_voice_state_data(self: *Self, dataMsg: msgt.VoiceStateData) !void
     {
+        self.all_users_lock.lock();
+        defer self.all_users_lock.unlock();
+
         if (dataMsg.data) |data|
         {
             for (data.voice_states) |voice_state|
@@ -230,6 +245,9 @@ pub const DiscordState = struct
 
     pub fn write_users_data_to_write_stream(self: *Self, writer: anytype) !void
     {
+        self.all_users_lock.lock();
+        defer self.all_users_lock.unlock();
+
         var alloc_buf: [256]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
         try writer.print("nickname                         | muted | speaking\n", .{});
@@ -295,6 +313,9 @@ pub const DiscordState = struct
 
     pub fn write_users_data_to_write_stream_ascii(self: *Self, writer: anytype) !void
     {
+        self.all_users_lock.lock();
+        defer self.all_users_lock.unlock();
+
         try writer.print("nickname                         | muted | speaking\n", .{});
 
         var it = self.all_users.iterator();

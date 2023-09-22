@@ -220,7 +220,11 @@ void
 
 pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
 {
-    _ = try disch.handle_next_message();
+    if (disch.conn != null and !disch.conn.?.state.all_users_lock.tryLock())
+    {
+        return; // Reuse previous frame until data is available
+    }
+    defer if (disch.conn != null) disch.conn.?.state.all_users_lock.unlock();
 
     const margin: f32 = 20;
 
