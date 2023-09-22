@@ -43,8 +43,6 @@ pub fn create_context(display_x_width: f32, display_y_height: f32) ContextContai
     var raw_context = cimgui.igCreateContext(font_atlas);
     set_current_context(raw_context);
 
-    cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
-
     const io = cimgui.igGetIO();
     io.*.Fonts = font_atlas;
     io.*.IniFilename = null;
@@ -108,11 +106,10 @@ pub fn destroy_context(im_context: [*c]cimgui.ImGuiContext) void
     if (unset) set_current_context(null);
 }
 
-fn draw_frame_contents() void
+fn draw_frame_contents() !void
 {
-    var alloc_buf: [256]u8 = undefined;
+    var alloc_buf: [1024]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
-    _ = fba;
 
     cimgui.igSeparator();
 
@@ -121,18 +118,92 @@ fn draw_frame_contents() void
         var it = conn.state.all_users.iterator();
         while (it.next()) |kv|
         {
+            fba.reset();
+
+            cimgui.igPushStyleColor_Vec4
+            (
+                cimgui.ImGuiCol_Button,
+                .{
+                    .x = 0.0,
+                    .y = 0.0,
+                    .z = 0.0,
+                    .w = 0.2,
+                }
+            );
+            defer cimgui.igPopStyleColor(1);
+
             const user: *disc.DiscordUser = kv.value_ptr;
-            if (user.muted)
+            const escaped_name = try std.Uri.escapeString(fba.allocator(), user.nickname.?.constSlice());
+            alloc_buf[escaped_name.len] = '\x00';
+            const safe_name: [:0]u8 = alloc_buf[0..escaped_name.len : 0];
+
+            if (user.muted and user.deafened)
             {
-                cimgui.igTextColored(.{ .x = 1, .y = 0, .z = 0, .w = 1 }, user.nickname.?.constSlice().ptr);
+                cimgui.igPushStyleColor_Vec4
+                (
+                    cimgui.ImGuiCol_Text,
+                    .{
+                        .x = 128.0 / 255.0,
+                        .y = 47.0 / 255.0,
+                        .z = 128.0 / 255.0,
+                        .w = 1.0,
+                    },
+                );
+                defer cimgui.igPopStyleColor(1);
+
+                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
+            }
+            else if (user.muted)
+            {
+                cimgui.igPushStyleColor_Vec4
+                (
+                    cimgui.ImGuiCol_Text,
+                    .{
+                        .x = 1.0,
+                        .y = 0.0,
+                        .z = 0.0,
+                        .w = 1.0,
+                    },
+                );
+                defer cimgui.igPopStyleColor(1);
+
+                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
+            }
+            else if (user.deafened)
+            {
+                cimgui.igPushStyleColor_Vec4
+                (
+                    cimgui.ImGuiCol_Text,
+                    .{
+                        .x = 0.0,
+                        .y = 94.0 / 255.0,
+                        .z = 1.0,
+                        .w = 1.0,
+                    },
+                );
+                defer cimgui.igPopStyleColor(1);
+
+                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
             }
             else if(user.speaking)
             {
-                cimgui.igTextColored(.{ .x = 0, .y = 1, .z = 0, .w = 1 }, user.nickname.?.constSlice().ptr);
+                cimgui.igPushStyleColor_Vec4
+                (
+                    cimgui.ImGuiCol_Text,
+                    .{
+                        .x = 0.0,
+                        .y = 1.0,
+                        .z = 0.0,
+                        .w = 1.0,
+                    },
+                );
+                defer cimgui.igPopStyleColor(1);
+
+                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
             }
             else
             {
-                cimgui.igText(user.nickname.?.constSlice().ptr);
+                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
             }
         }
     }
@@ -232,26 +303,31 @@ pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
     cimgui.igNewFrame();
     cimgui.igSetNextWindowBgAlpha(0);
 
-    const window_size = cimgui.ImVec2{ .x = 400, .y = 300, };
-    cimgui.igSetNextWindowSize(window_size, cimgui.ImGuiCond_Always);
-    set_window_position(display_x, display_y, window_size, .TOP_RIGHT, margin);
-
-    var show_window = true;
-    if
-    (
-        cimgui.igBegin
-        (
-            "Lurk",
-            &show_window,
-            (
-                cimgui.ImGuiWindowFlags_NoTitleBar |
-                cimgui.ImGuiWindowFlags_NoScrollbar |
-                cimgui.ImGuiWindowFlags_NoDecoration
-            ),
-        )
-    )
     {
-        draw_frame_contents();
+        cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
+        defer cimgui.igPopStyleVar(1);
+
+        const window_size = cimgui.ImVec2{ .x = 400, .y = 300, };
+        cimgui.igSetNextWindowSize(window_size, cimgui.ImGuiCond_Always);
+        set_window_position(display_x, display_y, window_size, .TOP_RIGHT, margin);
+
+        var show_window = true;
+        if
+        (
+            cimgui.igBegin
+            (
+                "Lurk",
+                &show_window,
+                (
+                    cimgui.ImGuiWindowFlags_NoTitleBar |
+                    cimgui.ImGuiWindowFlags_NoScrollbar |
+                    cimgui.ImGuiWindowFlags_NoDecoration
+                ),
+            )
+        )
+        {
+            try draw_frame_contents();
+        }
     }
 
     cimgui.igEnd();
