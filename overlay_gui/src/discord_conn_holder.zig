@@ -10,22 +10,15 @@ const debug = switch (builtin.mode)
     else => false,
 };
 
-var bundle: ?std.crypto.Certificate.Bundle = null;
 pub var conn: ?disc.DiscordWsConn = null;
 const timeout = 0.5 * std.time.ns_per_ms;
-
-pub fn alloc_ssl_bundle(temp_allocator: std.mem.Allocator, final_allocator: std.mem.Allocator) !void
-{
-    if (debug) return;
-    bundle = try disc.preload_ssl_certs(temp_allocator, final_allocator);
-}
 
 pub fn start_discord_conn(allocator: std.mem.Allocator) !void
 {
     if (debug) return;
     if (conn != null) return;
 
-    conn = try disc.DiscordWsConn.initMinimalAlloc(allocator, bundle);
+    conn = try disc.DiscordWsConn.init(allocator, .IguanaTLS, null);
     errdefer conn.close();
 
     std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.?.connection_uri });

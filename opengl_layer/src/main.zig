@@ -122,12 +122,6 @@ fn create_imgui_context() void
         heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
         heap_fba = std.heap.FixedBufferAllocator.init(heap_buf);
 
-        var temp_fba = std.heap.FixedBufferAllocator.init(heap_buf[4096..]);
-        overlay_gui
-            .disch
-            .alloc_ssl_bundle(temp_fba.allocator(), heap_fba.allocator())
-            catch @panic("oom");
-
         // Internal logic makes connecting multiple times idempotent
         overlay_gui.disch.start_discord_conn(heap_fba.allocator())
         catch @panic("Failed to start discord connection.");

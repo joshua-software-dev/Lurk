@@ -164,13 +164,6 @@ callconv(vk.vulkan_call_conv) vk.Result
                 vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
                 vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
-                var temp_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf[4096..]);
-                overlay_gui
-                    .disch
-                    .alloc_ssl_bundle(temp_fba.allocator(), vk_global_state.heap_fba.allocator())
-                    catch @panic("oom");
-                std.log.scoped(.VKLURK).debug("Post SSL bundle alloc: {d}", .{ vk_global_state.heap_fba.end_index });
-
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
                 vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
                 vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());

@@ -534,6 +534,7 @@ pub fn build(b: *std.Build) void {
         zglslang_dep = b.dependency("zware_glslang", .{ .optimize = .Debug });
     }
 
+    const iguana_tls_dep = b.dependency("iguanaTLS", build_args);
     const uuid_dep = b.dependency("uuid", build_args);
     const ws_dep = b.dependency("ws", build_args);
     const ziglyph_dep = b.dependency("ziglyph", build_args);
@@ -544,6 +545,7 @@ pub fn build(b: *std.Build) void {
         .{
             .source_file = .{ .path = "discord_ws_conn/src/main.zig" },
             .dependencies = &.{
+                .{ .name = "iguanaTLS", .module = iguana_tls_dep.module("iguanaTLS") },
                 .{ .name = "uuid", .module = uuid_dep.module("uuid") },
                 .{ .name = "ws", .module = ws_dep.module("ws") },
                 .{ .name = "ziglyph", .module = ziglyph_dep.module("ziglyph") },

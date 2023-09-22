@@ -1,7 +1,8 @@
 #!/bin/bash
 
 optimize="Debug"
-if [ "$1" = "safe" ]; then optimize="ReleaseSafe";
+if [ "$1" = "fast" ]; then optimize="ReleaseFast";
+elif [ "$1" = "safe" ]; then optimize="ReleaseSafe";
 elif [ "$1" = "small" ]; then optimize="ReleaseSmall";
 fi
 

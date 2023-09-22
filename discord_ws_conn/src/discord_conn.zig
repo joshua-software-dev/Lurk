@@ -2,17 +2,28 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const certs = @import("preload_ssl_certs.zig");
+const httpmode = @import("http_mode.zig");
 const msgt = @import("message_types.zig");
 const state = @import("discord_state.zig");
 
+const iguana = @import("iguanaTLS");
 const uuid = @import("uuid");
 const ws = @import("ws");
+const UnbufferedMessage = @typeInfo
+(
+    @typeInfo
+    (
+        @TypeOf(ws.UnbufferedConnection.receiveIntoBuffer)
+    ).Fn.return_type.?
+).ErrorUnion.payload;
 
 
 const CLIENT_ID = "207646673902501888";
 const EXPECTED_API_VERSION = 1;
 const HOST = "127.0.0.1";
 const HTTP_API_URL = "https://streamkit.discord.com/overlay/token";
+const HTTP_BUFFER_SIZE_IGUANATLS = 1024 * 20;
+const HTTP_BUFFER_SIZE_PROCESS = 1024 * 32;
 const JSON_BUFFER_SIZE = 1024;
 const MSG_BUFFER_START_SIZE = 1024 * 64;
 const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
@@ -28,54 +39,57 @@ const ws_logger = std.log.scoped(.WS);
 pub const DiscordWsConn = struct
 {
     const Self = @This();
-    access_token: std.BoundedArray(u8, 32),
-    allocator: std.mem.Allocator,
     connection_closed: bool = false,
     connection_uri: std.Uri,
-    msg_buffer: msgt.MessageBackingBuffer,
-    cert_bundle: std.crypto.Certificate.Bundle,
+    access_token: std.BoundedArray(u8, 32),
+    http_mode: httpmode.HttpMode,
+    cert_bundle: ?std.crypto.Certificate.Bundle,
+    msg_buffer: ?std.ArrayList(u8),
     conn: ws.UnbufferedConnection,
     state: state.DiscordState,
 
     pub fn init
     (
-        allocator: std.mem.Allocator,
-        bundle: ?std.crypto.Certificate.Bundle,
+        state_allocator: std.mem.Allocator,
+        comptime http_mode: httpmode.HttpMode,
+        comptime message_buffer: ?std.ArrayList(u8),
     )
     !DiscordWsConn
     {
-        var buf = try std.ArrayList(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE);
         var final_uri = WS_API_URI;
 
-        return .{
-            .access_token = try std.BoundedArray(u8, 32).init(0),
-            .allocator = allocator,
-            .cert_bundle = if (bundle) |*b| @constCast(b).* else try certs.preload_ssl_certs(allocator, allocator),
-            .connection_uri = final_uri,
-            .msg_buffer = .{ .dynamic = buf },
-            .conn = try connect(&final_uri),
-            .state = try state.DiscordState.init(allocator),
-        };
-    }
+        var cert_bundle: ?std.crypto.Certificate.Bundle = null;
+        switch (http_mode)
+        {
+            .StdLibraryHttp => |std_http|
+            {
+                switch (std_http.bundle)
+                {
+                    .allocate_new => |temp_allocator|
+                    {
+                        cert_bundle = try certs.preload_ssl_certs
+                        (
+                            temp_allocator,
+                            std_http.cert_allocator,
+                        );
+                    },
+                    .use_existing => |existing|
+                    {
+                        cert_bundle = existing.cert_bundle;
+                    },
+                }
+            },
+            else => {},
+        }
 
-    pub fn initMinimalAlloc
-    (
-        allocator: std.mem.Allocator,
-        bundle: ?std.crypto.Certificate.Bundle,
-    )
-    !DiscordWsConn
-    {
-        var buf = try std.ArrayListUnmanaged(u8).initCapacity(allocator, MSG_BUFFER_START_SIZE);
-        var final_uri = WS_API_URI;
-
         return .{
-            .access_token = try std.BoundedArray(u8, 32).init(0),
-            .allocator = allocator,
-            .cert_bundle = if (bundle) |*b| @constCast(b).* else try certs.preload_ssl_certs(allocator, allocator),
-            .connection_uri = final_uri,
-            .msg_buffer = .{ .fixed = buf },
+            .access_token = std.BoundedArray(u8, 32).init(0) catch unreachable,
+            .cert_bundle = cert_bundle,
             .conn = try connect(&final_uri),
-            .state = try state.DiscordState.init(allocator),
+            .connection_uri = final_uri,
+            .http_mode = http_mode,
+            .msg_buffer = message_buffer,
+            .state = try state.DiscordState.init(state_allocator),
         };
     }
 
@@ -116,15 +130,10 @@ pub const DiscordWsConn = struct
         if (!self.connection_closed)
         {
             self.connection_closed = true;
-            defer self.cert_bundle.deinit(self.allocator);
-            defer
-            {
-                switch (self.msg_buffer)
-                {
-                    .dynamic => |*d| d.deinit(),
-                    .fixed => |*f| f.deinit(self.allocator),
-                }
-            }
+
+            if (self.cert_bundle != null) self.cert_bundle.?.deinit(self.http_mode.StdLibraryHttp.cert_allocator);
+            if (self.msg_buffer != null) self.msg_buffer.?.deinit();
+
             defer self.conn.deinit();
             defer self.state.deinit();
         }
@@ -177,37 +186,140 @@ pub const DiscordWsConn = struct
         );
     }
 
-    pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
+    pub fn authorize_stage_2_iguana(self: *Self, auth_code: []const u8) !void
+    {
+        {
+            var fba_buf: [HTTP_BUFFER_SIZE_IGUANATLS]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&fba_buf);
+            var allocator = fba.allocator();
+            const json_code = try std.json.stringifyAlloc(fba.allocator(), .{ .code = auth_code, }, .{});
+
+            const out_buf = try allocator.create([512]u8);
+            defer allocator.free(out_buf);
+            var message_length: ?usize = null;
+
+            {
+                var net_stream: std.net.Stream = try std.net.tcpConnectToHost
+                (
+                    allocator,
+                    HTTP_API_URI.host.?,
+                    if (comptime std.mem.eql(u8, HTTP_API_URI.scheme, "https")) 443 else 80,
+                );
+                defer net_stream.close();
+
+                var random = blk:
+                {
+                    var seed: [std.rand.DefaultCsprng.secret_seed_length]u8 = undefined;
+                    try std.os.getrandom(&seed);
+                    break :blk std.rand.DefaultCsprng.init(seed);
+                };
+
+                var tls_stream = try iguana.client_connect
+                (
+                    .{
+                        .rand = random.random(),
+                        .reader = net_stream.reader(),
+                        .writer = net_stream.writer(),
+                        .temp_allocator = allocator,
+                        .cert_verifier = .none, // TODO: Enable this
+                    },
+                    HTTP_API_URI.host.?,
+                );
+                defer tls_stream.close_notify() catch {};
+
+                {
+                    const write_msg = try std.fmt.allocPrint
+                    (
+                        fba.allocator(),
+                        "POST {/} HTTP/1.1\r\n" ++
+                        "HOST: {s}\r\n" ++
+                        "User-Agent: Lurk (iguanaTLS)\r\n" ++
+                        "Accept: */*\r\n" ++
+                        "Content-Type: application/json\r\n" ++
+                        "Content-Length: {d}\r\n" ++
+                        "\r\n" ++
+                        "{s}\r\n" ++
+                        "\r\n",
+                        .{
+                            HTTP_API_URI,
+                            HTTP_API_URI.host.?,
+                            json_code.len,
+                            json_code,
+                        },
+                    );
+                    defer allocator.free(write_msg);
+                    _ = try tls_stream.write(write_msg);
+                }
+
+                while (true)
+                {
+                    var read_buf: [1]u8 = undefined;
+                    if ((try tls_stream.read(&read_buf)) < 1) return error.EndOfStream;
+
+                    switch (read_buf[0])
+                    {
+                        '\r' =>
+                        {
+                            var secondary_buf: [3]u8 = undefined;
+                            if ((try tls_stream.read(&secondary_buf)) < 3) return error.EndOfStream;
+
+                            if (std.mem.eql(u8, &secondary_buf, "\n\r\n")) break;
+                        },
+                        else => {}
+                    }
+                }
+
+                message_length = try tls_stream.read(&out_buf.*);
+            }
+
+            const token_holder = try std.json.parseFromSlice
+            (
+                msgt.AccessTokenHolder,
+                allocator,
+                out_buf[0..message_length.?],
+                .{},
+            );
+            defer token_holder.deinit();
+
+            self.access_token.len = 0;
+            try self.access_token.appendSlice(token_holder.value.access_token);
+        }
+
+        try self.authenticate();
+    }
+
+    pub fn authorize_stage_2_std(self: *Self, auth_code: []const u8) !void
     {
         {
             var auth_buf: [64]u8 = undefined;
             var auth_stream = std.io.fixedBufferStream(&auth_buf);
             try std.json.stringify(.{ .code = auth_code, }, .{}, auth_stream.writer());
+            const json_code = auth_stream.getWritten();
 
             // deinit unnecessary due to client.deinit calling it
             var temp_bundle = std.crypto.Certificate.Bundle
             {
-                .bytes = try self.cert_bundle.bytes.clone(self.allocator),
+                .bytes = try self.cert_bundle.?.bytes.clone(self.http_mode.StdLibraryHttp.http_allocator),
             };
 
             {
                 const now_sec = std.time.timestamp();
-                var iter = self.cert_bundle.map.iterator();
+                var iter = self.cert_bundle.?.map.iterator();
                 while (iter.next()) |it|
                 {
-                    try temp_bundle.parseCert(self.allocator, it.value_ptr.*, now_sec);
+                    try temp_bundle.parseCert(self.http_mode.StdLibraryHttp.http_allocator, it.value_ptr.*, now_sec);
                 }
             }
 
             var client = std.http.Client
             {
-                .allocator = self.allocator,
+                .allocator = self.http_mode.StdLibraryHttp.http_allocator,
                 .ca_bundle = temp_bundle,
                 .next_https_rescan_certs = false,
             };
             defer client.deinit();
 
-            var headers = std.http.Headers{ .allocator = self.allocator, };
+            var headers = std.http.Headers{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
             defer headers.deinit();
             try headers.append("Content-Type", "application/json");
 
@@ -222,7 +334,7 @@ pub const DiscordWsConn = struct
             defer req.deinit();
 
             try req.start();
-            try req.writeAll(auth_stream.getWritten());
+            try req.writeAll(json_code);
             try req.finish();
             try req.wait();
 
@@ -231,23 +343,86 @@ pub const DiscordWsConn = struct
                 return error.AuthFailed;
             }
 
-            var req_json_reader = std.json.reader(self.allocator, req.reader());
+            var req_json_reader = std.json.reader(self.http_mode.StdLibraryHttp.http_allocator, req.reader());
             defer req_json_reader.deinit();
 
-            const tokenHolder = try std.json.parseFromTokenSource
+            const token_holder = try std.json.parseFromTokenSource
             (
                 msgt.AccessTokenHolder,
-                self.allocator,
+                self.http_mode.StdLibraryHttp.http_allocator,
                 &req_json_reader,
                 .{}
             );
-            defer tokenHolder.deinit();
+            defer token_holder.deinit();
 
             self.access_token.len = 0;
-            try self.access_token.appendSlice(tokenHolder.value.access_token);
+            try self.access_token.appendSlice(token_holder.value.access_token);
         }
 
         try self.authenticate();
+    }
+
+    pub fn authorize_stage_2_process(self: *Self, auth_code: []const u8) !void
+    {
+        {
+            var fba_buf: [HTTP_BUFFER_SIZE_PROCESS]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&fba_buf);
+            var allocator = fba.allocator();
+            const json_code = try std.json.stringifyAlloc(allocator, .{ .code = auth_code, }, .{});
+
+            const result = try std.ChildProcess.exec
+            (
+                .{
+                    .allocator = allocator,
+                    .argv =
+                    &.{
+                        "curl",
+                        "-X",
+                        "POST",
+                        HTTP_API_URL,
+                        "-H",
+                        "Content-Type: application/json",
+                        "-d",
+                        json_code,
+                    },
+                    .cwd = null,
+                    .env_map = null,
+                    .max_output_bytes = JSON_BUFFER_SIZE
+                }
+            );
+
+            switch (result.term)
+            {
+                .Exited => |code| if (code != 0) return error.CommandFailed,
+                else => return error.CommandFailed,
+            }
+
+            const token_holder = try std.json.parseFromSlice
+            (
+                msgt.AccessTokenHolder,
+                allocator,
+                result.stdout,
+                .{}
+            );
+            defer token_holder.deinit();
+
+            self.access_token.len = 0;
+            try self.access_token.appendSlice(token_holder.value.access_token);
+        }
+
+        try self.authenticate();
+    }
+
+    pub fn authorize_stage_2(self: *Self, auth_code: []const u8) !void
+    {
+        std.log.scoped(.WS).debug("Using HTTP Backend: {s}", .{ @tagName(self.http_mode) });
+        switch (self.http_mode)
+        {
+            // .ChildProcess => return self.authorize_stage_2_process(auth_code),
+            .IguanaTLS => return self.authorize_stage_2_iguana(auth_code),
+            // .StdLibraryHttp => return self.authorize_stage_2_std(auth_code),
+            else => @panic("This HTTP Backend is temporarily disabled")
+        }
     }
 
     pub fn subscribe(self: *Self, event: msgt.Event, channel: ?state.DiscordChannel) !void
@@ -667,6 +842,7 @@ pub const DiscordWsConn = struct
 
                 ws_logger.debug("Attempting stage 2 auth...", .{});
                 try self.authorize_stage_2(localDataMsg.data.code);
+                ws_logger.debug("Stage 2 auth attempt finished.", .{});
             },
             .GET_SELECTED_VOICE_CHANNEL =>
             {
@@ -695,22 +871,8 @@ pub const DiscordWsConn = struct
         return true;
     }
 
-    pub fn recieve_next_msg(self: *Self, timeout_ns: u64) !bool
+    fn dispatch_handle_message(self: *Self, msg: UnbufferedMessage) !bool
     {
-        var msg = switch (self.msg_buffer)
-        {
-            .dynamic => |*d|
-            blk: {
-                d.clearRetainingCapacity();
-                break :blk try self.conn.receiveIntoWriter(d.writer(), 0, timeout_ns);
-            },
-            .fixed => |*f|
-            blk: {
-                f.clearRetainingCapacity();
-                break :blk try self.conn.receiveIntoBuffer(f.allocatedSlice(), timeout_ns);
-            },
-        };
-
         switch (msg.type)
         {
             .text =>
@@ -726,7 +888,7 @@ pub const DiscordWsConn = struct
                     .written => |write_length|
                     {
                         ws_logger.debug("msg is writer", .{});
-                        return try self.handle_message(self.msg_buffer.dynamic.items[0..@truncate(write_length)]);
+                        return try self.handle_message(self.msg_buffer.?.items[0..@truncate(write_length)]);
                     },
                     else => return error.UnexpectedMessageDataType,
                 }
@@ -747,6 +909,22 @@ pub const DiscordWsConn = struct
                 ws_logger.debug("got {s}: {any}", .{ @tagName(msg.type), msg.data });
                 return true;
             },
+        }
+    }
+
+    pub fn recieve_next_msg(self: *Self, timeout_ns: u64) !bool
+    {
+        if (self.msg_buffer == null)
+        {
+            var local_buffer: [MSG_BUFFER_START_SIZE]u8 = undefined;
+            var msg = try self.conn.receiveIntoBuffer(&local_buffer, timeout_ns);
+            return self.dispatch_handle_message(msg);
+        }
+        else
+        {
+            self.msg_buffer.?.clearRetainingCapacity();
+            var msg = try self.conn.receiveIntoWriter(self.msg_buffer.?.writer(), 0, timeout_ns);
+            return self.dispatch_handle_message(msg);
         }
     }
 };
