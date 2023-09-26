@@ -23,12 +23,12 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     conn = try disc.DiscordWsConn.init(allocator, .IguanaTLS, null);
     errdefer conn.?.close();
 
-    std.log.scoped(.VKLURK).info("Connection Success: {+/}", .{ conn.?.connection_uri });
+    std.log.scoped(.OVERLAY).info("Connection Success: {+/}", .{ conn.?.connection_uri });
 
     @atomicStore(bool, &thread_should_run, true, .Release);
     thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
 
-    std.log.scoped(.VKLURK).info("Started background thread", .{});
+    std.log.scoped(.OVERLAY).info("Started background thread", .{});
 }
 
 pub fn handle_message_thread() void
@@ -49,7 +49,7 @@ pub fn stop_discord_conn() void
     if (debug) return;
     if (conn == null)
     {
-        std.log.scoped(.VKLURK).warn("Discord connection was not started, could not close.", .{});
+        std.log.scoped(.OVERLAY).warn("Discord connection was not started, could not close.", .{});
         return;
     }
 
@@ -57,7 +57,7 @@ pub fn stop_discord_conn() void
     thread.?.join();
     thread = null;
 
-    std.log.scoped(.VKLURK).warn("Received shutdown command, closing connection to discord...", .{});
+    std.log.scoped(.OVERLAY).warn("Received shutdown command, closing connection to discord...", .{});
     conn.?.close();
-    std.log.scoped(.VKLURK).warn("Connection closed.", .{});
+    std.log.scoped(.OVERLAY).warn("Connection closed.", .{});
 }

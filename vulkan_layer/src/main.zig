@@ -159,7 +159,8 @@ callconv(vk.vulkan_call_conv) vk.Result
         {
             if (!vk_global_state.first_alloc_complete)
             {
-                vk_global_state.first_alloc_complete = true;
+                overlay_gui.load_fonts(true);
+
                 vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
                 vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
 
@@ -175,6 +176,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                     vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
                 vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
 
+                vk_global_state.first_alloc_complete = true;
                 std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
             }
 
@@ -220,6 +222,7 @@ callconv(vk.vulkan_call_conv) void
 
         if (vk_global_state.instance_backing.count() == 0)
         {
+            overlay_gui.destroy_overlay_context();
             overlay_gui.disch.stop_discord_conn();
             std.heap.c_allocator.free(vk_global_state.heap_buf);
             vk_global_state.heap_buf = undefined;
@@ -399,7 +402,6 @@ callconv(vk.vulkan_call_conv) vk.Result
             .format = null,
             .height = null,
             .image_count = null,
-            .imgui_context = null,
             .pipeline_layout = null,
             .pipeline = null,
             .render_pass = null,

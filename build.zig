@@ -1,7 +1,8 @@
 const std = @import("std");
 
-const download_xml = @import("vulkan_layer/src/download_xml.zig");
-const GitRepoStep = @import("overlay_gui/src/GitRepoStep.zig");
+const download_fonts = @import("overlay_gui/download_fonts.zig");
+const download_xml = @import("vulkan_layer/download_xml.zig");
+
 
 fn build_cli
 (
@@ -141,6 +142,15 @@ void
         }
     );
 
+    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
+    {
+        elfhacks.strip = true;
+    }
+
+    elfhacks.link_function_sections = true;
+    elfhacks.link_gc_sections = true;
+    elfhacks.link_z_relro = true;
+
     const opengl_layer = builder.addSharedLibrary
     (
         .{
@@ -156,7 +166,7 @@ void
         opengl_layer.link_z_notext = true;
     }
 
-    if (args.optimize != .Debug)
+    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
     {
         opengl_layer.strip = true;
     }
@@ -167,6 +177,21 @@ void
 
     opengl_layer.linkLibrary(elfhacks);
     opengl_layer.linkLibrary(overlay_gui_lib);
+
+    opengl_layer.addCSourceFile
+    (
+        .{
+            .file = .{ .path = "opengl_layer/deps/imgui/imgui_impl_opengl3.cpp" },
+            .flags = &[_][]const u8
+            {
+                "-std=c++11",
+                "-fno-sanitize=undefined",
+                "-ffunction-sections",
+                "-fvisibility=hidden",
+            },
+        }
+    );
+
     opengl_layer.addModule("overlay_gui", overlay_gui_mod);
     opengl_layer.addModule("zgl", zgl_dep.module("zgl"));
 
@@ -280,7 +305,7 @@ void
         vulkan_layer.link_z_notext = true;
     }
 
-    if (args.optimize != .Debug)
+    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
     {
         vulkan_layer.strip = true;
     }
@@ -497,46 +522,44 @@ pub fn build(b: *std.Build) void {
 
     const build_args = .{ .target = target, .optimize = optimize, };
 
-    const cimgui_repo = GitRepoStep.create
-    (
-        b,
-        .{
-            .url = "https://github.com/cimgui/cimgui.git",
-            .branch = "docking_inter",
-            .sha = "a21e28e74027796d983f8c8d4a639a4e304251f2",
-            .fetch_enabled = true,
-            .path = b.pathFromRoot("overlay_gui/deps/cimgui"),
-        },
-    );
-
-    var clap_dep: ?*std.Build.Dependency = null;
-    if (should_build_cli)
-    {
-        clap_dep = b.dependency("clap", build_args);
-    }
-
-    var vk_dep: ?*std.Build.Dependency = null;
-    if (should_build_vulkan)
-    {
-        vk_dep = b.dependency("vulkan_zig", .{});
-    }
-
-    var zgl_dep: ?*std.Build.Dependency = null;
-    if (should_build_opengl)
-    {
-        zgl_dep = b.dependency("zgl", .{});
-    }
-
-    var zglslang_dep: ?*std.Build.Dependency = null;
-    if (should_build_vulkan)
-    {
-        // build with debug for faster build times
-        zglslang_dep = b.dependency("zware_glslang", .{ .optimize = .Debug });
-    }
-
+    const clap_dep: ?*std.Build.Dependency =
+        if (should_build_cli)
+            b.dependency("clap", build_args)
+        else
+            null;
     const iguana_tls_dep = b.dependency("iguanaTLS", build_args);
     const uuid_dep = b.dependency("uuid", build_args);
+    const vk_dep: ?*std.Build.Dependency =
+        if (should_build_vulkan)
+            b.dependency("vulkan_zig", .{})
+        else
+            null;
     const ws_dep = b.dependency("ws", build_args);
+    const zgl_dep: ?*std.Build.Dependency =
+        if (should_build_opengl)
+            b.dependency("zgl", .{})
+        else
+            null;
+    const zglslang_dep: ?*std.Build.Dependency =
+        if (should_build_vulkan)
+            // build with debug for faster build times
+            b.dependency("zware_glslang", .{ .optimize = .Debug })
+        else
+            null;
+    const ZigImGui_dep: ?*std.Build.Dependency =
+        if (should_build_opengl or should_build_vulkan)
+            b.dependency
+            (
+                "ZigImGui",
+                .{
+                    .target = target,
+                    .optimize = optimize,
+                    .enable_freetype = true,
+                    .enable_lunasvg = false,
+                },
+            )
+        else
+            null;
     const ziglyph_dep = b.dependency("ziglyph", build_args);
 
     const disc = b.addModule
@@ -555,42 +578,8 @@ pub fn build(b: *std.Build) void {
 
     if (should_build_cli) build_cli(b, allow_any_arch, clap_dep.?, disc, build_args);
 
-    const cimgui = b.addStaticLibrary
-    (
-        .{
-            .name = "cimgui",
-            .target = target,
-            .optimize = optimize,
-        }
-    );
-    cimgui.force_pic = true;
-    if (target.getCpuArch() == .x86)
-    {
-        cimgui.link_z_notext = true;
-    }
-    cimgui.step.dependOn(&cimgui_repo.step);
-
-    cimgui.linkLibCpp();
-    cimgui.addIncludePath(.{ .path = "overlay_gui/deps/cimgui/imgui/" });
-    cimgui.addCSourceFiles
-    (
-        &[_][]const u8
-        {
-            "overlay_gui/deps/cimgui/cimgui.cpp",
-            "overlay_gui/deps/cimgui/imgui/imgui.cpp",
-            "overlay_gui/deps/cimgui/imgui/imgui_demo.cpp",
-            "overlay_gui/deps/cimgui/imgui/imgui_draw.cpp",
-            "overlay_gui/deps/cimgui/imgui/imgui_tables.cpp",
-            "overlay_gui/deps/cimgui/imgui/imgui_widgets.cpp",
-            "opengl_layer/deps/imgui/imgui_impl_opengl3.cpp",
-        },
-        &[_][]const u8
-        {
-            "-std=c++17",
-            "-fno-sanitize=undefined",
-            "-fvisibility=hidden",
-        }
-    );
+    const download_font_files = b.step("download_fonts", "Download fonts for imgui file");
+    download_font_files.makeFn = download_fonts.download_fonts;
 
     const overlay_gui_lib = b.addStaticLibrary
     (
@@ -601,13 +590,24 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }
     );
+    overlay_gui_lib.step.dependOn(download_font_files);
     overlay_gui_lib.force_pic = true;
     if (target.getCpuArch() == .x86)
     {
         overlay_gui_lib.link_z_notext = true;
     }
+
     overlay_gui_lib.addIncludePath(.{ .path = "overlay_gui/deps/cimgui/" });
-    overlay_gui_lib.linkLibrary(cimgui);
+    overlay_gui_lib.linkLibrary(ZigImGui_dep.?.artifact("cimgui"));
+
+    if (optimize != .Debug and optimize != .ReleaseSafe)
+    {
+        overlay_gui_lib.strip = true;
+    }
+
+    overlay_gui_lib.link_function_sections = true;
+    overlay_gui_lib.link_gc_sections = true;
+    overlay_gui_lib.link_z_relro = true;
 
     const overlay_gui_mod = b.addModule
     (
@@ -616,6 +616,7 @@ pub fn build(b: *std.Build) void {
             .source_file = .{ .path = "overlay_gui/src/main.zig" },
             .dependencies = &.{
                 .{ .name = "discord_ws_conn", .module = disc },
+                .{ .name = "Zig-ImGui", .module = ZigImGui_dep.?.module("Zig-ImGui") },
             }
         }
     );

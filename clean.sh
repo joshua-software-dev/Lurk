@@ -13,4 +13,7 @@ do
 done
 
 rm -rf lurk_overlay-*.zst
-rm -f vulkan_layer/src/shaders/*.spv
+rm -f overlay_gui/src/*.ttf
+rm -f overlay_gui/src/*.otf
+rm -f overlay_gui/src/*.woff
+rm -f overlay_gui/src/*.woff2

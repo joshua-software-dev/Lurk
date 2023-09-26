@@ -2,19 +2,16 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 pub const blacklist = @import("blacklist_processes.zig");
-const cimgui = @import("cimgui.zig");
-const disc = @import("discord_ws_conn");
 pub const disch = @import("discord_conn_holder.zig");
+const font = @import("font.zig");
+const state = @import("overlay_state.zig");
+
+const disc = @import("discord_ws_conn");
+const zimgui = @import("Zig-ImGui");
 
 
-pub const DrawIdx = cimgui.ImDrawIdx;
-pub const DrawVert = cimgui.ImDrawVert;
-
-pub const ContextContainer = struct
-{
-    im_context: [*c]cimgui.ImGuiContext,
-    im_io: [*c]cimgui.ImGuiIO,
-};
+pub const DrawIdx = zimgui.DrawIdx;
+pub const DrawVert = zimgui.DrawVert;
 
 const WindowPosition = enum
 {
@@ -24,43 +21,69 @@ const WindowPosition = enum
     BOTTOM_RIGHT,
 };
 
-pub fn get_current_context() [*c]cimgui.ImGuiContext
+pub fn load_fonts(use_thread: bool) void
 {
-    return cimgui.igGetCurrentContext();
+    if (state.shared_font_atlas == null)
+    {
+        state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
+        if (use_thread)
+        {
+            font.load_shared_font_background() catch @panic("Failed to start font loading thread");
+            return;
+        }
+
+        font.load_shared_font();
+    }
 }
 
-pub fn set_current_context(ctx: [*c]cimgui.ImGuiContext) void
+pub fn create_overlay_context(display_x_width: f32, display_y_height: f32) void
 {
-    cimgui.igSetCurrentContext(ctx);
+    if (state.overlay_context == null)
+    {
+        var old_ctx = zimgui.GetCurrentContext();
+        zimgui.SetCurrentContext(null);
+        defer zimgui.SetCurrentContext(old_ctx);
+
+        var temp_atlas = zimgui.FontAtlas.init_ImFontAtlas();
+        state.overlay_context = zimgui.CreateContextExt(temp_atlas);
+        zimgui.SetCurrentContext(state.overlay_context);
+
+        const io = zimgui.GetIO();
+        io.Fonts = temp_atlas;
+        io.IniFilename = null;
+        io.DisplaySize = zimgui.Vec2.init(display_x_width, display_y_height);
+    }
 }
 
-pub fn create_context(display_x_width: f32, display_y_height: f32) ContextContainer
+pub fn use_overlay_context() ?*zimgui.Context
 {
-    var old_ctx = get_current_context();
-    set_current_context(null);
-
-    var font_atlas = cimgui.ImFontAtlas_ImFontAtlas();
-    var raw_context = cimgui.igCreateContext(font_atlas);
-    set_current_context(raw_context);
-
-    const io = cimgui.igGetIO();
-    io.*.Fonts = font_atlas;
-    io.*.IniFilename = null;
-    io.*.DisplaySize = cimgui.ImVec2{ .x = display_x_width, .y = display_y_height, };
-
-    set_current_context(old_ctx);
-
-    return .{
-        .im_context = raw_context,
-        .im_io = io,
-    };
+    var old_ctx = zimgui.GetCurrentContext();
+    zimgui.SetCurrentContext(state.overlay_context);
+    return old_ctx;
 }
 
-pub fn setup_font_text_data(im_io: [*c]cimgui.ImGuiIO, x_width: *i32, y_height: *i32) ![*]u8
+pub fn restore_old_context(old_ctx: ?*zimgui.Context) void
 {
+    zimgui.SetCurrentContext(old_ctx);
+}
+
+pub fn destroy_overlay_context() void
+{
+    if (state.font_thread != null)
+    {
+        std.log.scoped(.OVERLAY).warn("Waiting for font thread to close...", .{});
+        state.font_thread.?.join();
+    }
+
+    zimgui.DestroyContextExt(state.overlay_context);
+}
+
+pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
+{
+    const im_io = zimgui.GetIO();
+
     var pixels: ?[*]u8 = undefined;
-    var bpp: i32 = 0;
-    cimgui.ImFontAtlas_GetTexDataAsRGBA32(im_io.*.Fonts, @ptrCast(&pixels.?), x_width, y_height, &bpp);
+    im_io.Fonts.?.GetTexDataAsRGBA32(&pixels, x_width, y_height);
 
     if (pixels == null) return error.InvalidTexData
     else if (x_width.* < 1 or y_height.* < 1) return error.InvalidFontSize;
@@ -68,50 +91,43 @@ pub fn setup_font_text_data(im_io: [*c]cimgui.ImGuiIO, x_width: *i32, y_height: 
     return pixels.?;
 }
 
-pub fn set_fonts_tex_ident(im_io: [*c]cimgui.ImGuiIO, id: *anyopaque) void
+pub fn set_fonts_tex_ident(id: *anyopaque) void
 {
-    cimgui.ImFontAtlas_SetTexID(im_io.*.Fonts, @ptrCast(id));
+    const im_io = zimgui.GetIO();
+    im_io.Fonts.?.TexID = id;
 }
 
-pub fn get_draw_data_draw_list(draw_data: cimgui.ImDrawData) []const [*c]cimgui.ImDrawList
+pub fn get_draw_data() ?*zimgui.DrawData
 {
-    const length: i32 = @intCast(draw_data.CmdLists.Size);
-    return @ptrCast(draw_data.CmdLists.Data[0..(if (length > -1) @intCast(length) else 0)]);
+    return zimgui.GetDrawData();
 }
 
-pub fn get_draw_list_command_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawCmd
+pub fn get_draw_data_draw_list(draw_data: *zimgui.DrawData) []const ?*zimgui.DrawList
 {
-    const length: i32 = @intCast(draw_list.CmdBuffer.Size);
-    return draw_list.CmdBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
+    return draw_data.CmdLists.Data.?[0..draw_data.CmdLists.Size];
 }
 
-pub fn get_draw_list_index_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawIdx
+pub fn get_draw_list_command_buffer(draw_list: *zimgui.DrawList) []const zimgui.DrawCmd
 {
-    const length: i32 = @intCast(draw_list.IdxBuffer.Size);
-    return draw_list.IdxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
+    return draw_list.CmdBuffer.Data.?[0..draw_list.CmdBuffer.Size];
 }
 
-pub fn get_draw_list_vertex_buffer(draw_list: cimgui.ImDrawList) []const cimgui.ImDrawVert
+pub fn get_draw_list_index_buffer(draw_list: *zimgui.DrawList) []const zimgui.DrawIdx
 {
-    const length: i32 = @intCast(draw_list.VtxBuffer.Size);
-    return draw_list.VtxBuffer.Data[0..(if (length > -1) @intCast(length) else 0)];
+    return draw_list.IdxBuffer.Data.?[0..draw_list.IdxBuffer.Size];
 }
 
-pub fn destroy_context(im_context: [*c]cimgui.ImGuiContext) void
+pub fn get_draw_list_vertex_buffer(draw_list: *zimgui.DrawList) []const zimgui.DrawVert
 {
-    var current_ctx = get_current_context();
-    var unset = im_context == current_ctx;
-
-    cimgui.igDestroyContext(im_context);
-    if (unset) set_current_context(null);
+    return draw_list.VtxBuffer.Data.?[0..draw_list.VtxBuffer.Size];
 }
 
 fn draw_frame_contents() !void
 {
-    var alloc_buf: [1024]u8 = undefined;
+    var alloc_buf: [512]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
 
-    cimgui.igSeparator();
+    zimgui.Separator();
 
     if (disch.conn) |*conn|
     {
@@ -120,97 +136,53 @@ fn draw_frame_contents() !void
         {
             fba.reset();
 
-            cimgui.igPushStyleColor_Vec4
-            (
-                cimgui.ImGuiCol_Button,
-                .{
-                    .x = 0.0,
-                    .y = 0.0,
-                    .z = 0.0,
-                    .w = 0.2,
-                }
-            );
-            defer cimgui.igPopStyleColor(1);
+            zimgui.PushStyleColor_Vec4(.Button, zimgui.Vec4.init(0.0, 0.0, 0.0, 0.2));
+            var style_count: u32 = 1;
+            defer zimgui.PopStyleColorExt(@intCast(style_count));
 
             const user: *disc.DiscordUser = kv.value_ptr;
-            const escaped_name = try std.Uri.escapeString(fba.allocator(), user.nickname.?.constSlice());
-            alloc_buf[escaped_name.len] = '\x00';
-            const safe_name: [:0]u8 = alloc_buf[0..escaped_name.len : 0];
+
+            // the fba.reset() handles this deallocation
+            var safe_name = try fba.allocator().allocSentinel(u8, user.nickname.?.constSlice().len, 0);
+            for (user.nickname.?.constSlice(), 0..) |chr, i|
+            {
+                safe_name[i] =
+                    if (chr == '\x00')
+                        ' '
+                    else if (chr == '#')
+                        '+'
+                    else
+                        chr;
+            }
 
             if (user.muted and user.deafened)
             {
-                cimgui.igPushStyleColor_Vec4
-                (
-                    cimgui.ImGuiCol_Text,
-                    .{
-                        .x = 128.0 / 255.0,
-                        .y = 47.0 / 255.0,
-                        .z = 128.0 / 255.0,
-                        .w = 1.0,
-                    },
-                );
-                defer cimgui.igPopStyleColor(1);
-
-                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
+                zimgui.PushStyleColor_Vec4(.Text, zimgui.Vec4.init(128.0 / 255.0, 47.0 / 255.0, 128.0 / 255.0, 0.2));
+                style_count += 1;
             }
             else if (user.muted)
             {
-                cimgui.igPushStyleColor_Vec4
-                (
-                    cimgui.ImGuiCol_Text,
-                    .{
-                        .x = 1.0,
-                        .y = 0.0,
-                        .z = 0.0,
-                        .w = 1.0,
-                    },
-                );
-                defer cimgui.igPopStyleColor(1);
-
-                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
+                zimgui.PushStyleColor_Vec4(.Text, zimgui.Vec4.init(1.0, 0.0, 0.0, 1.0));
+                style_count += 1;
             }
             else if (user.deafened)
             {
-                cimgui.igPushStyleColor_Vec4
-                (
-                    cimgui.ImGuiCol_Text,
-                    .{
-                        .x = 0.0,
-                        .y = 94.0 / 255.0,
-                        .z = 1.0,
-                        .w = 1.0,
-                    },
-                );
-                defer cimgui.igPopStyleColor(1);
-
-                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
+                zimgui.PushStyleColor_Vec4(.Text, zimgui.Vec4.init(0.0, 94.0 / 255.0, 1.0, 1.0));
+                style_count += 1;
             }
             else if(user.speaking)
             {
-                cimgui.igPushStyleColor_Vec4
-                (
-                    cimgui.ImGuiCol_Text,
-                    .{
-                        .x = 0.0,
-                        .y = 1.0,
-                        .z = 0.0,
-                        .w = 1.0,
-                    },
-                );
-                defer cimgui.igPopStyleColor(1);
+                zimgui.PushStyleColor_Vec4(.Text, zimgui.Vec4.init(0.0, 1.0, 0.0, 1.0));
+                style_count += 1;
+            }
 
-                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
-            }
-            else
-            {
-                _ = cimgui.igButton(safe_name[0..].ptr, .{ .x = 0, .y = 0 });
-            }
+            _ = zimgui.Button(safe_name[0..].ptr);
         }
     }
 
     if (builtin.mode == .Debug)
     {
-        cimgui.igSeparator();
+        zimgui.Separator();
     }
 }
 
@@ -218,7 +190,8 @@ fn set_window_position
 (
     display_x: u32,
     display_y: u32,
-    window_size: cimgui.ImVec2,
+    window_x: f32,
+    window_y: f32,
     position: WindowPosition,
     margin: f32,
 )
@@ -227,69 +200,52 @@ void
     switch (position)
     {
         .TOP_LEFT =>
-        {
-            cimgui.igSetNextWindowPos
+            zimgui.SetNextWindowPos
             (
-                .{
-                    .x = margin,
-                    .y = margin,
-                },
-                cimgui.ImGuiCond_Always,
-                .{
-                    .x = 0,
-                    .y = 0,
-                },
-            );
-        },
+                zimgui.Vec2.init(margin, margin)
+            ),
         .TOP_RIGHT =>
-        {
-            cimgui.igSetNextWindowPos
+            zimgui.SetNextWindowPos
             (
-                .{
-                    .x = @as(f32, @floatFromInt(display_x)) - window_size.x - margin,
-                    .y = margin,
-                },
-                cimgui.ImGuiCond_Always,
-                .{
-                    .x = 0,
-                    .y = 0,
-                },
-            );
-        },
+                zimgui.Vec2.init(@as(f32, @floatFromInt(display_x)) - window_x - margin, margin)
+            ),
         .BOTTOM_LEFT =>
-        {
-            cimgui.igSetNextWindowPos
+            zimgui.SetNextWindowPos
             (
-                .{
-                    .x = margin,
-                    .y = @as(f32, @floatFromInt(display_y)) - window_size.y - margin,
-                },
-                cimgui.ImGuiCond_Always,
-                .{
-                    .x = 0,
-                    .y = 0,
-                },
-            );
-        },
+                zimgui.Vec2.init(margin, @as(f32, @floatFromInt(display_y)) - window_y - margin)
+            ),
         .BOTTOM_RIGHT =>
-        {
-            cimgui.igSetNextWindowPos
+            zimgui.SetNextWindowPos
             (
-                .{
-                    .x = @as(f32, @floatFromInt(display_x)) - window_size.x - margin,
-                    .y = @as(f32, @floatFromInt(display_y)) - window_size.y - margin,
-                },
-                cimgui.ImGuiCond_Always,
-                .{
-                    .x = 0,
-                    .y = 0,
-                },
-            );
-        },
+                zimgui.Vec2.init
+                (
+                    @as(f32, @floatFromInt(display_x)) - window_x - margin,
+                    @as(f32, @floatFromInt(display_y)) - window_y - margin
+                )
+            ),
     }
 }
 
-pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
+pub fn is_draw_ready() !void
+{
+    if (!@atomicLoad(bool, &state.font_load_complete, .Acquire)) return error.FontNotLoaded;
+    if (@atomicLoad(bool, &state.font_thread_finished, .Acquire))
+    {
+        if (state.font_thread != null) state.font_thread.?.join();
+        state.font_thread = null;
+    }
+
+    const im_io = zimgui.GetIO();
+    if (im_io.Fonts != state.shared_font_atlas)
+    {
+        if (im_io.Fonts != null) im_io.Fonts.?.deinit();
+
+        im_io.Fonts = state.shared_font_atlas;
+        return error.FontTextureRequiresReload;
+    }
+}
+
+pub fn draw_frame(display_x: u32, display_y: u32) !void
 {
     if (disch.conn != null and !disch.conn.?.state.all_users_lock.tryLock())
     {
@@ -299,30 +255,34 @@ pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
 
     const margin: f32 = 20;
 
-    io.*.DisplaySize = cimgui.ImVec2{ .x = @floatFromInt(display_x), .y = @floatFromInt(display_y), };
-    cimgui.igNewFrame();
-    cimgui.igSetNextWindowBgAlpha(0);
+    const im_io = zimgui.GetIO();
+    im_io.DisplaySize = zimgui.Vec2.init(@floatFromInt(display_x), @floatFromInt(display_y));
+    zimgui.NewFrame();
+    zimgui.SetNextWindowBgAlpha(0);
 
     {
-        cimgui.igPushStyleVar_Float(cimgui.ImGuiStyleVar_WindowBorderSize, 0);
-        defer cimgui.igPopStyleVar(1);
+        zimgui.PushStyleVar_Float(.WindowBorderSize, 0);
+        defer zimgui.PopStyleVarExt(1);
 
-        const window_size = cimgui.ImVec2{ .x = 400, .y = 300, };
-        cimgui.igSetNextWindowSize(window_size, cimgui.ImGuiCond_Always);
-        set_window_position(display_x, display_y, window_size, .TOP_RIGHT, margin);
+        const window_size = zimgui.Vec2.init(400, 300);
+        zimgui.SetNextWindowSize(window_size);
+        set_window_position(display_x, display_y, window_size.x, window_size.y, .TOP_RIGHT, margin);
+
 
         var show_window = true;
         if
         (
-            cimgui.igBegin
+            zimgui.BeginExt
             (
                 "Lurk",
                 &show_window,
-                (
-                    cimgui.ImGuiWindowFlags_NoTitleBar |
-                    cimgui.ImGuiWindowFlags_NoScrollbar |
-                    cimgui.ImGuiWindowFlags_NoDecoration
-                ),
+                zimgui.WindowFlags
+                {
+                    .NoCollapse = true,
+                    .NoResize = true,
+                    .NoScrollbar = true,
+                    .NoTitleBar = true,
+                }
             )
         )
         {
@@ -330,12 +290,7 @@ pub fn draw_frame(io: [*c]cimgui.ImGuiIO, display_x: u32, display_y: u32) !void
         }
     }
 
-    cimgui.igEnd();
-    cimgui.igEndFrame();
-    cimgui.igRender();
-}
-
-pub fn get_draw_data() [*c]cimgui.ImDrawData
-{
-    return cimgui.igGetDrawData();
+    zimgui.End();
+    zimgui.EndFrame();
+    zimgui.Render();
 }

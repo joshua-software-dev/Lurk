@@ -5,6 +5,10 @@ zig-out
 zig-out/
 zig-out/*
 vulkan_layer/src/shaders/*.spv
+overlay_gui/src/*.otf
+overlay_gui/src/*.ttf
+overlay_gui/src/*.woff
+overlay_gui/src/*.woff2
 *.deb
 *.pkg.tar.zst
 *.rpm

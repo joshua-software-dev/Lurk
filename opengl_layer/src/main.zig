@@ -85,7 +85,6 @@ var heap_buf: []u8 = undefined;
 var heap_fba: std.heap.FixedBufferAllocator = undefined;
 
 var imgui_ref_count: i32 = 0;
-var imgui_context: ?overlay_gui.ContextContainer = null;
 
 var is_using_zink: ?bool = null;
 
@@ -119,6 +118,9 @@ fn create_imgui_context() void
 {
     if (!process_is_blacklisted())
     {
+        imgui_ref_count = @truncate(imgui_ref_count + 1);
+        overlay_gui.load_fonts(true);
+
         heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
         heap_fba = std.heap.FixedBufferAllocator.init(heap_buf);
 
@@ -129,34 +131,40 @@ fn create_imgui_context() void
         var viewport: [4]i32 = undefined;
         zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
 
-        imgui_context = overlay_gui.create_context(@floatFromInt(viewport[2]), @floatFromInt(viewport[3]));
+        overlay_gui.create_overlay_context(@floatFromInt(viewport[2]), @floatFromInt(viewport[3]));
 
-        const old_ctx = overlay_gui.get_current_context();
-        overlay_gui.set_current_context(imgui_context.?.im_context);
-        defer overlay_gui.set_current_context(old_ctx);
-
-        _ = gl_load.ImGui_ImplOpenGL3_Init(null);
-        var current_texture: [1]i32 = undefined;
-        zgl.binding.getIntegerv(zgl.binding.TEXTURE_BINDING_2D, current_texture[0..]);
+        const old_ctx = overlay_gui.use_overlay_context();
+        defer overlay_gui.restore_old_context(old_ctx);
     }
 }
 
 fn do_imgui_swap() void
 {
-    if (imgui_context == null) return;
+    if (imgui_ref_count < 1) return;
+
+    const old_ctx = overlay_gui.use_overlay_context();
+    defer overlay_gui.restore_old_context(old_ctx);
+
+    overlay_gui.is_draw_ready()
+        catch |err|
+            switch (err)
+            {
+                error.FontNotLoaded => return,
+                error.FontTextureRequiresReload =>
+                {
+                    _ = gl_load.ImGui_ImplOpenGL3_Init(null);
+                    return;
+                },
+            };
 
     var viewport: [4]i32 = undefined;
     zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
 
-    const old_ctx = overlay_gui.get_current_context();
-    overlay_gui.set_current_context(imgui_context.?.im_context);
-
     gl_load.ImGui_ImplOpenGL3_NewFrame();
-    overlay_gui
-        .draw_frame(imgui_context.?.im_io, @intCast(viewport[2]), @intCast(viewport[3]))
+    overlay_gui.draw_frame(@intCast(viewport[2]), @intCast(viewport[3]))
         catch @panic("Unexpected error while drawing frame");
-    gl_load.ImGui_ImplOpenGL3_RenderDrawData(overlay_gui.get_draw_data());
-    overlay_gui.set_current_context(old_ctx);
+
+    gl_load.ImGui_ImplOpenGL3_RenderDrawData(overlay_gui.get_draw_data().?);
 }
 
 export fn dlsym(handle: ?*anyopaque, name: [*c]const u8) ?*anyopaque
@@ -202,7 +210,7 @@ export fn glXCreateContext(dpy: ?*anyopaque, vis: ?*anyopaque, share_list: ?*any
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
 
     const result = gl_load.CreateContext.?(dpy, vis, share_list, arg_direct);
-    if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
+    if (result != null and imgui_ref_count < 1) create_imgui_context();
     return result;
 }
 
@@ -219,7 +227,7 @@ export fn glXCreateContextAttribs
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
 
     const result = gl_load.CreateContextAttribs.?(dpy, config, share_context, direct, attrib_list);
-    if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
+    if (result != null and imgui_ref_count < 1) create_imgui_context();
     return result;
 }
 
@@ -236,7 +244,7 @@ export fn glXCreateContextAttribsARB
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
 
     const result = gl_load.CreateContextAttribsARB.?(dpy, config, share_context, direct, arg_attrib_list);
-    if (result != null) imgui_ref_count = @truncate(imgui_ref_count + 1);
+    if (result != null and imgui_ref_count < 1) create_imgui_context();
     return result;
 }
 
@@ -257,18 +265,18 @@ export fn glXDestroyContext(dpy: ?*anyopaque, ctx: ?*anyopaque) void
         )
     );
 
-    if (imgui_ref_count == 0 and imgui_context != null)
+    if (imgui_ref_count == 0)
     {
-        overlay_gui.destroy_context(imgui_context.?.im_context);
         gl_load.ImGui_ImplOpenGL3_Shutdown();
-        imgui_context = null;
+        overlay_gui.destroy_overlay_context();
+        overlay_gui.disch.stop_discord_conn();
     }
 }
 
 export fn glXSwapBuffers(dpy: ?*anyopaque, drawable: ?*anyopaque) void
 {
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    if (gl_load.GetCurrentContext.?() != null and imgui_context == null) create_imgui_context();
+    if (gl_load.GetCurrentContext.?() != null and imgui_ref_count < 1) create_imgui_context();
 
     do_imgui_swap();
     gl_load.SwapBuffers.?(dpy, drawable);
@@ -285,7 +293,7 @@ export fn glXSwapBuffersMscOML
 i64
 {
     if (!gl_load.opengl_load_complete) gl_load.dynamic_load_opengl(false);
-    if (gl_load.GetCurrentContext.?() != null and imgui_context == null) create_imgui_context();
+    if (gl_load.GetCurrentContext.?() != null and imgui_ref_count < 1) create_imgui_context();
 
     do_imgui_swap();
     return gl_load.SwapBuffersMscOML.?(dpy, drawable, target_msc, divisor, remainder);

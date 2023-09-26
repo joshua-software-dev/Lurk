@@ -43,10 +43,15 @@
             .hash = "12203f350e5cd707acfc46980614c928e90b41f86cf2cbc926888293e6f5b63ad9f1",
             .url = "https://github.com/jecolon/ziglyph/archive/1201bf393a9c8ae4e1564d01e4e4d9377e2c89de.tar.gz",
         },
+        .ZigImGui =
+        .{
+            .hash = "1220ccb76517a0feca6ab27f9100a0d9afe5d974309ee2c7e4dc3fc754a0b71695b1",
+            .url = "https://github.com/joshua-software-dev/Zig-ImGui/archive/6fcbd57e5b1b1ac3b21f0eba4cdf27bacc198116.tar.gz",
+        },
         .zware_glslang =
         .{
-            .hash = "1220d49a6cc817308ad1dac53c8456aff6d21d51cd0a1256c083df851def66d7aa71",
-            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/512a632a1d8f3deccd93cf963f8c823dce92eaae.tar.gz",
+            .hash = "122015c4c0d7cbfc3d11f92b9340279367afce9563263083dc30753ca4e263a20f95",
+            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/86829c5dbe56326ecc6e04c11198f8f91235ac7c.tar.gz",
         }
     },
 }

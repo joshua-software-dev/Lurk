@@ -302,7 +302,7 @@ void
 
     var h: i32 = 0;
     var w: i32 = 0;
-    _ = overlay_gui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
+    _ = overlay_gui.setup_font_text_data(&w, &h)
     catch @panic("ImGui provided an invalid font size.");
 
     // Font image
@@ -414,14 +414,14 @@ void
     swapchain_data.width = p_create_info.image_extent.width;
     swapchain_data.format = p_create_info.image_format;
 
-    swapchain_data.imgui_context = overlay_gui.create_context
+    overlay_gui.create_overlay_context
     (
         @floatFromInt(swapchain_data.width.?),
         @floatFromInt(swapchain_data.height.?),
     );
 
-    const old_ctx = overlay_gui.get_current_context();
-    overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
+    const old_ctx = overlay_gui.use_overlay_context();
+    defer overlay_gui.restore_old_context(old_ctx);
 
     const attachment_desc = [1]vk.AttachmentDescription
     {
@@ -592,8 +592,6 @@ void
     };
     swapchain_data.command_pool = device_wrapper.createCommandPool(device, &cmd_buffer_pool_info, null)
     catch @panic("Vulkan function call failed: Device.CreateCommandPool");
-
-    overlay_gui.set_current_context(old_ctx);
 }
 
 pub fn destroy_swapchain
@@ -700,8 +698,6 @@ void
         device_wrapper.freeMemory(device, swapchain_data.upload_font_buffer_mem.?, null);
         swapchain_data.upload_font_buffer_mem = null;
     }
-
-    _ = overlay_gui.destroy_context(swapchain_data.imgui_context.?.im_context);
 }
 
 pub fn destroy_instance
@@ -922,7 +918,7 @@ void
     var w: i32 = 0;
     var h: i32 = 0;
     const pixels =
-        overlay_gui.setup_font_text_data(swapchain_data.imgui_context.?.im_io, &w, &h)
+        overlay_gui.setup_font_text_data(&w, &h)
         catch @panic("ImGui provided an invalid font size.");
 
     const upload_size: usize = @intCast(w * h * 4);
@@ -1114,7 +1110,7 @@ void
         &use_barrier,
     );
 
-    overlay_gui.set_fonts_tex_ident(swapchain_data.imgui_context.?.im_io, @ptrCast(&swapchain_data.font_image.?));
+    overlay_gui.set_fonts_tex_ident(@ptrCast(&swapchain_data.font_image.?));
     swapchain_data.font_uploaded = true;
 }
 
@@ -1197,7 +1193,7 @@ fn render_swapchain_display
 ?vkt.DrawData
 {
     const imgui_draw_data = overlay_gui.get_draw_data();
-    if (imgui_draw_data == null or imgui_draw_data.*.TotalVtxCount < 1) return null;
+    if (imgui_draw_data == null or imgui_draw_data.?.TotalVtxCount < 1) return null;
 
     var draw_data = get_overlay_draw(device, set_device_loader_data_func, device_wrapper, swapchain_data, g_previous_draw_data);
 
@@ -1272,8 +1268,8 @@ fn render_swapchain_display
 
     device_wrapper.cmdBeginRenderPass(draw_data.command_buffer, &render_pass_info, .@"inline");
 
-    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalVtxCount)) * @sizeOf(overlay_gui.DrawVert);
-    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.*.TotalIdxCount)) * @sizeOf(overlay_gui.DrawIdx);
+    const vertex_size: u64 = @as(u64, @intCast(imgui_draw_data.?.TotalVtxCount)) * @sizeOf(overlay_gui.DrawVert);
+    const index_size: u64 = @as(u64, @intCast(imgui_draw_data.?.TotalIdxCount)) * @sizeOf(overlay_gui.DrawIdx);
 
     if (draw_data.vertex_buffer_size < vertex_size)
     {
@@ -1335,10 +1331,10 @@ fn render_swapchain_display
         ),
     );
 
-    for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
+    for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.?)) |cmd_list|
     {
-        const vertex_buf = overlay_gui.get_draw_list_vertex_buffer(cmd_list.*);
-        const index_buf = overlay_gui.get_draw_list_index_buffer(cmd_list.*);
+        const vertex_buf = overlay_gui.get_draw_list_vertex_buffer(cmd_list.?);
+        const index_buf = overlay_gui.get_draw_list_index_buffer(cmd_list.?);
         @memcpy(vertex_dst[0..vertex_buf.len], vertex_buf);
         @memcpy(index_dst[0..index_buf.len], index_buf);
         vertex_dst += vertex_buf.len;
@@ -1411,8 +1407,8 @@ fn render_swapchain_display
         {
             .x = 0,
             .y = 0,
-            .width = imgui_draw_data.*.DisplaySize.x,
-            .height = imgui_draw_data.*.DisplaySize.y,
+            .width = imgui_draw_data.?.DisplaySize.x,
+            .height = imgui_draw_data.?.DisplaySize.y,
             .min_depth = 0.0,
             .max_depth = 1.0,
         },
@@ -1421,8 +1417,8 @@ fn render_swapchain_display
 
     const scale = [2]f32
     {
-        2.0 / imgui_draw_data.*.DisplaySize.x,
-        2.0 / imgui_draw_data.*.DisplaySize.y,
+        2.0 / imgui_draw_data.?.DisplaySize.x,
+        2.0 / imgui_draw_data.?.DisplaySize.y,
     };
     device_wrapper.cmdPushConstants
     (
@@ -1448,12 +1444,12 @@ fn render_swapchain_display
     {
         var vertex_offset: u32 = 0;
         var index_offset: u32 = 0;
-        for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.*)) |cmd_list|
+        for (overlay_gui.get_draw_data_draw_list(imgui_draw_data.?)) |cmd_list|
         {
-            for (overlay_gui.get_draw_list_command_buffer(cmd_list.*)) |cmd|
+            for (overlay_gui.get_draw_list_command_buffer(cmd_list.?)) |cmd|
             {
-                const x_pos: i32 = @intFromFloat(cmd.ClipRect.x - imgui_draw_data.*.DisplayPos.x);
-                const y_pos: i32 = @intFromFloat(cmd.ClipRect.y - imgui_draw_data.*.DisplayPos.y);
+                const x_pos: i32 = @intFromFloat(cmd.ClipRect.x - imgui_draw_data.?.DisplayPos.x);
+                const y_pos: i32 = @intFromFloat(cmd.ClipRect.y - imgui_draw_data.?.DisplayPos.y);
                 const scissor = [1]vk.Rect2D
                 {
                     vk.Rect2D
@@ -1485,7 +1481,7 @@ fn render_swapchain_display
                 index_offset += cmd.ElemCount;
             }
 
-            vertex_offset += @intCast(overlay_gui.get_draw_list_vertex_buffer(cmd_list.*).len);
+            vertex_offset += @intCast(overlay_gui.get_draw_list_vertex_buffer(cmd_list.?).len);
         }
     }
 
@@ -1642,11 +1638,23 @@ pub fn before_present
 {
     if (swapchain_data.image_count.? > 0)
     {
-        const old_ctx = overlay_gui.get_current_context();
-        overlay_gui.set_current_context(swapchain_data.imgui_context.?.im_context);
+        const old_ctx = overlay_gui.use_overlay_context();
+        defer overlay_gui.restore_old_context(old_ctx);
+
+        overlay_gui.is_draw_ready()
+            catch |err|
+                switch (err)
+                {
+                    error.FontNotLoaded => return null,
+                    error.FontTextureRequiresReload =>
+                    {
+                        setup_swapchain_data_pipeline(device, device_wrapper, swapchain_data);
+                        swapchain_data.font_uploaded = false;
+                    },
+                };
+
         try overlay_gui.draw_frame
         (
-            swapchain_data.imgui_context.?.im_io,
             swapchain_data.width.?,
             swapchain_data.height.?,
         );
@@ -1664,7 +1672,6 @@ pub fn before_present
             g_previous_draw_data,
             swapchain_data,
         );
-        overlay_gui.set_current_context(if (old_ctx == swapchain_data.imgui_context.?.im_context) null else old_ctx);
         return draw_data;
     }
 
