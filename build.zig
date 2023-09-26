@@ -518,6 +518,15 @@ pub fn build(b: *std.Build) void {
         "instead of downloading the latest bindings from the Vulkan SDK."
     ) orelse false;
 
+    const english_only =
+        if
+        (
+            b.option(bool, "english_only", "Build without support for non-english text and emojis, default=false")
+        ) |opt|
+            opt
+        else
+            false;
+
     if (!should_build_cli and !should_build_opengl and !should_build_vulkan) return;
 
     const build_args = .{ .target = target, .optimize = optimize, };
@@ -554,7 +563,7 @@ pub fn build(b: *std.Build) void {
                 .{
                     .target = target,
                     .optimize = optimize,
-                    .enable_freetype = true,
+                    .enable_freetype = !english_only,
                     .enable_lunasvg = false,
                 },
             )
@@ -609,6 +618,8 @@ pub fn build(b: *std.Build) void {
     overlay_gui_lib.link_gc_sections = true;
     overlay_gui_lib.link_z_relro = true;
 
+    const overlay_opts = b.addOptions();
+    overlay_opts.addOption(bool, "english_only", english_only);
     const overlay_gui_mod = b.addModule
     (
         "overlay_gui",
@@ -616,6 +627,7 @@ pub fn build(b: *std.Build) void {
             .source_file = .{ .path = "overlay_gui/src/main.zig" },
             .dependencies = &.{
                 .{ .name = "discord_ws_conn", .module = disc },
+                .{ .name = "overlay_opts", .module = overlay_opts.createModule() },
                 .{ .name = "Zig-ImGui", .module = ZigImGui_dep.?.module("Zig-ImGui") },
             }
         }

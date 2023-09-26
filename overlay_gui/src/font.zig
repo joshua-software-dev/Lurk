@@ -1,23 +1,33 @@
 const std = @import("std");
 
+const overlay_opts = @import("overlay_opts");
 const state = @import("overlay_state.zig");
 
 const zimgui = @import("Zig-ImGui");
 
 
-const primary_embedded_font_name = "GoNotoKurrent-Regular_v7.0.woff2";
-const primary_embedded_font = @embedFile(primary_embedded_font_name);
+const english_only = overlay_opts.english_only;
+
 const primary_font_size: f32 = 20.0;
 var primary_font_config: ?*zimgui.FontConfig = null;
 
-const emoji_embedded_font_name = "Twemoji.Mozilla.v0.7.0.woff2";
-const emoji_embedded_font = @embedFile(emoji_embedded_font_name);
 const emoji_font_size: f32 = 15.0;
 var emoji_font_config: ?*zimgui.FontConfig = null;
 
 pub fn load_shared_font() void
 {
     state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
+    if (english_only)
+    {
+        state.shared_font_atlas.?.AddFontDefault();
+        _ = state.shared_font_atlas.?.Build();
+        @atomicStore(bool, &state.font_thread_finished, true, .Release);
+        @atomicStore(bool, &state.font_load_complete, true, .Release);
+        return;
+    }
+
+    const primary_embedded_font_name = "GoNotoKurrent-Regular_v7.0.woff2";
+    const primary_embedded_font = @embedFile(primary_embedded_font_name);
     primary_font_config = zimgui.FontConfig.init_ImFontConfig();
     primary_font_config.?.EllipsisChar = @as(zimgui.Wchar, 0x0085);
     primary_font_config.?.GlyphOffset.y = 1.0;
@@ -47,6 +57,8 @@ pub fn load_shared_font() void
         state.shared_font_atlas.?.GetGlyphRangesChineseFull(),
     );
 
+    const emoji_embedded_font_name = "Twemoji.Mozilla.v0.7.0.woff2";
+    const emoji_embedded_font = @embedFile(emoji_embedded_font_name);
     emoji_font_config = zimgui.FontConfig.init_ImFontConfig();
     emoji_font_config.?.FontBuilderFlags = 256; // Allow Color Emoji
     emoji_font_config.?.MergeMode = true;

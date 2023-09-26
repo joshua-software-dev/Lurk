@@ -75,7 +75,7 @@ pub fn destroy_overlay_context() void
         state.font_thread.?.join();
     }
 
-    zimgui.DestroyContextExt(state.overlay_context);
+    if (state.overlay_context != null) zimgui.DestroyContextExt(state.overlay_context);
 }
 
 pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
@@ -127,7 +127,14 @@ fn draw_frame_contents() !void
     var alloc_buf: [512]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
 
-    zimgui.Separator();
+    if (builtin.mode == .Debug)
+    {
+        zimgui.SeparatorText("DEBUG 🖥️");
+    }
+    else
+    {
+        zimgui.Separator();
+    }
 
     if (disch.conn) |*conn|
     {
@@ -178,11 +185,6 @@ fn draw_frame_contents() !void
 
             _ = zimgui.Button(safe_name[0..].ptr);
         }
-    }
-
-    if (builtin.mode == .Debug)
-    {
-        zimgui.Separator();
     }
 }
 
