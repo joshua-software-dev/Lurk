@@ -45,8 +45,8 @@
         },
         .ZigImGui =
         .{
-            .hash = "1220ccb76517a0feca6ab27f9100a0d9afe5d974309ee2c7e4dc3fc754a0b71695b1",
-            .url = "https://github.com/joshua-software-dev/Zig-ImGui/archive/6fcbd57e5b1b1ac3b21f0eba4cdf27bacc198116.tar.gz",
+            .hash = "122089193eec56da1e6ffe9ccd8b4ec620642c247f99dafb58f53da7eba9fe567db2",
+            .url = "https://github.com/joshua-software-dev/Zig-ImGui/archive/b3efd041b2580490c6ba31162135a7faef600a3c.tar.gz",
         },
         .zware_glslang =
         .{
