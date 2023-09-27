@@ -579,7 +579,18 @@ pub fn build(b: *std.Build) void {
         }
     );
 
+    b.installFile("LICENSE", "share/licenses/lurk/LICENSE");
+    b.installDirectory
+    (
+        .{
+            .source_dir = .{ .path = "discord_ws_conn/third_party" },
+            .install_dir = .prefix,
+            .install_subdir = "share/licenses/lurk/third_party"
+        }
+    );
+
     if (should_build_cli) build_cli(b, allow_any_arch, clap_dep.?, disc, build_args);
+    if (!should_build_opengl and !should_build_vulkan) return;
 
     const download_font_files = b.step("download_fonts", "Download fonts for imgui file");
     download_font_files.makeFn = download_fonts.download_fonts;
@@ -600,7 +611,6 @@ pub fn build(b: *std.Build) void {
         overlay_gui_lib.link_z_notext = true;
     }
 
-    overlay_gui_lib.addIncludePath(.{ .path = "overlay_gui/deps/cimgui/" });
     overlay_gui_lib.linkLibrary(ZigImGui_dep.?.artifact("cimgui"));
 
     if (optimize != .Debug and optimize != .ReleaseSafe)
@@ -643,14 +653,4 @@ pub fn build(b: *std.Build) void {
             build_args,
         );
     }
-
-    b.installFile("LICENSE", "share/licenses/lurk/LICENSE");
-    b.installDirectory
-    (
-        .{
-            .source_dir = .{ .path = "discord_ws_conn/third_party" },
-            .install_dir = .prefix,
-            .install_subdir = "share/licenses/lurk/third_party"
-        }
-    );
 }

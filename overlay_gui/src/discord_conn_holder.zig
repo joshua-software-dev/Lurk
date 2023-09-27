@@ -20,7 +20,7 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     if (debug) return;
     if (conn != null) return;
 
-    conn = try disc.DiscordWsConn.init(allocator, .IguanaTLS, null);
+    conn = try disc.DiscordWsConn.init(allocator, .{ .IguanaTLS = allocator });
     errdefer conn.?.close();
 
     std.log.scoped(.OVERLAY).info("Connection Success: {+/}", .{ conn.?.connection_uri });

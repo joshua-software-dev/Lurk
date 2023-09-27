@@ -25,7 +25,7 @@ const HTTP_API_URL = "https://streamkit.discord.com/overlay/token";
 const HTTP_BUFFER_SIZE_IGUANATLS = 1024 * 20;
 const HTTP_BUFFER_SIZE_PROCESS = 1024 * 32;
 const JSON_BUFFER_SIZE = 1024;
-const MSG_BUFFER_START_SIZE = 1024 * 64;
+const MSG_BUFFER_START_SIZE = 1024 * 8;
 const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
 
 const HTTP_API_URI =
@@ -36,6 +36,8 @@ const WS_API_URI =
     catch @panic("Failed to parse WS API URL");
 const ws_logger = std.log.scoped(.WS);
 
+var FAKE_BUFFER_ALLOCATOR = std.heap.FixedBufferAllocator.init(&[0]u8{});
+
 pub const DiscordWsConn = struct
 {
     const Self = @This();
@@ -44,42 +46,85 @@ pub const DiscordWsConn = struct
     access_token: std.BoundedArray(u8, 32),
     http_mode: httpmode.HttpMode,
     cert_bundle: ?std.crypto.Certificate.Bundle,
-    msg_buffer: ?std.ArrayList(u8),
+    msg_backing_allocator: std.heap.StackFallbackAllocator(MSG_BUFFER_START_SIZE),
+    msg_allocator: ?std.heap.ArenaAllocator,
     conn: ws.UnbufferedConnection,
     state: state.DiscordState,
 
     pub fn init
     (
         state_allocator: std.mem.Allocator,
-        comptime http_mode: httpmode.HttpMode,
-        comptime message_buffer: ?std.ArrayList(u8),
+        http_mode: httpmode.HttpMode,
     )
     !DiscordWsConn
     {
         var final_uri = WS_API_URI;
 
         var cert_bundle: ?std.crypto.Certificate.Bundle = null;
+        var msg_backing_allocator: ?std.heap.StackFallbackAllocator(MSG_BUFFER_START_SIZE) = null;
         switch (http_mode)
         {
+            .ChildProcess => |maybe_child|
+            {
+                if (maybe_child) |child|
+                {
+                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, child);
+                }
+                else
+                {
+                    msg_backing_allocator = std.heap.stackFallback
+                    (
+                        MSG_BUFFER_START_SIZE,
+                        FAKE_BUFFER_ALLOCATOR.allocator(),
+                    );
+                }
+            },
+            .IguanaTLS => |maybe_iguana|
+            {
+                if (maybe_iguana) |iguana_alloc|
+                {
+                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, iguana_alloc);
+                }
+                else
+                {
+                    msg_backing_allocator = std.heap.stackFallback
+                    (
+                        MSG_BUFFER_START_SIZE,
+                        FAKE_BUFFER_ALLOCATOR.allocator(),
+                    );
+                }
+            },
             .StdLibraryHttp => |std_http|
             {
+                if (std_http.primary_allocator) |prim_alloc|
+                {
+                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, prim_alloc);
+                }
+                else
+                {
+                    msg_backing_allocator = std.heap.stackFallback
+                    (
+                        MSG_BUFFER_START_SIZE,
+                        FAKE_BUFFER_ALLOCATOR.allocator(),
+                    );
+                }
+
                 switch (std_http.bundle)
                 {
-                    .allocate_new => |temp_allocator|
+                    .allocate_new => |alloc_new|
                     {
                         cert_bundle = try certs.preload_ssl_certs
                         (
-                            temp_allocator,
-                            std_http.cert_allocator,
+                            alloc_new.temp_cert_allocator,
+                            std_http.final_cert_allocator,
                         );
                     },
                     .use_existing => |existing|
                     {
-                        cert_bundle = existing.cert_bundle;
+                        cert_bundle = existing;
                     },
                 }
             },
-            else => {},
         }
 
         return .{
@@ -88,7 +133,8 @@ pub const DiscordWsConn = struct
             .conn = try connect(&final_uri),
             .connection_uri = final_uri,
             .http_mode = http_mode,
-            .msg_buffer = message_buffer,
+            .msg_backing_allocator = msg_backing_allocator.?,
+            .msg_allocator = std.heap.ArenaAllocator.init(msg_backing_allocator.?.get()),
             .state = try state.DiscordState.init(state_allocator),
         };
     }
@@ -131,8 +177,7 @@ pub const DiscordWsConn = struct
         {
             self.connection_closed = true;
 
-            if (self.cert_bundle != null) self.cert_bundle.?.deinit(self.http_mode.StdLibraryHttp.cert_allocator);
-            if (self.msg_buffer != null) self.msg_buffer.?.deinit();
+            if (self.cert_bundle != null) self.cert_bundle.?.deinit(self.http_mode.StdLibraryHttp.final_cert_allocator);
 
             defer self.conn.deinit();
             defer self.state.deinit();
@@ -873,7 +918,7 @@ pub const DiscordWsConn = struct
         return true;
     }
 
-    fn dispatch_handle_message(self: *Self, msg: UnbufferedMessage) !bool
+    fn dispatch_handle_message(self: *Self, msg: UnbufferedMessage, buffer: std.ArrayList(u8)) !bool
     {
         switch (msg.type)
         {
@@ -890,7 +935,7 @@ pub const DiscordWsConn = struct
                     .written => |write_length|
                     {
                         ws_logger.debug("msg is writer", .{});
-                        return try self.handle_message(self.msg_buffer.?.items[0..@truncate(write_length)]);
+                        return try self.handle_message(buffer.items[0..@truncate(write_length)]);
                     },
                     else => return error.UnexpectedMessageDataType,
                 }
@@ -916,17 +961,9 @@ pub const DiscordWsConn = struct
 
     pub fn recieve_next_msg(self: *Self, timeout_ns: u64) !bool
     {
-        if (self.msg_buffer == null)
-        {
-            var local_buffer: [MSG_BUFFER_START_SIZE]u8 = undefined;
-            var msg = try self.conn.receiveIntoBuffer(&local_buffer, timeout_ns);
-            return self.dispatch_handle_message(msg);
-        }
-        else
-        {
-            self.msg_buffer.?.clearRetainingCapacity();
-            var msg = try self.conn.receiveIntoWriter(self.msg_buffer.?.writer(), 0, timeout_ns);
-            return self.dispatch_handle_message(msg);
-        }
+        _ = self.msg_allocator.?.reset(.retain_capacity);
+        var msg_buffer = std.ArrayList(u8).init(self.msg_allocator.?.allocator());
+        var msg = try self.conn.receiveIntoWriter(msg_buffer.writer(), 0, timeout_ns);
+        return self.dispatch_handle_message(msg, msg_buffer);
     }
 };

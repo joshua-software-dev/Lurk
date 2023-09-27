@@ -56,7 +56,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     const allocator = gpa.allocator();
     errdefer _ = gpa.detectLeaks();
 
-    conn = try disc.DiscordWsConn.init(allocator, .IguanaTLS, null);
+    conn = try disc.DiscordWsConn.init(allocator, .{ .IguanaTLS = allocator });
     errdefer conn.?.close();
     if (builtin.os.tag == .linux)
     {
