@@ -94,7 +94,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "/usr/bin/glxgears",
-            "args": [],
+            "args": ["-geometry", "500x500"],
             "cwd": "${workspaceFolder}",
             "env": {
                 "LD_PRELOAD": "${workspaceFolder}/zig-out/lib/libopengl_layer_lurk.so"
@@ -376,7 +376,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "/usr/bin/glxgears",
-            "args": [],
+            "args": ["-geometry", "500x500"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [

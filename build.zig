@@ -147,8 +147,6 @@ void
         elfhacks.strip = true;
     }
 
-    elfhacks.link_function_sections = true;
-    elfhacks.link_gc_sections = true;
     elfhacks.link_z_relro = true;
 
     const opengl_layer = builder.addSharedLibrary
@@ -171,8 +169,6 @@ void
         opengl_layer.strip = true;
     }
 
-    opengl_layer.link_function_sections = true;
-    opengl_layer.link_gc_sections = true;
     opengl_layer.link_z_relro = true;
 
     opengl_layer.linkLibrary(elfhacks);
@@ -310,8 +306,6 @@ void
         vulkan_layer.strip = true;
     }
 
-    vulkan_layer.link_function_sections = true;
-    vulkan_layer.link_gc_sections = true;
     vulkan_layer.link_z_relro = true;
 
     if (!found_frag_output)
@@ -614,8 +608,6 @@ pub fn build(b: *std.Build) void {
         overlay_gui_lib.strip = true;
     }
 
-    overlay_gui_lib.link_function_sections = true;
-    overlay_gui_lib.link_gc_sections = true;
     overlay_gui_lib.link_z_relro = true;
 
     const overlay_opts = b.addOptions();

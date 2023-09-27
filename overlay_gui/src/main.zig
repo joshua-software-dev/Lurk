@@ -21,11 +21,12 @@ const WindowPosition = enum
     BOTTOM_RIGHT,
 };
 
+pub const set_allocator_for_imgui = state.set_allocator_for_imgui;
+
 pub fn load_fonts(use_thread: bool) void
 {
     if (state.shared_font_atlas == null)
     {
-        state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
         if (use_thread)
         {
             font.load_shared_font_background() catch @panic("Failed to start font loading thread");
@@ -73,9 +74,20 @@ pub fn destroy_overlay_context() void
     {
         std.log.scoped(.OVERLAY).warn("Waiting for font thread to close...", .{});
         state.font_thread.?.join();
+        state.font_thread = null;
+
+        const old_ctx = use_overlay_context();
+        defer restore_old_context(old_ctx);
+        const im_io = zimgui.GetIO();
+        if (im_io.Fonts != null and im_io.Fonts != state.shared_font_atlas) im_io.Fonts.?.deinit();
     }
 
-    if (state.overlay_context != null) zimgui.DestroyContextExt(state.overlay_context);
+    if (state.overlay_context != null)
+    {
+        zimgui.DestroyContextExt(state.overlay_context);
+        state.shared_font_atlas.?.deinit();
+        state.free_custom_allocator();
+    }
 }
 
 pub fn setup_font_text_data(x_width: *i32, y_height: *i32) ![*]u8
@@ -129,7 +141,7 @@ fn draw_frame_contents() !void
 
     if (builtin.mode == .Debug)
     {
-        zimgui.SeparatorText("DEBUG 🖥️");
+        zimgui.SeparatorText("DEBUG 🖥️ デバッグ");
     }
     else
     {

@@ -61,8 +61,6 @@ const LAYER_DESC =
     "Lurk as a Vulkan Layer - " ++
     "https://github.com/joshua-software-dev/Lurk";
 
-const MAX_MEMORY_ALLOCATION = 1024 * 512; // bytes
-
 // Create compile time hashmaps that specify which functions this layer intends
 // to hook into
 const DeviceRegistionFunctionMap = std.ComptimeStringMap
@@ -159,25 +157,21 @@ callconv(vk.vulkan_call_conv) vk.Result
         {
             if (!vk_global_state.first_alloc_complete)
             {
+                if (builtin.mode == .Debug) overlay_gui.set_allocator_for_imgui(null);
                 overlay_gui.load_fonts(true);
 
-                vk_global_state.heap_buf = std.heap.c_allocator.create([MAX_MEMORY_ALLOCATION]u8) catch @panic("oom");
-                vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
+                const allocator = vk_global_state.get_default_allocator(false);
 
-                vk_global_state.device_backing =
-                    vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
                 vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
 
-                vk_global_state.instance_backing =
-                    vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
                 vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
 
-                vk_global_state.swapchain_backing =
-                    vkt.SwapchainDataHashMap.init(vk_global_state.heap_fba.allocator());
+                vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
                 vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
 
                 vk_global_state.first_alloc_complete = true;
-                std.log.scoped(.VKLURK).debug("Post backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
             }
 
             var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom");
@@ -224,9 +218,7 @@ callconv(vk.vulkan_call_conv) void
         {
             overlay_gui.destroy_overlay_context();
             overlay_gui.disch.stop_discord_conn();
-            std.heap.c_allocator.free(vk_global_state.heap_buf);
-            vk_global_state.heap_buf = undefined;
-            vk_global_state.heap_fba = undefined;
+            vk_global_state.free_default_allocator();
             vk_global_state.first_alloc_complete = false;
         }
 
@@ -256,10 +248,8 @@ callconv(vk.vulkan_call_conv) vk.Result
         if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
         {
             // Internal logic makes connecting multiple times idempotent
-            overlay_gui.disch.start_discord_conn(vk_global_state.heap_fba.allocator())
+            overlay_gui.disch.start_discord_conn(vk_global_state.get_default_allocator(proc_is_blacklisted))
             catch @panic("Failed to start discord connection.");
-
-            std.log.scoped(.VKLURK).debug("Post connection alloc: {d}", .{ vk_global_state.heap_fba.end_index });
         }
 
         std.log.scoped(.VKLURK).debug("Create Device: {d}" ++ LAYER_NAME, .{ p_device.* });
@@ -632,15 +622,16 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
         if (!vk_global_state.first_alloc_complete)
         {
             // allocate much less memory for only the basics
-            vk_global_state.first_alloc_complete = true;
-            vk_global_state.heap_buf = std.heap.c_allocator.create([1024*64]u8) catch @panic("oom");
-            vk_global_state.heap_fba = std.heap.FixedBufferAllocator.init(vk_global_state.heap_buf);
+            const allocator = vk_global_state.get_default_allocator(proc_is_blacklisted);
 
-            vk_global_state.device_backing = vkt.DeviceDataHashMap.init(vk_global_state.heap_fba.allocator());
+            vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
             vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
-            vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(vk_global_state.heap_fba.allocator());
+            vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
             vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
-            std.log.scoped(.VKLURK).debug("Post minimal backing alloc: {d}", .{ vk_global_state.heap_fba.end_index });
+            vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
+            vk_global_state.swapchain_backing.ensureTotalCapacity(0) catch @panic("oom");
+
+            vk_global_state.first_alloc_complete = true;
         }
 
         const bl_func = BlacklistRegistionFunctionMap.get(span_name);
