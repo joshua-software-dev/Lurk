@@ -39,6 +39,7 @@ pub fn preload_ssl_certs
 !std.crypto.Certificate.Bundle
 {
     var out_buffer = try std.ArrayList(u8).initCapacity(temp_allocator, START_CERT_BUFFER_SIZE);
+    defer out_buffer.deinit();
     var out_indices: [2]u32 = [2]u32{ START_CERT_BUFFER_SIZE, START_CERT_BUFFER_SIZE, };
 
     {

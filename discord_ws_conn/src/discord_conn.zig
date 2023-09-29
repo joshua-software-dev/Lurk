@@ -25,7 +25,7 @@ const HTTP_API_URL = "https://streamkit.discord.com/overlay/token";
 const HTTP_BUFFER_SIZE_IGUANATLS = 1024 * 20;
 const HTTP_BUFFER_SIZE_PROCESS = 1024 * 32;
 const JSON_BUFFER_SIZE = 1024;
-const MSG_BUFFER_START_SIZE = 1024 * 8;
+const MSG_BUFFER_SIZE = 1024 * 64;
 const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
 
 const HTTP_API_URI =
@@ -36,8 +36,6 @@ const WS_API_URI =
     catch @panic("Failed to parse WS API URL");
 const ws_logger = std.log.scoped(.WS);
 
-var FAKE_BUFFER_ALLOCATOR = std.heap.FixedBufferAllocator.init(&[0]u8{});
-
 pub const DiscordWsConn = struct
 {
     const Self = @This();
@@ -46,8 +44,9 @@ pub const DiscordWsConn = struct
     access_token: std.BoundedArray(u8, 32),
     http_mode: httpmode.HttpMode,
     cert_bundle: ?std.crypto.Certificate.Bundle,
-    msg_backing_allocator: std.heap.StackFallbackAllocator(MSG_BUFFER_START_SIZE),
-    msg_allocator: ?std.heap.ArenaAllocator,
+    msg_backing_allocator: std.mem.Allocator,
+    msg_backing: *[MSG_BUFFER_SIZE]u8,
+    msg_allocator: std.heap.FixedBufferAllocator,
     conn: ws.UnbufferedConnection,
     state: state.DiscordState,
 
@@ -61,61 +60,38 @@ pub const DiscordWsConn = struct
         var final_uri = WS_API_URI;
 
         var cert_bundle: ?std.crypto.Certificate.Bundle = null;
-        var msg_backing_allocator: ?std.heap.StackFallbackAllocator(MSG_BUFFER_START_SIZE) = null;
+        var msg_backing_allocator: std.mem.Allocator = state_allocator;
+
         switch (http_mode)
         {
             .ChildProcess => |maybe_child|
             {
                 if (maybe_child) |child|
                 {
-                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, child);
-                }
-                else
-                {
-                    msg_backing_allocator = std.heap.stackFallback
-                    (
-                        MSG_BUFFER_START_SIZE,
-                        FAKE_BUFFER_ALLOCATOR.allocator(),
-                    );
+                    msg_backing_allocator = child;
                 }
             },
             .IguanaTLS => |maybe_iguana|
             {
                 if (maybe_iguana) |iguana_alloc|
                 {
-                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, iguana_alloc);
-                }
-                else
-                {
-                    msg_backing_allocator = std.heap.stackFallback
-                    (
-                        MSG_BUFFER_START_SIZE,
-                        FAKE_BUFFER_ALLOCATOR.allocator(),
-                    );
+                    msg_backing_allocator = iguana_alloc;
                 }
             },
             .StdLibraryHttp => |std_http|
             {
-                if (std_http.primary_allocator) |prim_alloc|
+                if (std_http.message_allocator) |msg_alloc|
                 {
-                    msg_backing_allocator = std.heap.stackFallback(MSG_BUFFER_START_SIZE, prim_alloc);
-                }
-                else
-                {
-                    msg_backing_allocator = std.heap.stackFallback
-                    (
-                        MSG_BUFFER_START_SIZE,
-                        FAKE_BUFFER_ALLOCATOR.allocator(),
-                    );
+                    msg_backing_allocator = msg_alloc;
                 }
 
                 switch (std_http.bundle)
                 {
-                    .allocate_new => |alloc_new|
+                    .allocate_new => |new_allocator|
                     {
                         cert_bundle = try certs.preload_ssl_certs
                         (
-                            alloc_new.temp_cert_allocator,
+                            new_allocator,
                             std_http.final_cert_allocator,
                         );
                     },
@@ -127,14 +103,17 @@ pub const DiscordWsConn = struct
             },
         }
 
+        const msg_backing: *[MSG_BUFFER_SIZE]u8 = try msg_backing_allocator.create([MSG_BUFFER_SIZE]u8);
+
         return .{
             .access_token = std.BoundedArray(u8, 32).init(0) catch unreachable,
             .cert_bundle = cert_bundle,
             .conn = try connect(&final_uri),
             .connection_uri = final_uri,
             .http_mode = http_mode,
-            .msg_backing_allocator = msg_backing_allocator.?,
-            .msg_allocator = std.heap.ArenaAllocator.init(msg_backing_allocator.?.get()),
+            .msg_backing_allocator = msg_backing_allocator,
+            .msg_backing = msg_backing,
+            .msg_allocator = std.heap.FixedBufferAllocator.init(&msg_backing.*),
             .state = try state.DiscordState.init(state_allocator),
         };
     }
@@ -178,6 +157,7 @@ pub const DiscordWsConn = struct
             self.connection_closed = true;
 
             if (self.cert_bundle != null) self.cert_bundle.?.deinit(self.http_mode.StdLibraryHttp.final_cert_allocator);
+            self.msg_backing_allocator.free(self.msg_backing);
 
             defer self.conn.deinit();
             defer self.state.deinit();
@@ -464,8 +444,8 @@ pub const DiscordWsConn = struct
         switch (self.http_mode)
         {
             // .ChildProcess => return self.authorize_stage_2_process(auth_code),
-            .IguanaTLS => return self.authorize_stage_2_iguana(auth_code),
-            // .StdLibraryHttp => return self.authorize_stage_2_std(auth_code),
+            // .IguanaTLS => return self.authorize_stage_2_iguana(auth_code),
+            .StdLibraryHttp => return self.authorize_stage_2_std(auth_code),
             else => @panic("This HTTP Backend is temporarily disabled")
         }
     }
@@ -961,8 +941,8 @@ pub const DiscordWsConn = struct
 
     pub fn recieve_next_msg(self: *Self, timeout_ns: u64) !bool
     {
-        _ = self.msg_allocator.?.reset(.retain_capacity);
-        var msg_buffer = std.ArrayList(u8).init(self.msg_allocator.?.allocator());
+        self.msg_allocator.reset();
+        var msg_buffer = std.ArrayList(u8).init(self.msg_allocator.allocator());
         var msg = try self.conn.receiveIntoWriter(msg_buffer.writer(), 0, timeout_ns);
         return self.dispatch_handle_message(msg, msg_buffer);
     }
