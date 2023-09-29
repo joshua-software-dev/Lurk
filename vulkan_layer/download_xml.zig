@@ -1,4 +1,23 @@
+const builtin = @import("builtin");
 const std = @import("std");
+
+
+fn start_0110(req: *std.http.Client.Request, args: anytype) !void
+{
+    _ = args;
+    try req.start();
+}
+
+fn start_0120(req: *std.http.Client.Request, args: anytype) !void
+{
+    try req.start(args);
+}
+
+const start_func =
+    if (builtin.zig_version.order(std.SemanticVersion.parse("0.11.0") catch unreachable) == .gt)
+        start_0120
+    else
+        start_0110;
 
 // Parts of the following are adapted from software with the following license
 
@@ -54,7 +73,7 @@ fn downloadWithHttpClient(allocator: std.mem.Allocator, url: []const u8, writer:
     var req = try client.request(.GET, uri, headers, .{});
     defer req.deinit();
 
-    try req.start();
+    try start_func(&req, .{});
     try req.wait();
 
     if (req.response.status != .ok) return error.ResponseNotOk;

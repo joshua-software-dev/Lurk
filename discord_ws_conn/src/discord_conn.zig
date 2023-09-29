@@ -17,6 +17,23 @@ const UnbufferedMessage = @typeInfo
     ).Fn.return_type.?
 ).ErrorUnion.payload;
 
+fn start_0110(req: *std.http.Client.Request, args: anytype) !void
+{
+    _ = args;
+    try req.start();
+}
+
+fn start_0120(req: *std.http.Client.Request, args: anytype) !void
+{
+    try req.start(args);
+}
+
+const start_func =
+    if (builtin.zig_version.order(std.SemanticVersion.parse("0.11.0") catch unreachable) == .gt)
+        start_0120
+    else
+        start_0110;
+
 
 const CLIENT_ID = "207646673902501888";
 const EXPECTED_API_VERSION = 1;
@@ -358,7 +375,7 @@ pub const DiscordWsConn = struct
             req.transfer_encoding = .chunked;
             defer req.deinit();
 
-            try req.start();
+            try start_func(&req, .{});
             try req.writeAll(json_code);
             try req.finish();
             try req.wait();

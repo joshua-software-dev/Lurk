@@ -48,10 +48,15 @@
             .hash = "122089193eec56da1e6ffe9ccd8b4ec620642c247f99dafb58f53da7eba9fe567db2",
             .url = "https://github.com/joshua-software-dev/Zig-ImGui/archive/b3efd041b2580490c6ba31162135a7faef600a3c.tar.gz",
         },
-        .zware_glslang =
+        .zware_glslang11 =
         .{
-            .hash = "122015c4c0d7cbfc3d11f92b9340279367afce9563263083dc30753ca4e263a20f95",
-            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/86829c5dbe56326ecc6e04c11198f8f91235ac7c.tar.gz",
-        }
+            .hash = "1220683f2350baa56c487610569dd52e92d53c12530946ec73e83a856fc1b91aadb8",
+            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/aeca51f858300c86e4dc61534396fddfb5f8e6a9.tar.gz",
+        },
+        .zware_glslang12 =
+        .{
+            .hash = "1220af9d0257e0b8513f9c7349f4142950ac9da44e4541fdde63d4d8844969c631fa",
+            .url = "https://github.com/joshua-software-dev/zware-glslang/archive/a547abbc9d8c9b516bc5ef87447e7f0bafe80e52.tar.gz",
+        },
     },
 }

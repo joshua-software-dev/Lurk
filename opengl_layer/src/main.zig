@@ -256,7 +256,9 @@ export fn glXDestroyContext(dpy: ?*anyopaque, ctx: ?*anyopaque) void
     (
         @divExact
         (
-            (std.math.absInt(temp_ref_count) catch unreachable) + temp_ref_count,
+            // at least it would be, if I didn't need to do this compat step
+            // for 0.11.0 and 0.12.0
+            (if (temp_ref_count < 0) -temp_ref_count else temp_ref_count) + temp_ref_count,
             2
         )
     );

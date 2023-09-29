@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const download_fonts = @import("overlay_gui/download_fonts.zig");
@@ -524,7 +525,14 @@ pub fn build(b: *std.Build) void {
     const zglslang_dep: ?*std.Build.Dependency =
         if (should_build_vulkan)
             // build with debug for faster build times
-            b.dependency("zware_glslang", .{ .optimize = .Debug })
+            b.dependency
+            (
+                if (builtin.zig_version.order(std.SemanticVersion.parse("0.11.0") catch unreachable) == .gt)
+                    "zware_glslang12"
+                else
+                    "zware_glslang11",
+                .{ .optimize = .Debug }
+            )
         else
             null;
     const ZigImGui_dep: ?*std.Build.Dependency =
