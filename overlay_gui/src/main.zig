@@ -56,8 +56,10 @@ pub fn create_overlay_context(display_x_width: f32, display_y_height: f32) void
     }
 }
 
-pub fn use_overlay_context() ?*zimgui.Context
+pub fn use_overlay_context() !?*zimgui.Context
 {
+    if (state.overlay_context == null) return error.OverlayContextNotCreated;
+
     var old_ctx = zimgui.GetCurrentContext();
     zimgui.SetCurrentContext(state.overlay_context);
     return old_ctx;
@@ -76,10 +78,13 @@ pub fn destroy_overlay_context() void
         state.font_thread.?.join();
         state.font_thread = null;
 
-        const old_ctx = use_overlay_context();
-        defer restore_old_context(old_ctx);
-        const im_io = zimgui.GetIO();
-        if (im_io.Fonts != null and im_io.Fonts != state.shared_font_atlas) im_io.Fonts.?.deinit();
+        if (state.overlay_context != null)
+        {
+            const old_ctx = use_overlay_context() catch unreachable;
+            defer restore_old_context(old_ctx);
+            const im_io = zimgui.GetIO();
+            if (im_io.Fonts != null and im_io.Fonts != state.shared_font_atlas) im_io.Fonts.?.deinit();
+        }
     }
 
     if (state.overlay_context != null)
@@ -245,8 +250,12 @@ pub fn is_draw_ready() !void
     if (!@atomicLoad(bool, &state.font_load_complete, .Acquire)) return error.FontNotLoaded;
     if (@atomicLoad(bool, &state.font_thread_finished, .Acquire))
     {
-        if (state.font_thread != null) state.font_thread.?.join();
-        state.font_thread = null;
+        if (state.font_thread != null)
+        {
+            std.log.scoped(.OVERLAY).debug("Closing font thread before first draw...", .{});
+            state.font_thread.?.join();
+            state.font_thread = null;
+        }
     }
 
     const im_io = zimgui.GetIO();
@@ -257,6 +266,45 @@ pub fn is_draw_ready() !void
         im_io.Fonts = state.shared_font_atlas;
         return error.FontTextureRequiresReload;
     }
+}
+
+fn write_font_cache(atlas: *zimgui.FontAtlas) void
+{
+    const font_out: ?*zimgui.Font = atlas.Fonts.Data.?[0];
+    var width: i32 = 0;
+    var height: i32 = 0;
+
+    const pixels = setup_font_text_data(&width, &height) catch @panic("Fuck");
+    const pixel_array_size: u32 = @intCast(width * height);
+    std.debug.assert(pixel_array_size % 4 == 0);
+
+    var out_pixels: []u8 = std.heap.c_allocator.alloc(u8, pixel_array_size / 4) catch @panic("oom");
+    defer std.heap.c_allocator.free(out_pixels);
+
+    var ii: usize = 0;
+    for (pixels[0..pixel_array_size], 1..) |it, i|
+    {
+        if (i % 4 == 0)
+        {
+            out_pixels[ii] = it;
+            ii += 1;
+        }
+    }
+
+    var cache = font.font_cache
+    {
+        .TexUvWhitePixel = atlas.TexUvWhitePixel,
+        .TexUvLines = atlas.TexUvLines,
+        .Glyphs = font_out.?.Glyphs.Data.?[0..font_out.?.Glyphs.Size],
+        .TextureX = @intCast(width),
+        .TextureY = @intCast(height),
+        .TextureData = out_pixels,
+    };
+
+    var cwd = std.fs.cwd();
+    var file = cwd.createFile("out.imfont.json", .{}) catch @panic("fs fail");
+    std.json.stringify(cache, .{}, file.writer()) catch @panic("write fail");
+    @panic("done");
 }
 
 pub fn draw_frame(display_x: u32, display_y: u32) !void
@@ -307,4 +355,9 @@ pub fn draw_frame(display_x: u32, display_y: u32) !void
     zimgui.End();
     zimgui.EndFrame();
     zimgui.Render();
+
+    // if (state.shared_font_atlas.?.TexReady and state.shared_font_atlas.?.TexID != null)
+    // {
+    //     write_font_cache(state.shared_font_atlas.?);
+    // }
 }

@@ -85,7 +85,7 @@ pub fn create_instance_wrappers
         .instance = instance,
         .get_inst_proc_addr_func_ptr = get_inst_proc_addr_func_ptr,
         .instance_wrapper = instance_wrapper,
-        .physical_devices = vkt.PhysicalDeviceBacking.init(0) catch @panic("oom"),
+        .physical_devices = vkt.PhysicalDeviceBacking.init(0) catch @panic("oom getting physicaldevice backing"),
     };
 }
 
@@ -150,7 +150,7 @@ pub fn create_device_wrappers
     catch @panic("Failed to load Vulkan Device function table.");
 
     var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
-    var backing = vk_global_state.device_backing.getOrPut(device) catch @panic("oom");
+    var backing = vk_global_state.device_backing.getOrPut(device) catch @panic("oom creating device wrapper");
     if (backing.found_existing)
     {
         @panic("Found an existing Device with the same id when creating a new one");
@@ -167,7 +167,7 @@ pub fn create_device_wrappers
         .get_device_proc_addr_func = get_device_proc_addr,
         .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
         .graphic_queue = null,
-        .queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom"),
+        .queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom creating instance wrapper"),
         .previous_draw_data = null,
         .device_wrapper = device_wrapper,
     };

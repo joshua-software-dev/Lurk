@@ -163,18 +163,18 @@ callconv(vk.vulkan_call_conv) vk.Result
                 const allocator = vk_global_state.get_default_allocator(false);
 
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
-                vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
+                vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during device backing");
 
                 vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
-                vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
+                vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom during instance backing");
 
                 vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
-                vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom");
+                vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom during swapchain backing");
 
                 vk_global_state.first_alloc_complete = true;
             }
 
-            var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom");
+            var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom storing instance");
             if (backing.found_existing)
             {
                 @panic("Found an existing Instance with the same id when creating a new one");
@@ -349,7 +349,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         if (result != vk.Result.success) return result;
 
         const swapchain = p_swapchain.*;
-        const backing = vk_global_state.swapchain_backing.getOrPut(swapchain) catch @panic("oom");
+        const backing = vk_global_state.swapchain_backing.getOrPut(swapchain) catch @panic("oom storing swapchain");
         if (backing.found_existing)
         {
             std.log.scoped(.VKLURK).warn
@@ -399,9 +399,9 @@ callconv(vk.vulkan_call_conv) vk.Result
             .upload_font_buffer_mem = null,
             .upload_font_buffer = null,
             .width = null,
-            .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom"),
-            .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom"),
-            .images = vkt.ImageBacking.init(0) catch @panic("oom"),
+            .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom creating framebuffer backing"),
+            .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom creating imageview backing"),
+            .images = vkt.ImageBacking.init(0) catch @panic("oom creating image backing"),
         };
 
         setup.setup_swapchain
@@ -625,11 +625,11 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
             const allocator = vk_global_state.get_default_allocator(proc_is_blacklisted);
 
             vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
-            vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom");
+            vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during bl device backing");
             vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
-            vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom");
+            vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom during bl instance backing");
             vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
-            vk_global_state.swapchain_backing.ensureTotalCapacity(0) catch @panic("oom");
+            vk_global_state.swapchain_backing.ensureTotalCapacity(0) catch @panic("oom during bl swapchain backing");
 
             vk_global_state.first_alloc_complete = true;
         }

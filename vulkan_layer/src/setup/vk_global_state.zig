@@ -19,7 +19,7 @@ pub var device_ref_count: u32 = 0;
 pub var instance_ref_count: u32 = 0;
 pub var swapchain_ref_count: u32 = 0;
 
-const MAX_MEMORY_ALLOCATION = 1024 * 256; // bytes
+const MAX_MEMORY_ALLOCATION = 1024 * 512; // bytes
 const MAX_MEMORY_ALLOCATION_BLACKLISTED = 1024 * 64; // bytes
 const gpa_type = std.heap.GeneralPurposeAllocator
 (
@@ -65,7 +65,7 @@ pub fn get_default_allocator(blacklisted: bool) std.mem.Allocator
                     else
                         MAX_MEMORY_ALLOCATION
                 )
-                    catch @panic("oom");
+                    catch @panic("oom getting default allocator");
                 heap_fba = std.heap.FixedBufferAllocator.init(heap_buf.?);
             }
 

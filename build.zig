@@ -35,6 +35,12 @@ void
         }
     );
     lurk_cli.pie = true;
+    if (args.optimize != .Debug)
+    {
+        lurk_cli.want_lto = true;
+        lurk_cli.strip = true;
+    }
+
     lurk_cli.addModule("discord_ws_conn", disc);
     lurk_cli.addModule("clap", clap_dep.module("clap"));
 
@@ -114,22 +120,30 @@ void
         }
     }
 
-    const elfhacks = builder.addStaticLibrary
+    const opengl_layer = builder.addSharedLibrary
     (
         .{
-            .name = "elfhacks",
+            .name = "opengl_layer_lurk",
+            .root_source_file = .{ .path = "opengl_layer/src/main.zig" },
             .target = args.target,
             .optimize = args.optimize,
         }
     );
-    elfhacks.force_pic = true;
-    elfhacks.linkLibCpp();
+    opengl_layer.force_pic = true;
+    opengl_layer.link_z_relro = true;
     if (args.target.getCpuArch() == .x86)
     {
-        elfhacks.link_z_notext = true;
+        opengl_layer.link_z_notext = true;
     }
 
-    elfhacks.addCSourceFile
+    if (args.optimize != .Debug)
+    {
+        opengl_layer.want_lto = true;
+        opengl_layer.strip = true;
+    }
+
+    opengl_layer.linkLibrary(overlay_gui_lib);
+    opengl_layer.addCSourceFile
     (
         .{
             .file = .{ .path = "opengl_layer/deps/elfhacks/elfhacks.cpp" },
@@ -141,39 +155,6 @@ void
             },
         }
     );
-
-    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
-    {
-        elfhacks.strip = true;
-    }
-
-    elfhacks.link_z_relro = true;
-
-    const opengl_layer = builder.addSharedLibrary
-    (
-        .{
-            .name = "opengl_layer_lurk",
-            .root_source_file = .{ .path = "opengl_layer/src/main.zig" },
-            .target = args.target,
-            .optimize = args.optimize,
-        }
-    );
-    opengl_layer.force_pic = true;
-    if (args.target.getCpuArch() == .x86)
-    {
-        opengl_layer.link_z_notext = true;
-    }
-
-    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
-    {
-        opengl_layer.strip = true;
-    }
-
-    opengl_layer.link_z_relro = true;
-
-    opengl_layer.linkLibrary(elfhacks);
-    opengl_layer.linkLibrary(overlay_gui_lib);
-
     opengl_layer.addCSourceFile
     (
         .{
@@ -182,7 +163,6 @@ void
             {
                 "-std=c++11",
                 "-fno-sanitize=undefined",
-                "-ffunction-sections",
                 "-fvisibility=hidden",
             },
         }
@@ -296,17 +276,17 @@ void
         }
     );
     vulkan_layer.force_pic = true;
+    vulkan_layer.link_z_relro = true;
     if (args.target.getCpuArch() == .x86)
     {
         vulkan_layer.link_z_notext = true;
     }
 
-    if (args.optimize != .Debug and args.optimize != .ReleaseSafe)
+    if (args.optimize != .Debug)
     {
+        vulkan_layer.want_lto = true;
         vulkan_layer.strip = true;
     }
-
-    vulkan_layer.link_z_relro = true;
 
     if (!found_frag_output)
     {
@@ -372,17 +352,15 @@ void
         vulkan_layer.step.dependOn(&vert_shader_compile.step);
     }
 
+    vulkan_layer.linkLibC();
+    vulkan_layer.linkLibrary(overlay_gui_lib);
+
+    vulkan_layer.addModule("overlay_gui", overlay_gui_mod);
+    vulkan_layer.addModule("vulkan_layer_build_options", options.createModule());
+
     vulkan_layer.step.dependOn(&gen_install.step);
     const vulkan_mod = builder.addModule("vk", .{ .source_file = .{ .path = "zig-cache/vk.zig" } });
     vulkan_layer.addModule("vk", vulkan_mod);
-
-    vulkan_layer.addModule("vulkan_layer_build_options", options.createModule());
-
-    vulkan_layer.addIncludePath(.{ .path = "overlay_gui/dep/cimgui/" });
-    vulkan_layer.linkLibrary(overlay_gui_lib);
-    vulkan_layer.addModule("overlay_gui", overlay_gui_mod);
-
-    vulkan_layer.linkLibC();
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when

@@ -420,7 +420,7 @@ void
         @floatFromInt(swapchain_data.height.?),
     );
 
-    const old_ctx = overlay_gui.use_overlay_context();
+    const old_ctx = overlay_gui.use_overlay_context() catch unreachable;
     defer overlay_gui.restore_old_context(old_ctx);
 
     const attachment_desc = [1]vk.AttachmentDescription
@@ -1638,7 +1638,13 @@ pub fn before_present
 {
     if (swapchain_data.image_count.? > 0)
     {
-        const old_ctx = overlay_gui.use_overlay_context();
+        // calling this should be idempotent
+        overlay_gui.create_overlay_context
+        (
+            @floatFromInt(swapchain_data.width.?),
+            @floatFromInt(swapchain_data.height.?),
+        );
+        const old_ctx = overlay_gui.use_overlay_context() catch unreachable;
         defer overlay_gui.restore_old_context(old_ctx);
 
         overlay_gui.is_draw_ready()

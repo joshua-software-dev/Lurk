@@ -128,7 +128,7 @@ fn create_imgui_context() void
 
         overlay_gui.create_overlay_context(@floatFromInt(viewport[2]), @floatFromInt(viewport[3]));
 
-        const old_ctx = overlay_gui.use_overlay_context();
+        const old_ctx = overlay_gui.use_overlay_context() catch unreachable;
         defer overlay_gui.restore_old_context(old_ctx);
     }
 }
@@ -137,7 +137,7 @@ fn do_imgui_swap() void
 {
     if (state.imgui_ref_count < 1) return;
 
-    const old_ctx = overlay_gui.use_overlay_context();
+    const old_ctx = overlay_gui.use_overlay_context() catch return;
     defer overlay_gui.restore_old_context(old_ctx);
 
     overlay_gui.is_draw_ready()

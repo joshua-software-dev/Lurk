@@ -6,7 +6,7 @@ pub var first_draw_complete = false;
 pub var imgui_ref_count: i32 = 0;
 pub var is_using_zink: ?bool = null;
 
-const MAX_MEMORY_ALLOCATION = 1024 * 256; // bytes
+const MAX_MEMORY_ALLOCATION = 1024 * 512; // bytes
 const gpa_type = std.heap.GeneralPurposeAllocator
 (
     .{
