@@ -631,7 +631,12 @@ pub const DiscordWsConn = struct
                 )
                 {
                     var next_token = try json_reader.next();
-                    guild_id = next_token.string;
+                    guild_id = switch (next_token)
+                    {
+                        std.json.Token.null => "<null>",
+                        std.json.Token.string => next_token.string,
+                        else => return error.InvalidJsonToken,
+                    };
                 }
             }
 
@@ -647,7 +652,11 @@ pub const DiscordWsConn = struct
             return state.DiscordChannel
             {
                 .channel_id = try state.ChannelId.fromSlice(channel_id.?),
-                .guild_id = try state.GuildId.fromSlice(guild_id.?),
+                .guild_id =
+                    if (std.mem.eql(u8, guild_id.?, "<null>"))
+                        null
+                    else
+                        try state.GuildId.fromSlice(guild_id.?),
             };
         }
 

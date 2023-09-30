@@ -20,7 +20,7 @@ pub const UserId = std.BoundedArray(u8, MAX_USER_ID_LENGTH);
 pub const DiscordChannel = struct
 {
     channel_id: ChannelId,
-    guild_id: GuildId,
+    guild_id: ?GuildId,
 };
 
 pub const DiscordUser = struct
@@ -96,11 +96,22 @@ pub const DiscordState = struct
                         new_channel.?.channel_id.slice()
                     )
                     and
-                    std.mem.eql
                     (
-                        u8,
-                        self.current_channel.guild_id.slice(),
-                        new_channel.?.guild_id.slice()
+                        (
+                            self.current_channel.guild_id == null and
+                            new_channel.?.guild_id == null
+                        )
+                        or
+                        (
+                            self.current_channel.guild_id != null and
+                            new_channel.?.guild_id != null and
+                            std.mem.eql
+                            (
+                                u8,
+                                self.current_channel.guild_id.?.slice(),
+                                new_channel.?.guild_id.?.slice()
+                            )
+                        )
                     )
                 )
             )
@@ -136,14 +147,14 @@ pub const DiscordState = struct
             .channel_id
             .replaceRange(0, new_channel.?.channel_id.len, new_channel.?.channel_id.slice());
 
-        try self
-            .current_channel
-            .guild_id
-            .resize(new_channel.?.guild_id.len);
-        try self
-            .current_channel
-            .guild_id
-            .replaceRange(0, new_channel.?.guild_id.len, new_channel.?.guild_id.slice());
+        if (new_channel.?.guild_id == null)
+        {
+            self.current_channel.guild_id = null;
+            return;
+        }
+
+        self.current_channel.guild_id = try GuildId.init(0);
+        try self.current_channel.guild_id.?.appendSlice(new_channel.?.guild_id.?.constSlice());
     }
 
     /// Must acquire mutex to use safely
