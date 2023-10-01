@@ -34,7 +34,8 @@ const start_func =
     else
         start_0110;
 
-
+const AVATAR_API_URL = "https://cdn.discordapp.com/avatars/{s}/{s}.png"; // user_id, avatar_id
+const AVATAR_MAX_SIZE = 1024 * 1024 * 8; // 8 Megabytes
 const CLIENT_ID = "207646673902501888";
 const EXPECTED_API_VERSION = 1;
 const HOST = "127.0.0.1";
@@ -47,10 +48,10 @@ const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 646
 
 const HTTP_API_URI =
     std.Uri.parse(HTTP_API_URL)
-    catch @panic("Failed to parse HTTP API URL");
+    catch unreachable;
 const WS_API_URI =
     std.Uri.parse(std.fmt.comptimePrint("ws://{s}:{d}/?v=1&client_id={s}", .{ HOST, PORT_RANGE[0], CLIENT_ID }))
-    catch @panic("Failed to parse WS API URL");
+    catch unreachable;
 const ws_logger = std.log.scoped(.WS);
 
 pub const DiscordWsConn = struct
@@ -70,6 +71,7 @@ pub const DiscordWsConn = struct
     pub fn init
     (
         state_allocator: std.mem.Allocator,
+        image_allocator: ?std.mem.Allocator,
         http_mode: httpmode.HttpMode,
     )
     !DiscordWsConn
@@ -131,7 +133,7 @@ pub const DiscordWsConn = struct
             .msg_backing_allocator = msg_backing_allocator,
             .msg_backing = msg_backing,
             .msg_allocator = std.heap.FixedBufferAllocator.init(&msg_backing.*),
-            .state = try state.DiscordState.init(state_allocator),
+            .state = try state.DiscordState.init(state_allocator, image_allocator),
         };
     }
 
@@ -663,6 +665,91 @@ pub const DiscordWsConn = struct
         return null;
     }
 
+    pub fn fetch_user_avatars_std(self: *Self) !void
+    {
+        if (self.state.image_backing_allocator == null) return;
+
+        var api_url_buf: [512]u8 = undefined;
+
+        self.state.all_users_lock.lock();
+        defer self.state.all_users_lock.unlock();
+        var user_it = self.state.all_users.iterator();
+        while (user_it.next()) |user_kv|
+        {
+            var user: *state.DiscordUser = user_kv.value_ptr;
+            if (user.avatar_id == null)
+            {
+                user.avatar_up_to_date = true;
+                continue;
+            }
+
+            // deinit unnecessary due to client.deinit calling it
+            var temp_bundle = std.crypto.Certificate.Bundle
+            {
+                .bytes = try self.cert_bundle.?.bytes.clone(self.http_mode.StdLibraryHttp.http_allocator),
+            };
+
+            {
+                const now_sec = std.time.timestamp();
+                var iter = self.cert_bundle.?.map.iterator();
+                while (iter.next()) |it|
+                {
+                    try temp_bundle.parseCert(self.http_mode.StdLibraryHttp.http_allocator, it.value_ptr.*, now_sec);
+                }
+            }
+
+            var client = std.http.Client
+            {
+                .allocator = self.http_mode.StdLibraryHttp.http_allocator,
+                .ca_bundle = temp_bundle,
+                .next_https_rescan_certs = false,
+            };
+            defer client.deinit();
+
+            var headers = std.http.Headers{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
+            defer headers.deinit();
+            try headers.append("Referer", "https://streamkit.discord.com/overlay/voice");
+
+            var req = try client.request
+            (
+                .POST,
+                try std.Uri.parse
+                (
+                    try std.fmt.bufPrint
+                    (
+                        &api_url_buf,
+                        AVATAR_API_URL,
+                        .{
+                            user.user_id.constSlice(),
+                            user.avatar_id.?.constSlice(),
+                        }
+                    )
+                ),
+                headers,
+                .{ .max_redirects = 10 },
+            );
+            defer req.deinit();
+
+            try start_func(&req, .{});
+            try req.finish();
+            try req.wait();
+
+            if (req.response.status != .ok)
+            {
+                return error.DownloadFailed;
+            }
+
+            const image = try req.reader().readAllAlloc(self.state.image_backing_allocator.?, AVATAR_MAX_SIZE);
+            user.avatar_bytes = image;
+            user.avatar_up_to_date = true;
+        }
+    }
+
+    pub fn fetch_user_avatars(self: *Self) !void
+    {
+        return self.fetch_user_avatars_std();
+    }
+
     pub fn handle_message(self: *Self, msg: []const u8) !bool
     {
         var buf: [JSON_BUFFER_SIZE]u8 = undefined;
@@ -758,7 +845,7 @@ pub const DiscordWsConn = struct
                         (
                             localMsg.evt.? == .VOICE_STATE_CREATE and
                             self.state.self_user_id.len > 0 and
-                            std.mem.eql(u8, self.state.self_user_id.slice(), new_user.user_id.slice())
+                            std.mem.eql(u8, self.state.self_user_id.constSlice(), new_user.user_id.constSlice())
                         )
                         {
                             try self.send_get_selected_voice_channel();
@@ -777,11 +864,21 @@ pub const DiscordWsConn = struct
                             );
                             defer dataMsg.deinit();
 
-                            _ = self.state.all_users.orderedRemove(dataMsg.value.data.user.id);
+                            const maybe_user = self.state.all_users.fetchOrderedRemove(dataMsg.value.data.user.id);
+                            if (maybe_user) |user|
+                            {
+                                if (user.value.avatar_bytes) |avatar_bytes|
+                                {
+                                    if (self.state.image_backing_allocator != null)
+                                    {
+                                        self.state.image_backing_allocator.?.free(avatar_bytes);
+                                    }
+                                }
+                            }
+
                             clear =
                                 self.state.self_user_id.len > 0 and
-                                std.mem.eql(u8, self.state.self_user_id.slice(), dataMsg.value.data.user.id);
-
+                                std.mem.eql(u8, self.state.self_user_id.constSlice(), dataMsg.value.data.user.id);
                         }
 
                         if (clear)
@@ -861,13 +958,8 @@ pub const DiscordWsConn = struct
                             );
                             defer dataMsg.deinit();
 
-                            try self.state.self_user_id.resize(dataMsg.value.data.user.id.len);
-                            try self.state.self_user_id.replaceRange
-                            (
-                                0,
-                                dataMsg.value.data.user.id.len,
-                                dataMsg.value.data.user.id
-                            );
+                            self.state.self_user_id.len = 0;
+                            try self.state.self_user_id.appendSlice(dataMsg.value.data.user.id);
                         }
 
                         try self.subscribe(.VOICE_CHANNEL_SELECT, null);
@@ -915,6 +1007,8 @@ pub const DiscordWsConn = struct
 
                     try self.state.parse_voice_state_data(dataMsg.value);
                 }
+
+                try self.fetch_user_avatars();
             },
             .SUBSCRIBE => { },
             .UNSUBSCRIBE => { },

@@ -59,6 +59,7 @@ pub fn start_discord_ws_conn(outFile: []const u8) !void
     conn = try disc.DiscordWsConn.init
     (
         allocator,
+        null,
         .{
             .StdLibraryHttp =
             .{

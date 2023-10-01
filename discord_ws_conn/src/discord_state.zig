@@ -29,11 +29,11 @@ pub const DiscordUser = struct
     muted: bool,
     deafened: bool,
     volume: u32,
+    avatar_up_to_date: bool,
     nickname: ?Nickname,
     user_id: UserId,
     avatar_id: ?AvatarId,
-    // avatar_up_to_date: bool,
-    // avatar_bytes: ?std.BoundedArray(u8, 1024*1024),
+    avatar_bytes: ?[]const u8,
 };
 
 pub const DiscordState = struct
@@ -41,16 +41,17 @@ pub const DiscordState = struct
     const Self = @This();
     self_user_id: UserId,
     current_channel: DiscordChannel,
-    backing_allocator: std.mem.Allocator,
-    arena: std.heap.ArenaAllocator,
+    image_backing_allocator: ?std.mem.Allocator,
+    user_backing_allocator: std.mem.Allocator,
+    user_arena: std.heap.ArenaAllocator,
     all_users_lock: std.Thread.Mutex,
     all_users: std.StringArrayHashMapUnmanaged(DiscordUser),
 
-    pub fn init(allocator: std.mem.Allocator) !DiscordState
+    pub fn init(user_allocator: std.mem.Allocator, image_allocator: ?std.mem.Allocator) !DiscordState
     {
-        var arena = std.heap.ArenaAllocator.init(allocator);
+        var user_arena = std.heap.ArenaAllocator.init(user_allocator);
         var user_map = std.StringArrayHashMapUnmanaged(DiscordUser){};
-        try user_map.ensureTotalCapacity(arena.allocator(), 128);
+        try user_map.ensureTotalCapacity(user_arena.allocator(), 128);
 
         return .{
             .self_user_id = try UserId.init(0),
@@ -59,8 +60,9 @@ pub const DiscordState = struct
                 .channel_id = try ChannelId.init(0),
                 .guild_id = try GuildId.init(0),
             },
-            .backing_allocator = allocator,
-            .arena = arena,
+            .image_backing_allocator = image_allocator,
+            .user_backing_allocator = user_allocator,
+            .user_arena = user_arena,
             .all_users_lock = .{},
             .all_users = user_map,
         };
@@ -68,14 +70,34 @@ pub const DiscordState = struct
 
     pub fn deinit(self: *Self) void
     {
-        self.all_users.deinit(self.arena.allocator());
-        self.arena.deinit();
+        if (self.image_backing_allocator != null)
+        {
+            var iter = self.all_users.iterator();
+            while (iter.next()) |user_kv|
+            {
+                var user: *DiscordUser = user_kv.value_ptr;
+                if (user.avatar_bytes != null) self.image_backing_allocator.?.free(user.avatar_bytes.?);
+            }
+        }
+
+        self.all_users.deinit(self.user_arena.allocator());
+        self.user_arena.deinit();
     }
 
     pub fn free_user_hashmap(self: *Self) void
     {
         self.all_users_lock.lock();
         defer self.all_users_lock.unlock();
+
+        if (self.image_backing_allocator != null)
+        {
+            var iter = self.all_users.iterator();
+            while (iter.next()) |user_kv|
+            {
+                var user: *DiscordUser = user_kv.value_ptr;
+                if (user.avatar_bytes != null) self.image_backing_allocator.?.free(user.avatar_bytes.?);
+            }
+        }
 
         self.all_users.clearRetainingCapacity();
     }
@@ -138,21 +160,14 @@ pub const DiscordState = struct
             try discord_conn.subscribe(.SPEAKING_STOP, new_channel);
         }
 
-        try self
-            .current_channel
-            .channel_id
-            .resize(new_channel.?.channel_id.len);
-        try self
-            .current_channel
-            .channel_id
-            .replaceRange(0, new_channel.?.channel_id.len, new_channel.?.channel_id.slice());
+        self.current_channel.channel_id.len = 0;
+        try self.current_channel.channel_id.appendSlice(new_channel.?.channel_id.constSlice());
 
         if (new_channel.?.guild_id == null)
         {
             self.current_channel.guild_id = null;
             return;
         }
-
         self.current_channel.guild_id = try GuildId.init(0);
         try self.current_channel.guild_id.?.appendSlice(new_channel.?.guild_id.?.constSlice());
     }
@@ -182,13 +197,15 @@ pub const DiscordState = struct
                 .muted = false,
                 .deafened = false,
                 .volume = 0,
+                .avatar_up_to_date = false,
                 .nickname = null,
                 .user_id = try std.BoundedArray(u8, MAX_USER_ID_LENGTH).init(0),
                 .avatar_id = null,
+                .avatar_bytes = null,
             };
 
-            try result.value_ptr.*.user_id.resize(voice_state.user.id.len);
-            try result.value_ptr.*.user_id.replaceRange(0, voice_state.user.id.len, voice_state.user.id);
+            result.value_ptr.*.user_id.len = 0;
+            try result.value_ptr.*.user_id.appendSlice(voice_state.user.id);
             result.key_ptr.* = result.value_ptr.*.user_id.constSlice();
         }
 
@@ -231,8 +248,7 @@ pub const DiscordState = struct
         if (voice_state.user.avatar) |avatar|
         {
             result.value_ptr.*.avatar_id = try std.BoundedArray(u8, MAX_AVATAR_ID_LENGTH).init(0);
-            try result.value_ptr.*.avatar_id.?.resize(avatar.len);
-            try result.value_ptr.*.avatar_id.?.replaceRange(0, avatar.len, avatar);
+            try result.value_ptr.*.avatar_id.?.appendSlice(avatar);
         }
 
         return result.value_ptr;
@@ -258,7 +274,7 @@ pub const DiscordState = struct
         self.all_users_lock.lock();
         defer self.all_users_lock.unlock();
 
-        var alloc_buf: [256]u8 = undefined;
+        var alloc_buf: [MAX_NICKNAME_LENGTH]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
         try writer.print("nickname                         | muted | speaking\n", .{});
 
@@ -276,8 +292,8 @@ pub const DiscordState = struct
                 const unicodeLength = try ziglyph.display_width.strWidth(nick.slice(), .half);
                 if (unicodeLength > 32)
                 {
-                    try nickname_buffer.resize(nick.len);
-                    try nickname_buffer.replaceRange(0, nick.len, nick.constSlice());
+                    nickname_buffer.len = 0;
+                    try nickname_buffer.appendSlice(nick.constSlice());
 
                     while (try ziglyph.display_width.strWidth(nickname_buffer.constSlice(), .half) > 29)
                     {
@@ -299,14 +315,14 @@ pub const DiscordState = struct
                     );
                     defer fba_a.free(paddedNickname);
 
-                    try nickname_buffer.resize(paddedNickname.len);
-                    try nickname_buffer.replaceRange(0, paddedNickname.len, paddedNickname);
+                    nickname_buffer.len = 0;
+                    try nickname_buffer.appendSlice(paddedNickname);
                 }
             }
             else
             {
-                try nickname_buffer.resize(32);
-                try nickname_buffer.replaceRange(0, 32, "unknown                         ");
+                nickname_buffer.len = 0;
+                try nickname_buffer.appendSlice("unknown                         ");
             }
 
             try writer.print
@@ -335,19 +351,15 @@ pub const DiscordState = struct
             var nickname_buffer = try Nickname.init(0);
             if (user.nickname) |nick|
             {
-                try nickname_buffer.resize(MAX_NICKNAME_LENGTH);
+                nickname_buffer.len = 0;
 
-                var currentIndex: usize = 0;
                 for (nick.constSlice()) |character|
                 {
                     if (character < 128) // is ascii
                     {
-                        nickname_buffer.set(currentIndex, character);
-                        currentIndex += 1;
+                        try nickname_buffer.append(character);
                     }
                 }
-
-                try nickname_buffer.resize(currentIndex);
             }
 
             try writer.print

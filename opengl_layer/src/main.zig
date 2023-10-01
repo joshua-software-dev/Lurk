@@ -120,7 +120,7 @@ fn create_imgui_context() void
         const allocator = state.get_default_allocator();
 
         // Internal logic makes connecting multiple times idempotent
-        overlay_gui.disch.start_discord_conn(allocator)
+        overlay_gui.disch.start_discord_conn(allocator, null)
         catch @panic("Failed to start discord connection.");
 
         var viewport: [4]i32 = undefined;

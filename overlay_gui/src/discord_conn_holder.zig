@@ -15,7 +15,7 @@ const timeout = 0.5 * std.time.ns_per_ms;
 var message_thread: ?std.Thread = null;
 var thread_should_run: bool = false;
 
-pub fn start_discord_conn(allocator: std.mem.Allocator) !void
+pub fn start_discord_conn(state_allocator: std.mem.Allocator, image_allocator: ?std.mem.Allocator) !void
 {
     if (debug) return;
     if (conn != null) return;
@@ -23,14 +23,15 @@ pub fn start_discord_conn(allocator: std.mem.Allocator) !void
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     conn = try disc.DiscordWsConn.init
     (
-        allocator,
+        state_allocator,
+        image_allocator,
         .{
             .StdLibraryHttp =
             .{
                 .bundle = .{ .allocate_new = gpa.allocator() },
-                .final_cert_allocator = allocator,
-                .http_allocator = allocator,
-                .message_allocator = allocator,
+                .final_cert_allocator = state_allocator,
+                .http_allocator = state_allocator,
+                .message_allocator = state_allocator,
             }
         }
     );

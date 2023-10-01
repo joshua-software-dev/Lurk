@@ -248,7 +248,11 @@ callconv(vk.vulkan_call_conv) vk.Result
         if (!proc_is_blacklisted and vk_global_state.device_backing.count() < 1)
         {
             // Internal logic makes connecting multiple times idempotent
-            overlay_gui.disch.start_discord_conn(vk_global_state.get_default_allocator(proc_is_blacklisted))
+            overlay_gui.disch.start_discord_conn
+            (
+                vk_global_state.get_default_allocator(proc_is_blacklisted),
+                null,
+            )
             catch @panic("Failed to start discord connection.");
         }
 

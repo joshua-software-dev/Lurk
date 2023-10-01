@@ -48,12 +48,6 @@ pub const Event = enum
     ACTIVITY_JOIN_REQUEST,
 };
 
-pub const MessageBackingBuffer = union(enum)
-{
-    dynamic: std.ArrayList(u8),
-    fixed: std.ArrayListUnmanaged(u8),
-};
-
 pub const Message = struct
 {
     cmd: Command,
