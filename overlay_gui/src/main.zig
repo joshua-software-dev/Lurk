@@ -175,6 +175,8 @@ fn draw_frame_contents() !void
                         ' '
                     else if (chr == '#')
                         '+'
+                    else if (chr == '%')
+                        '+'
                     else
                         chr;
             }
