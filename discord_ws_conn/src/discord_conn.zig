@@ -577,15 +577,17 @@ pub const DiscordWsConn = struct
         (
             channelMsg.value.data != null and
             guildMsg.value.data != null and
-            channelMsg.value.data.?.channel_id != null and
-            guildMsg.value.data.?.guild_id != null
+            channelMsg.value.data.?.channel_id != null
         )
         {
-
             return state.DiscordChannel
             {
                 .channel_id = try state.ChannelId.fromSlice(channelMsg.value.data.?.channel_id.?),
-                .guild_id = try state.GuildId.fromSlice(guildMsg.value.data.?.guild_id.?),
+                .guild_id =
+                    if (guildMsg.value.data.?.guild_id == null)
+                        null
+                    else
+                        try state.GuildId.fromSlice(guildMsg.value.data.?.guild_id.?),
             };
         }
 

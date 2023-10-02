@@ -21,6 +21,25 @@ pub const DiscordChannel = struct
 {
     channel_id: ChannelId,
     guild_id: ?GuildId,
+
+    pub fn same_channel_id(lhs: @This(), rhs: @This()) bool
+    {
+        return
+            lhs.channel_id.len > 0 and
+            rhs.channel_id.len > 0 and
+            std.mem.eql(u8, lhs.channel_id.constSlice(), rhs.channel_id.constSlice());
+    }
+
+    pub fn same_guild_id(lhs: @This(), rhs: @This()) bool
+    {
+        return
+            (lhs.guild_id == null and rhs.guild_id == null) or
+            (
+                lhs.guild_id != null and
+                rhs.guild_id != null and
+                std.mem.eql(u8, lhs.guild_id.?.constSlice(), rhs.guild_id.?.constSlice())
+            );
+    }
 };
 
 pub const DiscordUser = struct
@@ -106,36 +125,10 @@ pub const DiscordState = struct
     {
         if
         (
-            new_channel == null or
+            (new_channel == null) or
             (
-                new_channel != null and
-                self.current_channel.channel_id.len > 0 and
-                (
-                    std.mem.eql
-                    (
-                        u8,
-                        self.current_channel.channel_id.slice(),
-                        new_channel.?.channel_id.slice()
-                    )
-                    and
-                    (
-                        (
-                            self.current_channel.guild_id == null and
-                            new_channel.?.guild_id == null
-                        )
-                        or
-                        (
-                            self.current_channel.guild_id != null and
-                            new_channel.?.guild_id != null and
-                            std.mem.eql
-                            (
-                                u8,
-                                self.current_channel.guild_id.?.slice(),
-                                new_channel.?.guild_id.?.slice()
-                            )
-                        )
-                    )
-                )
+                self.current_channel.same_channel_id(new_channel.?) and
+                self.current_channel.same_guild_id(new_channel.?)
             )
         )
         {
@@ -151,14 +144,11 @@ pub const DiscordState = struct
             try discord_conn.unsubscribe(.SPEAKING_STOP, self.current_channel);
         }
 
-        if (new_channel != null)
-        {
-            try discord_conn.subscribe(.VOICE_STATE_CREATE, new_channel);
-            try discord_conn.subscribe(.VOICE_STATE_UPDATE, new_channel);
-            try discord_conn.subscribe(.VOICE_STATE_DELETE, new_channel);
-            try discord_conn.subscribe(.SPEAKING_START, new_channel);
-            try discord_conn.subscribe(.SPEAKING_STOP, new_channel);
-        }
+        try discord_conn.subscribe(.VOICE_STATE_CREATE, new_channel.?);
+        try discord_conn.subscribe(.VOICE_STATE_UPDATE, new_channel.?);
+        try discord_conn.subscribe(.VOICE_STATE_DELETE, new_channel.?);
+        try discord_conn.subscribe(.SPEAKING_START, new_channel.?);
+        try discord_conn.subscribe(.SPEAKING_STOP, new_channel.?);
 
         self.current_channel.channel_id.len = 0;
         try self.current_channel.channel_id.appendSlice(new_channel.?.channel_id.constSlice());
