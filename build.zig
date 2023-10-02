@@ -510,6 +510,7 @@ pub fn build(b: *std.Build) void {
         else
             null;
     const iguana_tls_dep = b.dependency("iguanaTLS", build_args);
+    const known_folders_dep = b.dependency("known_folders", .{});
     const uuid_dep = b.dependency("uuid", build_args);
     const vk_dep: ?*std.Build.Dependency =
         if (should_build_vulkan)
@@ -517,6 +518,7 @@ pub fn build(b: *std.Build) void {
         else
             null;
     const ws_dep = b.dependency("ws", build_args);
+    const zig_yaml_dep = b.dependency("zig_yaml", build_args);
     const zgl_dep: ?*std.Build.Dependency =
         if (should_build_opengl)
             b.dependency("zgl", .{})
@@ -615,7 +617,9 @@ pub fn build(b: *std.Build) void {
             .source_file = .{ .path = "overlay_gui/src/main.zig" },
             .dependencies = &.{
                 .{ .name = "discord_ws_conn", .module = disc },
+                .{ .name = "known-folders", .module = known_folders_dep.module("known-folders") },
                 .{ .name = "overlay_opts", .module = overlay_opts.createModule() },
+                .{ .name = "yaml", .module = zig_yaml_dep.module("yaml") },
                 .{ .name = "Zig-ImGui", .module = ZigImGui_dep.?.module("Zig-ImGui") },
             }
         }

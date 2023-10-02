@@ -1,10 +1,12 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+const state = @import("overlay_state.zig");
+
 const disc = @import("discord_ws_conn");
 
 
-const debug = switch (builtin.mode)
+const disable_connection = switch (builtin.mode)
 {
     .Debug => true,
     else => false,
@@ -17,7 +19,7 @@ var thread_should_run: bool = false;
 
 pub fn start_discord_conn(state_allocator: std.mem.Allocator, image_allocator: ?std.mem.Allocator) !void
 {
-    if (debug) return;
+    if (disable_connection) return;
     if (conn != null) return;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -40,28 +42,36 @@ pub fn start_discord_conn(state_allocator: std.mem.Allocator, image_allocator: ?
 
     std.log.scoped(.OVERLAY).info("Connection Success: {+/}", .{ conn.?.connection_uri });
 
-    @atomicStore(bool, &thread_should_run, true, .Release);
-    message_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
+    if (state.config.?.use_background_network_thread)
+    {
+        @atomicStore(bool, &thread_should_run, true, .Release);
+        message_thread = try std.Thread.spawn(.{}, handle_message_thread, .{});
 
-    std.log.scoped(.OVERLAY).info("Started background discord message thread", .{});
+        std.log.scoped(.OVERLAY).info("Started background discord message thread", .{});
+    }
+}
+
+pub fn handle_one_message() !void
+{
+    _ = conn.?.recieve_next_msg(timeout)
+        catch |err| switch (err)
+        {
+            std.net.Stream.ReadError.WouldBlock => {},
+            else => std.log.scoped(.OVERLAY).err("{any}", .{ err }),
+        };
 }
 
 pub fn handle_message_thread() void
 {
     while (@atomicLoad(bool, &thread_should_run, .Acquire))
     {
-        _ = conn.?.recieve_next_msg(timeout)
-            catch |err| switch (err)
-            {
-                std.net.Stream.ReadError.WouldBlock => {},
-                else => std.log.scoped(.OVERLAY).err("{any}", .{ err }),
-            };
+        try handle_one_message();
     }
 }
 
 pub fn stop_discord_conn() void
 {
-    if (debug) return;
+    if (disable_connection) return;
     if (conn == null)
     {
         std.log.scoped(.OVERLAY).warn("Discord connection was not started, could not close.", .{});

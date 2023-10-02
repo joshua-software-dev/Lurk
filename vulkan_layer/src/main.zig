@@ -26,6 +26,14 @@ pub const std_options = struct
             }
         },
         .{
+            .scope = .parse,
+            .level = .err,
+        },
+        .{
+            .scope = .tokenizer,
+            .level = .err,
+        },
+        .{
             .scope = .VKLURK,
             .level = switch (builtin.mode)
             {
@@ -43,7 +51,6 @@ pub const std_options = struct
         },
     };
 };
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Layer globals definition
@@ -158,9 +165,12 @@ callconv(vk.vulkan_call_conv) vk.Result
             if (!vk_global_state.first_alloc_complete)
             {
                 if (builtin.mode == .Debug) overlay_gui.set_allocator_for_imgui(null);
-                overlay_gui.load_fonts(true);
 
                 const allocator = vk_global_state.get_default_allocator(false);
+
+                _ = overlay_gui.make_or_fetch_config(allocator) catch @panic("Failed to load config file.");
+
+                overlay_gui.load_fonts();
 
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
                 vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during device backing");
@@ -627,6 +637,8 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
         {
             // allocate much less memory for only the basics
             const allocator = vk_global_state.get_default_allocator(proc_is_blacklisted);
+
+            _ = overlay_gui.make_or_fetch_config(allocator) catch @panic("Failed to load config file.");
 
             vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
             vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during bl device backing");

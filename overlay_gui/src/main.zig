@@ -2,8 +2,10 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 pub const blacklist = @import("blacklist_processes.zig");
+const config = @import("config.zig");
 pub const disch = @import("discord_conn_holder.zig");
 const font = @import("font.zig");
+const overlay_types = @import("overlay_types.zig");
 const state = @import("overlay_state.zig");
 
 const disc = @import("discord_ws_conn");
@@ -13,21 +15,14 @@ const zimgui = @import("Zig-ImGui");
 pub const DrawIdx = zimgui.DrawIdx;
 pub const DrawVert = zimgui.DrawVert;
 
-const WindowPosition = enum
-{
-    TOP_LEFT,
-    TOP_RIGHT,
-    BOTTOM_LEFT,
-    BOTTOM_RIGHT,
-};
-
+pub const make_or_fetch_config = config.make_or_fetch_config;
 pub const set_allocator_for_imgui = state.set_allocator_for_imgui;
 
-pub fn load_fonts(use_thread: bool) void
+pub fn load_fonts() void
 {
     if (state.shared_font_atlas == null)
     {
-        if (use_thread)
+        if (state.config.?.load_fonts_in_background_thread)
         {
             font.load_shared_font_background() catch @panic("Failed to start font loading thread");
             return;
@@ -213,7 +208,7 @@ fn set_window_position
     display_y: u32,
     window_x: f32,
     window_y: f32,
-    position: WindowPosition,
+    position: overlay_types.window_position,
     margin: f32,
 )
 void
@@ -311,13 +306,24 @@ fn write_font_cache(atlas: *zimgui.FontAtlas) void
 
 pub fn draw_frame(display_x: u32, display_y: u32) !void
 {
-    if (disch.conn != null and !disch.conn.?.state.all_users_lock.tryLock())
+    var need_unlock = false;
+    if (disch.conn != null)
     {
-        return; // Reuse previous frame until data is available
-    }
-    defer if (disch.conn != null) disch.conn.?.state.all_users_lock.unlock();
+        if (!state.config.?.use_background_network_thread)
+        {
+            try disch.handle_one_message();
+        }
+        else
+        {
+            if (!disch.conn.?.state.all_users_lock.tryLock())
+            {
+                return; // Reuse previous frame until data is available
+            }
 
-    const margin: f32 = 20;
+            need_unlock = true;
+        }
+    }
+    defer if (need_unlock) disch.conn.?.state.all_users_lock.unlock();
 
     const im_io = zimgui.GetIO();
     im_io.DisplaySize = zimgui.Vec2.init(@floatFromInt(display_x), @floatFromInt(display_y));
@@ -330,8 +336,15 @@ pub fn draw_frame(display_x: u32, display_y: u32) !void
 
         const window_size = zimgui.Vec2.init(400, 300);
         zimgui.SetNextWindowSize(window_size);
-        set_window_position(display_x, display_y, window_size.x, window_size.y, .TOP_RIGHT, margin);
-
+        set_window_position
+        (
+            display_x,
+            display_y,
+            window_size.x,
+            window_size.y,
+            state.config.?.window_position,
+            @floatFromInt(state.config.?.screen_margin),
+        );
 
         var show_window = true;
         if

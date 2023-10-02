@@ -13,6 +13,11 @@
             .hash = "1220da25f35c5174187293f94bea72ed6905a67f02029f3c23c2f2133edfce3dc315",
             .url = "https://github.com/joshua-software-dev/iguanaTLS/archive/c4e6140b60f0d2266fb7a6a343ba8aabc89c59ad.tar.gz",
         },
+        .known_folders =
+        .{
+            .hash = "1220bb12c9bfe291eed1afe6a2070c7c39918ab1979f24a281bba39dfb23f5bcd544",
+            .url = "https://github.com/ziglibs/known-folders/archive/a564f582122326328dad6b59209d070d57c4e6ae.tar.gz",
+        },
         .uuid =
         .{
             .hash = "1220b32a616236fd26f0e4f063f3f11f5c5b83943d1fd71c367cf0bdbebedbf42385",
@@ -47,6 +52,11 @@
         .{
             .hash = "122089193eec56da1e6ffe9ccd8b4ec620642c247f99dafb58f53da7eba9fe567db2",
             .url = "https://github.com/joshua-software-dev/Zig-ImGui/archive/b3efd041b2580490c6ba31162135a7faef600a3c.tar.gz",
+        },
+        .zig_yaml =
+        .{
+            .hash = "122055ce75eb5bf7dafab5dcb007f945672e10bf89156f2eec4ae0de6e682adb2596",
+            .url = "https://github.com/kubkon/zig-yaml/archive/2b6de6354b7211abd1cf6c9d22d0b23402613e24.tar.gz",
         },
         .zware_glslang11 =
         .{

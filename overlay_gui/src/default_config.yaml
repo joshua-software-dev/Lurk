@@ -1,0 +1,24 @@
+# Last version this config was auto generated with
+config_version: 1
+# How many pixels should the overlay be offset from the edges of the screen
+# Must be a value equal to or greater than 0
+screen_margin: 20
+# Valid values are: "TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", and "BOTTOM_RIGHT"
+window_position: "TOP_RIGHT"
+# Do not download/load non english fonts. Disables emoji support as well.
+english_only: false
+# Use a background thread to load fonts instead of delaying the application
+# from drawing frames until fonts finish loading.
+load_fonts_in_background_thread: true
+# Must be an absolute path
+primary_font_path: "~/.config/lurk/GoNotoKurrent-Regular_v7.0.woff2"
+# Must be a value equal to or greater than 0.0
+primary_font_size: 20.0
+# Must be an absolute path
+emoji_font_path: "~/.config/lurk/Twemoji.Mozilla.v0.7.0.woff2"
+# Must be a value equal to or greater than 0.0
+emoji_font_size: 15.0
+# Run messaging necessary to communicate with discord in a background thread,
+# instead of delaying rendering of frames each time communication needs to
+# occur.
+use_background_network_thread: true

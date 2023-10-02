@@ -16,11 +16,6 @@ pub const font_cache = struct
     TextureData: []const u8,
 };
 
-const english_only = overlay_opts.english_only;
-
-const primary_font_size: f32 = 20.0;
-const emoji_font_size: f32 = 15.0;
-
 fn load_shared_font_from_font_cache() void
 {
     const file = std.fs.cwd().openFile("out.imfont.json", .{}) catch @panic("fs error");
@@ -110,17 +105,16 @@ fn load_shared_font_from_font_cache() void
 pub fn load_shared_font() void
 {
     state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
-    if (english_only)
+    if (state.config.?.english_only)
     {
         _ = state.shared_font_atlas.?.AddFontDefault();
         _ = state.shared_font_atlas.?.Build();
+        std.log.scoped(.OVERLAY).warn("Using english only mode, expect potential rendering errors", .{});
         @atomicStore(bool, &state.font_thread_finished, true, .Release);
         @atomicStore(bool, &state.font_load_complete, true, .Release);
         return;
     }
 
-    const primary_embedded_font_name = "GoNotoKurrent-Regular_v7.0.woff2";
-    const primary_embedded_font = @embedFile(primary_embedded_font_name);
     var primary_font_config = zimgui.FontConfig.init_ImFontConfig();
     defer primary_font_config.deinit();
     primary_font_config.EllipsisChar = @as(zimgui.Wchar, 0x0085);
@@ -128,59 +122,69 @@ pub fn load_shared_font() void
     primary_font_config.OversampleH = 1;
     primary_font_config.OversampleV = 1;
     primary_font_config.PixelSnapH = true;
-    primary_font_config.SizePixels = primary_font_size;
+    primary_font_config.SizePixels = state.config.?.primary_font_size;
 
-    _ = std.fmt.bufPrint
-    (
-        &primary_font_config.Name,
-        "{s}, {d}px\x00",
-        .{
-            primary_embedded_font_name,
+    {
+        const primary_font_name = std.fs.path.basename(state.config.?.primary_font_path.constSlice());
+        _ = std.fmt.bufPrint
+        (
+            &primary_font_config.Name,
+            "{s}, {d}px\x00",
+            .{
+                primary_font_name[0..@min(primary_font_name.len, 32)],
+                primary_font_config.SizePixels,
+            }
+        ) catch @panic("oom loading primary font name");
+    }
+
+    {
+        const primary_font_posix_path = std.os.toPosixPath(state.config.?.primary_font_path.constSlice())
+            catch @panic("Failed to get posix path for primary font.");
+
+        // init using imgui's allocator to allow it to free the memory later
+        _ = state.shared_font_atlas.?.AddFontFromFileTTFExt
+        (
+            &primary_font_posix_path,
             primary_font_config.SizePixels,
-        }
-    ) catch @panic("oom loading primary font name");
+            primary_font_config,
+            state.shared_font_atlas.?.GetGlyphRangesChineseFull(),
+        );
+    }
 
-    // init using imgui's allocator to allow it to free the memory later
-    var primary_font_data = zimgui.allocator.dupe(u8, primary_embedded_font) catch @panic("oom loading primary font");
-    _ = state.shared_font_atlas.?.AddFontFromMemoryTTFExt
-    (
-        @ptrCast(primary_font_data),
-        @intCast(primary_font_data.len),
-        primary_font_config.SizePixels,
-        primary_font_config,
-        state.shared_font_atlas.?.GetGlyphRangesChineseFull(),
-    );
-
-    const emoji_embedded_font_name = "Twemoji.Mozilla.v0.7.0.woff2";
-    const emoji_embedded_font = @embedFile(emoji_embedded_font_name);
     var emoji_font_config = zimgui.FontConfig.init_ImFontConfig();
     defer emoji_font_config.deinit();
     emoji_font_config.FontBuilderFlags = 256; // Allow Color Emoji
     emoji_font_config.MergeMode = true;
     emoji_font_config.OversampleH = 1;
     emoji_font_config.OversampleV = 1;
-    emoji_font_config.SizePixels = emoji_font_size;
+    emoji_font_config.SizePixels = state.config.?.emoji_font_size;
 
-    _ = std.fmt.bufPrint
-    (
-        &emoji_font_config.Name,
-        "{s}, {d}px\x00",
-        .{
-            emoji_embedded_font_name,
+    {
+        const emoji_font_name = std.fs.path.basename(state.config.?.emoji_font_path.constSlice());
+        _ = std.fmt.bufPrint
+        (
+            &emoji_font_config.Name,
+            "{s}, {d}px\x00",
+            .{
+                emoji_font_name[0..@min(emoji_font_name.len, 32)],
+                emoji_font_config.SizePixels,
+            }
+        ) catch @panic("oom loading emoji font name");
+    }
+
+    {
+        const emoji_font_posix_path = std.os.toPosixPath(state.config.?.emoji_font_path.constSlice())
+            catch @panic("Failed to get posix path for emoji font.");
+
+        // init using imgui's allocator to allow it to free the memory later
+        _ = state.shared_font_atlas.?.AddFontFromFileTTFExt
+        (
+            &emoji_font_posix_path,
             emoji_font_config.SizePixels,
-        }
-    ) catch @panic("oom loading emoji font name");
-
-    // init using imgui's allocator to allow it to free the memory later
-    var emoji_font_data = zimgui.allocator.dupe(u8, emoji_embedded_font) catch @panic("oom loading emoji font");
-    _ = state.shared_font_atlas.?.AddFontFromMemoryTTFExt
-    (
-        @ptrCast(emoji_font_data),
-        emoji_embedded_font.len,
-        emoji_font_config.SizePixels,
-        emoji_font_config,
-        &[_:0]zimgui.Wchar{ 0x1, 0x10FFFF },
-    );
+            emoji_font_config,
+            &[_:0]zimgui.Wchar{ 0x1, 0x10FFFF },
+        );
+    }
 
     _ = state.shared_font_atlas.?.Build();
     @atomicStore(bool, &state.font_thread_finished, true, .Release);

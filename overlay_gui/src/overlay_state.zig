@@ -1,8 +1,11 @@
 const std = @import("std");
 
+const overlay_types = @import("overlay_types.zig");
+
 const zimgui = @import("Zig-ImGui");
 
 
+pub var config: ?overlay_types.overlay_config = null;
 pub var font_load_complete = false;
 pub var font_thread_finished = false;
 pub var font_thread: ?std.Thread = null;

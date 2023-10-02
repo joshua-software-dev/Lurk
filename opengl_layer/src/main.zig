@@ -32,6 +32,14 @@ pub const std_options = struct
             }
         },
         .{
+            .scope = .parse,
+            .level = .err,
+        },
+        .{
+            .scope = .tokenizer,
+            .level = .err,
+        },
+        .{
             .scope = .WS,
             .level = switch (builtin.mode)
             {
@@ -115,9 +123,12 @@ fn create_imgui_context() void
 
         if (builtin.mode == .Debug) overlay_gui.set_allocator_for_imgui(null);
 
-        overlay_gui.load_fonts(true);
-
         const allocator = state.get_default_allocator();
+
+        _ = overlay_gui.make_or_fetch_config(allocator)
+            catch @panic("Failed to load config file.");
+
+        overlay_gui.load_fonts();
 
         // Internal logic makes connecting multiple times idempotent
         overlay_gui.disch.start_discord_conn(allocator, null)
