@@ -67,7 +67,7 @@ fn downloadWithHttpClient(allocator: std.mem.Allocator, url: []const u8, writer:
     var client: std.http.Client = .{ .allocator = allocator };
     defer client.deinit();
 
-    var headers = std.http.Headers{ .allocator = allocator };
+    var headers: std.http.Headers = .{ .allocator = allocator };
     defer headers.deinit();
 
     var req = try client.request(.GET, uri, headers, .{});
@@ -95,10 +95,11 @@ fn fetch(step: *std.Build.Step, url: []const u8, destination_path: []const u8) !
 
     var buffered_writer = std.io.bufferedWriter(file.writer());
 
-    downloadWithHttpClient(step.owner.allocator, url, buffered_writer.writer()) catch |err|
-    {
-        return step.fail("failed to fetch '{s}': {s}", .{ url, @errorName(err) });
-    };
+    downloadWithHttpClient(step.owner.allocator, url, buffered_writer.writer())
+        catch |err|
+        {
+            return step.fail("failed to fetch '{s}': {s}", .{ url, @errorName(err) });
+        };
 
     try buffered_writer.flush();
 }
@@ -113,7 +114,8 @@ pub fn download_fonts(self: *std.build.Step, progress: *std.Progress.Node) !void
     );
 
     var main_font_exists = true;
-    std.fs.accessAbsolute(main_font_path, .{}) catch { main_font_exists = false; };
+    std.fs.accessAbsolute(main_font_path, .{})
+        catch { main_font_exists = false; };
     if (!main_font_exists)
     {
         try fetch
@@ -132,7 +134,8 @@ pub fn download_fonts(self: *std.build.Step, progress: *std.Progress.Node) !void
     );
 
     var emoji_font_exists = true;
-    std.fs.accessAbsolute(emoji_font_path, .{}) catch { emoji_font_exists = false; };
+    std.fs.accessAbsolute(emoji_font_path, .{})
+        catch { emoji_font_exists = false; };
     if (!emoji_font_exists)
     {
         try fetch

@@ -24,7 +24,8 @@ pub fn load_fonts() void
     {
         if (state.config.?.load_fonts_in_background_thread)
         {
-            font.load_shared_font_background() catch @panic("Failed to start font loading thread");
+            font.load_shared_font_background()
+                catch @panic("Failed to start font loading thread");
             return;
         }
 
@@ -75,7 +76,8 @@ pub fn destroy_overlay_context() void
 
         if (state.overlay_context != null)
         {
-            const old_ctx = use_overlay_context() catch unreachable;
+            const old_ctx = use_overlay_context()
+                catch unreachable;
             defer restore_old_context(old_ctx);
             const im_io = zimgui.GetIO();
             if (im_io.Fonts != null and im_io.Fonts != state.shared_font_atlas) im_io.Fonts.?.deinit();
@@ -165,15 +167,13 @@ fn draw_frame_contents() !void
             var safe_name = try fba.allocator().allocSentinel(u8, user.nickname.?.constSlice().len, 0);
             for (user.nickname.?.constSlice(), 0..) |chr, i|
             {
-                safe_name[i] =
-                    if (chr == '\x00')
-                        ' '
-                    else if (chr == '#')
-                        '+'
-                    else if (chr == '%')
-                        '+'
-                    else
-                        chr;
+                safe_name[i] = switch (chr)
+                {
+                    '\x00' => ' ',
+                    '#' => '+',
+                    '%' => '+',
+                    else => chr,
+                };
             }
 
             if (user.muted and user.deafened)
@@ -271,11 +271,13 @@ fn write_font_cache(atlas: *zimgui.FontAtlas) void
     var width: i32 = 0;
     var height: i32 = 0;
 
-    const pixels = setup_font_text_data(&width, &height) catch @panic("Fuck");
+    const pixels = setup_font_text_data(&width, &height)
+        catch @panic("Fuck");
     const pixel_array_size: u32 = @intCast(width * height);
     std.debug.assert(pixel_array_size % 4 == 0);
 
-    var out_pixels: []u8 = std.heap.c_allocator.alloc(u8, pixel_array_size / 4) catch @panic("oom");
+    var out_pixels = std.heap.c_allocator.alloc(u8, pixel_array_size / 4)
+        catch @panic("oom");
     defer std.heap.c_allocator.free(out_pixels);
 
     var ii: usize = 0;
@@ -299,8 +301,10 @@ fn write_font_cache(atlas: *zimgui.FontAtlas) void
     };
 
     var cwd = std.fs.cwd();
-    var file = cwd.createFile("out.imfont.json", .{}) catch @panic("fs fail");
-    std.json.stringify(cache, .{}, file.writer()) catch @panic("write fail");
+    var file = cwd.createFile("out.imfont.json", .{})
+        catch @panic("fs fail");
+    std.json.stringify(cache, .{}, file.writer())
+        catch @panic("write fail");
     @panic("done");
 }
 
@@ -353,8 +357,7 @@ pub fn draw_frame(display_x: u32, display_y: u32) !void
             (
                 "Lurk",
                 &show_window,
-                zimgui.WindowFlags
-                {
+                .{
                     .NoCollapse = true,
                     .NoResize = true,
                     .NoScrollbar = true,

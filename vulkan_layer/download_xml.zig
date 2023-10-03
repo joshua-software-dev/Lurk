@@ -67,7 +67,7 @@ fn downloadWithHttpClient(allocator: std.mem.Allocator, url: []const u8, writer:
     var client: std.http.Client = .{ .allocator = allocator };
     defer client.deinit();
 
-    var headers = std.http.Headers{ .allocator = allocator };
+    var headers: std.http.Headers = .{ .allocator = allocator };
     defer headers.deinit();
 
     var req = try client.request(.GET, uri, headers, .{});
@@ -95,10 +95,11 @@ fn fetch(step: *std.Build.Step, url: []const u8, destination_path: []const u8) !
 
     var buffered_writer = std.io.bufferedWriter(file.writer());
 
-    downloadWithHttpClient(step.owner.allocator, url, buffered_writer.writer()) catch |err|
-    {
-        return step.fail("failed to fetch '{s}': {s}", .{ url, @errorName(err) });
-    };
+    downloadWithHttpClient(step.owner.allocator, url, buffered_writer.writer())
+        catch |err|
+        {
+            return step.fail("failed to fetch '{s}': {s}", .{ url, @errorName(err) });
+        };
 
     try buffered_writer.flush();
 
@@ -148,7 +149,8 @@ pub fn download_xml(self: *std.build.Step, progress: *std.Progress.Node) !void
     const xml_path = @as([]const u8, self.owner.pathFromRoot("zig-cache/vk.xml"));
 
     var file_exists = true;
-    std.fs.accessAbsolute(xml_path, .{}) catch { file_exists = false; };
+    std.fs.accessAbsolute(xml_path, .{})
+        catch { file_exists = false; };
     if (!file_exists)
     {
         try fetch

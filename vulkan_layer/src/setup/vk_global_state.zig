@@ -41,7 +41,7 @@ pub fn get_default_allocator(blacklisted: bool) std.mem.Allocator
         {
             if (gpa == null)
             {
-                gpa = gpa_type{};
+                gpa = .{};
                 gpa.?.setRequestedMemoryLimit
                 (
                     if (blacklisted)

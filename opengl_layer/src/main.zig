@@ -12,9 +12,7 @@ const zgl = @import("zgl");
 // Zig scoped logger set based on compile mode
 pub const std_options = struct
 {
-    pub const log_scope_levels: []const std.log.ScopeLevel =
-    &[_]std.log.ScopeLevel
-    {
+    pub const log_scope_levels: []const std.log.ScopeLevel = &.{
         .{
             .scope = .GLLURK,
             .level = switch (builtin.mode)
@@ -132,14 +130,15 @@ fn create_imgui_context() void
 
         // Internal logic makes connecting multiple times idempotent
         overlay_gui.disch.start_discord_conn(allocator, null)
-        catch @panic("Failed to start discord connection.");
+            catch @panic("Failed to start discord connection.");
 
         var viewport: [4]i32 = undefined;
         zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
 
         overlay_gui.create_overlay_context(@floatFromInt(viewport[2]), @floatFromInt(viewport[3]));
 
-        const old_ctx = overlay_gui.use_overlay_context() catch unreachable;
+        const old_ctx = overlay_gui.use_overlay_context()
+            catch unreachable;
         defer overlay_gui.restore_old_context(old_ctx);
     }
 }
@@ -148,20 +147,20 @@ fn do_imgui_swap() void
 {
     if (state.imgui_ref_count < 1) return;
 
-    const old_ctx = overlay_gui.use_overlay_context() catch return;
+    const old_ctx = overlay_gui.use_overlay_context()
+        catch return;
     defer overlay_gui.restore_old_context(old_ctx);
 
     overlay_gui.is_draw_ready()
-        catch |err|
-            switch (err)
+        catch |err| switch (err)
+        {
+            error.FontNotLoaded => return,
+            error.FontTextureRequiresReload =>
             {
-                error.FontNotLoaded => return,
-                error.FontTextureRequiresReload =>
-                {
-                    _ = gl_load.ImGui_ImplOpenGL3_Init(null);
-                    return;
-                },
-            };
+                _ = gl_load.ImGui_ImplOpenGL3_Init(null);
+                return;
+            },
+        };
 
     var viewport: [4]i32 = undefined;
     zgl.binding.getIntegerv(zgl.binding.VIEWPORT, viewport[0..]);
@@ -178,7 +177,8 @@ export fn dlsym(handle: ?*anyopaque, name: [*c]const u8) ?*anyopaque
 {
     if (!hacks.functions_loaded)
     {
-        hacks.get_original_func_ptrs() catch |err| std.debug.panic("Encountered error while loading: {any}", .{ err });
+        hacks.get_original_func_ptrs()
+            catch |err| std.debug.panic("Encountered error while loading: {any}", .{ err });
         hacks.functions_loaded = true;
     }
 

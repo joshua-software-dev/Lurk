@@ -22,7 +22,7 @@ pub fn start_discord_conn(state_allocator: std.mem.Allocator, image_allocator: ?
     if (disable_connection) return;
     if (conn != null) return;
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
     conn = try disc.DiscordWsConn.init
     (
         state_allocator,

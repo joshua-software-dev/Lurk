@@ -28,8 +28,10 @@ var imgui_alloc_table: ?std.AutoHashMap(usize, usize) = null;
 fn mem_alloc(size: usize, user_data: ?*anyopaque) callconv(.C) ?*anyopaque
 {
     _ = user_data;
-    const memory = imgui_allocator.?.alignedAlloc(u8, 16, size) catch @panic("oom in ImGui alloc");
-    imgui_alloc_table.?.put(@intFromPtr(memory.ptr), size) catch @panic("oom in ImGui alloc");
+    const memory = imgui_allocator.?.alignedAlloc(u8, 16, size)
+        catch @panic("oom in ImGui alloc");
+    imgui_alloc_table.?.put(@intFromPtr(memory.ptr), size)
+        catch @panic("oom in ImGui alloc");
     return memory.ptr;
 }
 
@@ -51,10 +53,7 @@ pub fn set_allocator_for_imgui(maybe_allocator: ?std.mem.Allocator) void
 {
     if (imgui_allocator == null)
     {
-        if (maybe_allocator == null)
-        {
-            font_gpa = font_gpa_type{};
-        }
+        if (maybe_allocator == null) font_gpa = .{};
 
         const allocator =
             if (maybe_allocator == null)

@@ -27,7 +27,7 @@ pub fn get_default_allocator() std.mem.Allocator
         {
             if (gpa == null)
             {
-                gpa = gpa_type{};
+                gpa = .{};
                 gpa.?.setRequestedMemoryLimit(MAX_MEMORY_ALLOCATION);
             }
 
@@ -37,7 +37,8 @@ pub fn get_default_allocator() std.mem.Allocator
         {
             if (heap_fba == null)
             {
-                heap_buf = std.heap.c_allocator.alloc(u8, MAX_MEMORY_ALLOCATION) catch @panic("oom");
+                heap_buf = std.heap.c_allocator.alloc(u8, MAX_MEMORY_ALLOCATION)
+                    catch @panic("oom");
                 heap_fba = std.heap.FixedBufferAllocator.init(heap_buf.?);
             }
 

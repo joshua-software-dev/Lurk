@@ -7,8 +7,7 @@ const vkt = @import("vk_types.zig");
 pub fn vk_memory_type(device: vk.Device, properties: vk.MemoryPropertyFlags, type_bits: u32) u32
 {
     const device_data: vkt.DeviceData = vk_global_state.device_backing.get(device).?;
-    const maybe_instance_data: ?vkt.InstanceData =
-    blk: {
+    const maybe_instance_data: ?vkt.InstanceData = blk: {
         var it = vk_global_state.instance_backing.iterator();
         while (it.next()) |kv|
         {
@@ -23,7 +22,7 @@ pub fn vk_memory_type(device: vk.Device, properties: vk.MemoryPropertyFlags, typ
 
         break :blk null;
     };
-    const instance_data: vkt.InstanceData = maybe_instance_data.?;
+    const instance_data = maybe_instance_data.?;
     const physical_mem_props = instance_data.instance_wrapper.getPhysicalDeviceMemoryProperties
     (
         device_data.physical_device

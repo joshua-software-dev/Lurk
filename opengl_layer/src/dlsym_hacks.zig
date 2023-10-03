@@ -73,7 +73,7 @@ pub fn get_original_func_ptrs() !void
 {
     std.log.scoped(.GLLURK).debug("Hooking dlopen and dlsym...", .{});
 
-    const dlls_to_try = [_][]const u8{ "*libdl.so*", "*libc.so*", "*libc.*.so*" };
+    const dlls_to_try: []const []const u8 = &.{ "*libdl.so*", "*libc.so*", "*libc.*.so*" };
     for (dlls_to_try) |dll|
     {
         var libdl: eh_obj_t = undefined;

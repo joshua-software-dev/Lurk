@@ -69,7 +69,7 @@ pub const DiscordState = struct
     pub fn init(user_allocator: std.mem.Allocator, image_allocator: ?std.mem.Allocator) !DiscordState
     {
         var user_arena = std.heap.ArenaAllocator.init(user_allocator);
-        var user_map = std.StringArrayHashMapUnmanaged(DiscordUser){};
+        var user_map: std.StringArrayHashMapUnmanaged(DiscordUser) = .{};
         try user_map.ensureTotalCapacity(user_arena.allocator(), 128);
 
         return .{
@@ -181,8 +181,7 @@ pub const DiscordState = struct
         var result = self.all_users.getOrPutAssumeCapacity(voice_state.user.id);
         if (!result.found_existing)
         {
-            result.value_ptr.* = DiscordUser
-            {
+            result.value_ptr.* = .{
                 .speaking = false,
                 .muted = false,
                 .deafened = false,

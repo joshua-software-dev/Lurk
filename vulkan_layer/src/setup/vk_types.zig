@@ -81,8 +81,7 @@ pub const VkQueueData = struct
 
 pub const LayerDeviceWrapper = vk.DeviceWrapper
 (
-    vk.DeviceCommandFlags
-    {
+    .{
         .allocateCommandBuffers = true,
         .allocateDescriptorSets = true,
         .allocateMemory = true,
@@ -153,8 +152,7 @@ pub const LayerDeviceWrapper = vk.DeviceWrapper
 );
 pub const LayerInstanceWrapper = vk.InstanceWrapper
 (
-    vk.InstanceCommandFlags
-    {
+    .{
         .destroyInstance = true,
         .enumerateDeviceExtensionProperties = true,
         .enumeratePhysicalDevices = true,

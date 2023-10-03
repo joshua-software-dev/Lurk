@@ -15,8 +15,7 @@ const vk = @import("vk");
 pub const std_options = struct
 {
     pub const log_scope_levels: []const std.log.ScopeLevel =
-    &[_]std.log.ScopeLevel
-    {
+    &.{
         .{
             .scope = .OVERLAY,
             .level = switch (builtin.mode)
@@ -168,23 +167,28 @@ callconv(vk.vulkan_call_conv) vk.Result
 
                 const allocator = vk_global_state.get_default_allocator(false);
 
-                _ = overlay_gui.make_or_fetch_config(allocator) catch @panic("Failed to load config file.");
+                _ = overlay_gui.make_or_fetch_config(allocator)
+                    catch @panic("Failed to load config file.");
 
                 overlay_gui.load_fonts();
 
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
-                vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during device backing");
+                vk_global_state.device_backing.ensureTotalCapacity(8)
+                    catch @panic("oom during device backing");
 
                 vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
-                vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom during instance backing");
+                vk_global_state.instance_backing.ensureTotalCapacity(8)
+                    catch @panic("oom during instance backing");
 
                 vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
-                vk_global_state.swapchain_backing.ensureTotalCapacity(8) catch @panic("oom during swapchain backing");
+                vk_global_state.swapchain_backing.ensureTotalCapacity(8)
+                    catch @panic("oom during swapchain backing");
 
                 vk_global_state.first_alloc_complete = true;
             }
 
-            var backing = vk_global_state.instance_backing.getOrPut(p_instance.*) catch @panic("oom storing instance");
+            var backing = vk_global_state.instance_backing.getOrPut(p_instance.*)
+                catch @panic("oom storing instance");
             if (backing.found_existing)
             {
                 @panic("Found an existing Instance with the same id when creating a new one");
@@ -247,8 +251,7 @@ export fn VkLayerLurk_CreateDevice
 )
 callconv(vk.vulkan_call_conv) vk.Result
 {
-    const proc_is_blacklisted =
-        overlay_gui.blacklist.is_this_process_blacklisted()
+    const proc_is_blacklisted = overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (vk_global_state.wrappers_global_lock.tryLock())
@@ -263,7 +266,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                 vk_global_state.get_default_allocator(proc_is_blacklisted),
                 null,
             )
-            catch @panic("Failed to start discord connection.");
+                catch @panic("Failed to start discord connection.");
         }
 
         std.log.scoped(.VKLURK).debug("Create Device: {d}" ++ LAYER_NAME, .{ p_device.* });
@@ -363,7 +366,8 @@ callconv(vk.vulkan_call_conv) vk.Result
         if (result != vk.Result.success) return result;
 
         const swapchain = p_swapchain.*;
-        const backing = vk_global_state.swapchain_backing.getOrPut(swapchain) catch @panic("oom storing swapchain");
+        const backing = vk_global_state.swapchain_backing.getOrPut(swapchain)
+            catch @panic("oom storing swapchain");
         if (backing.found_existing)
         {
             std.log.scoped(.VKLURK).warn
@@ -413,9 +417,12 @@ callconv(vk.vulkan_call_conv) vk.Result
             .upload_font_buffer_mem = null,
             .upload_font_buffer = null,
             .width = null,
-            .framebuffers = vkt.FramebufferBacking.init(0) catch @panic("oom creating framebuffer backing"),
-            .image_views = vkt.ImageViewBacking.init(0) catch @panic("oom creating imageview backing"),
-            .images = vkt.ImageBacking.init(0) catch @panic("oom creating image backing"),
+            .framebuffers = vkt.FramebufferBacking.init(0)
+                catch @panic("oom creating framebuffer backing"),
+            .image_views = vkt.ImageViewBacking.init(0)
+                catch @panic("oom creating imageview backing"),
+            .images = vkt.ImageBacking.init(0)
+                catch @panic("oom creating image backing"),
         };
 
         setup.setup_swapchain
@@ -491,8 +498,7 @@ callconv(vk.vulkan_call_conv) vk.Result
         defer vk_global_state.wrappers_global_lock.unlock();
 
         var maybe_device_data: ?*vkt.DeviceData = null;
-        var maybe_queue_data: ?*vkt.VkQueueData =
-        blk: {
+        var maybe_queue_data: ?*vkt.VkQueueData = blk: {
             var it = vk_global_state.device_backing.iterator();
             while (it.next()) |kv|
             {
@@ -547,19 +553,17 @@ callconv(vk.vulkan_call_conv) vk.Result
                     device_data.graphic_queue.?,
                     &device_data.previous_draw_data,
                     swapchain_data.?
-                ) catch |err|
-                {
-                    std.log.scoped(.VKLURK).err("{any}", .{ err });
-                    return final_result;
-                };
+                )
+                    catch |err|
+                    {
+                        std.log.scoped(.VKLURK).err("{any}", .{ err });
+                        return final_result;
+                    };
 
                 var present_info = p_present_info.*;
                 if (maybe_draw_data) |draw_data|
                 {
-                    const semaphore_container = [1]vk.Semaphore
-                    {
-                        draw_data.semaphore,
-                    };
+                    const semaphore_container: [1]vk.Semaphore = .{ draw_data.semaphore, };
                     present_info.p_wait_semaphores = &semaphore_container;
                     present_info.wait_semaphore_count = 1;
                 }
@@ -594,8 +598,7 @@ export fn VkLayerLurk_GetDeviceProcAddr
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
-    const proc_is_blacklisted =
-        overlay_gui.blacklist.is_this_process_blacklisted()
+    const proc_is_blacklisted = overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (proc_is_blacklisted)
@@ -627,8 +630,7 @@ export fn VkLayerLurk_GetInstanceProcAddr
 callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
 {
     const span_name = std.mem.span(p_name);
-    const proc_is_blacklisted =
-        overlay_gui.blacklist.is_this_process_blacklisted()
+    const proc_is_blacklisted = overlay_gui.blacklist.is_this_process_blacklisted()
         catch @panic("Failed to validate process blacklist");
 
     if (proc_is_blacklisted)
@@ -638,14 +640,18 @@ callconv(vk.vulkan_call_conv) vk.PfnVoidFunction
             // allocate much less memory for only the basics
             const allocator = vk_global_state.get_default_allocator(proc_is_blacklisted);
 
-            _ = overlay_gui.make_or_fetch_config(allocator) catch @panic("Failed to load config file.");
+            _ = overlay_gui.make_or_fetch_config(allocator)
+                catch @panic("Failed to load config file.");
 
             vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
-            vk_global_state.device_backing.ensureTotalCapacity(8) catch @panic("oom during bl device backing");
+            vk_global_state.device_backing.ensureTotalCapacity(8)
+                catch @panic("oom during bl device backing");
             vk_global_state.instance_backing = vkt.InstanceDataHashMap.init(allocator);
-            vk_global_state.instance_backing.ensureTotalCapacity(8) catch @panic("oom during bl instance backing");
+            vk_global_state.instance_backing.ensureTotalCapacity(8)
+                catch @panic("oom during bl instance backing");
             vk_global_state.swapchain_backing = vkt.SwapchainDataHashMap.init(allocator);
-            vk_global_state.swapchain_backing.ensureTotalCapacity(0) catch @panic("oom during bl swapchain backing");
+            vk_global_state.swapchain_backing.ensureTotalCapacity(0)
+                catch @panic("oom during bl swapchain backing");
 
             vk_global_state.first_alloc_complete = true;
         }

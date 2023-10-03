@@ -74,18 +74,18 @@ pub fn create_instance_wrappers
         instance,
         get_inst_proc_addr_func_ptr,
     )
-    catch @panic("Failed to load Vulkan Instance function table 2.");
+        catch @panic("Failed to load Vulkan Instance function table 2.");
 
     std.log.scoped(.VKLURK).debug("Current Instance Ref: {d}", .{ vk_global_state.instance_ref_count });
     vk_global_state.instance_ref_count += 1;
     std.log.scoped(.VKLURK).debug("New Instance Ref: {d}|{d}", .{ vk_global_state.instance_ref_count, instance });
-    return vkt.InstanceData
-    {
+    return .{
         .instance_id = vk_global_state.instance_ref_count,
         .instance = instance,
         .get_inst_proc_addr_func_ptr = get_inst_proc_addr_func_ptr,
         .instance_wrapper = instance_wrapper,
-        .physical_devices = vkt.PhysicalDeviceBacking.init(0) catch @panic("oom getting physicaldevice backing"),
+        .physical_devices = vkt.PhysicalDeviceBacking.init(0)
+            catch @panic("oom getting physicaldevice backing"),
     };
 }
 
@@ -147,10 +147,11 @@ pub fn create_device_wrappers
 
     const device = p_device.*;
     const device_wrapper = vkt.LayerDeviceWrapper.load(device, get_device_proc_addr)
-    catch @panic("Failed to load Vulkan Device function table.");
+        catch @panic("Failed to load Vulkan Device function table.");
 
     var device_loader = search_device_create_info(p_create_info, vkl.LayerFunction_LOADER_DATA_CALLBACK);
-    var backing = vk_global_state.device_backing.getOrPut(device) catch @panic("oom creating device wrapper");
+    var backing = vk_global_state.device_backing.getOrPut(device)
+        catch @panic("oom creating device wrapper");
     if (backing.found_existing)
     {
         @panic("Found an existing Device with the same id when creating a new one");
@@ -159,15 +160,15 @@ pub fn create_device_wrappers
     std.log.scoped(.VKLURK).debug("Current Device Ref: {d}", .{ vk_global_state.device_ref_count });
     vk_global_state.device_ref_count += 1;
     std.log.scoped(.VKLURK).debug("New Device Ref: {d}|{d}", .{ vk_global_state.device_ref_count, device });
-    backing.value_ptr.* = vkt.DeviceData
-    {
+    backing.value_ptr.* = .{
         .device_id = vk_global_state.device_ref_count,
         .device = device,
         .physical_device = physical_device,
         .get_device_proc_addr_func = get_device_proc_addr,
         .set_device_loader_data_func = device_loader.u.pfn_set_device_loader_data.?,
         .graphic_queue = null,
-        .queues = vkt.VkQueueDataBacking.init(0) catch @panic("oom creating instance wrapper"),
+        .queues = vkt.VkQueueDataBacking.init(0)
+            catch @panic("oom creating instance wrapper"),
         .previous_draw_data = null,
         .device_wrapper = device_wrapper,
     };

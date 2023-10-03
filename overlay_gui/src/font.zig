@@ -18,11 +18,13 @@ pub const font_cache = struct
 
 fn load_shared_font_from_font_cache() void
 {
-    const file = std.fs.cwd().openFile("out.imfont.json", .{}) catch @panic("fs error");
+    const file = std.fs.cwd().openFile("out.imfont.json", .{})
+        catch @panic("fs error");
     var json_reader = std.json.reader(std.heap.c_allocator, file.reader());
     defer json_reader.deinit();
 
-    const cache_holder = std.json.parseFromTokenSource(font_cache, std.heap.c_allocator, &json_reader, .{}) catch @panic("parse fail");
+    const cache_holder = std.json.parseFromTokenSource(font_cache, std.heap.c_allocator, &json_reader, .{})
+        catch @panic("parse fail");
     defer cache_holder.deinit();
 
     const cache: font_cache = cache_holder.value;
@@ -62,7 +64,7 @@ fn load_shared_font_from_font_cache() void
     //     // }
     // }
 
-    var tex_vector = zimgui.Vector(u32){};
+    var tex_vector: zimgui.Vector(u32) = .{};
     tex_vector.reserve(@intCast(cache.TextureData.len));
     for (cache.TextureData, 0..) |it, i|
     {
@@ -134,7 +136,8 @@ pub fn load_shared_font() void
                 primary_font_name[0..@min(primary_font_name.len, 32)],
                 primary_font_config.SizePixels,
             }
-        ) catch @panic("oom loading primary font name");
+        )
+            catch @panic("oom loading primary font name");
     }
 
     {
@@ -169,7 +172,8 @@ pub fn load_shared_font() void
                 emoji_font_name[0..@min(emoji_font_name.len, 32)],
                 emoji_font_config.SizePixels,
             }
-        ) catch @panic("oom loading emoji font name");
+        )
+            catch @panic("oom loading emoji font name");
     }
 
     {
@@ -182,7 +186,7 @@ pub fn load_shared_font() void
             &emoji_font_posix_path,
             emoji_font_config.SizePixels,
             emoji_font_config,
-            &[_:0]zimgui.Wchar{ 0x1, 0x10FFFF },
+            &@as([2:0]zimgui.Wchar, .{ 0x1, 0x10FFFF, })
         );
     }
 

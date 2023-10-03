@@ -45,7 +45,7 @@ const BlacklistedProcessesMap = std.ComptimeStringMap
 
 fn get_process_name(buf: []u8) ![]const u8
 {
-    var proc_name: []u8 = try std.fs.selfExePath(buf);
+    var proc_name = try std.fs.selfExePath(buf);
 
     const is_wine =
         std.mem.endsWith(u8, proc_name, "wine-preloader") or
@@ -67,12 +67,12 @@ fn get_process_name(buf: []u8) ![]const u8
     {
         try cmd.reader().skipUntilDelimiterOrEof('\x00');
 
-        var next_byte: u8 = cmd.reader().readByte()
-        catch |err| switch (err)
-        {
-            error.EndOfStream => return "", // failed to find .exe name
-            else => return err,
-        };
+        var next_byte = cmd.reader().readByte()
+            catch |err| switch (err)
+            {
+                error.EndOfStream => return "", // failed to find .exe name
+                else => return err,
+            };
         i += 1;
 
         if (next_byte == '\x00')

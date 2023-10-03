@@ -1,8 +1,7 @@
 const std = @import("std");
 
 
-const CLOUDFLARE_CERT_SUBJECT: []const u8 = &[_]u8
-{
+const CLOUDFLARE_CERT_SUBJECT: []const u8 = &.{
     0x31, 0x0b, 0x30, 0x09, 0x06, 0x03, 0x55, 0x04,
     0x06, 0x13, 0x02, 0x55, 0x53, 0x31, 0x19, 0x30,
     0x17, 0x06, 0x03, 0x55, 0x04, 0x0a, 0x13, 0x10,
@@ -14,8 +13,7 @@ const CLOUDFLARE_CERT_SUBJECT: []const u8 = &[_]u8
     0x63, 0x20, 0x45, 0x43, 0x43, 0x20, 0x43, 0x41,
     0x2d, 0x33,
 };
-const CYBERTRUST_CERT_SUBJECT: []const u8 = &[_]u8
-{
+const CYBERTRUST_CERT_SUBJECT: []const u8 = &.{
     0x31, 0x0b, 0x30, 0x09, 0x06, 0x03, 0x55, 0x04,
     0x06, 0x13, 0x02, 0x49, 0x45, 0x31, 0x12, 0x30,
     0x10, 0x06, 0x03, 0x55, 0x04, 0x0a, 0x13, 0x09,
@@ -40,10 +38,10 @@ pub fn preload_ssl_certs
 {
     var out_buffer = try std.ArrayList(u8).initCapacity(temp_allocator, START_CERT_BUFFER_SIZE);
     defer out_buffer.deinit();
-    var out_indices: [2]u32 = [2]u32{ START_CERT_BUFFER_SIZE, START_CERT_BUFFER_SIZE, };
+    var out_indices: [2]u32 = .{ START_CERT_BUFFER_SIZE, START_CERT_BUFFER_SIZE, };
 
     {
-        var temp_bundle = std.crypto.Certificate.Bundle{};
+        var temp_bundle: std.crypto.Certificate.Bundle = .{};
         try temp_bundle.map.ensureUnusedCapacityContext(temp_allocator, 256, .{ .cb = &temp_bundle });
         defer temp_bundle.deinit(temp_allocator);
         try temp_bundle.rescan(temp_allocator);
@@ -99,7 +97,7 @@ pub fn preload_ssl_certs
         }
     }
 
-    var final_bundle = std.crypto.Certificate.Bundle{};
+    var final_bundle: std.crypto.Certificate.Bundle = .{};
     try final_bundle.bytes.appendSlice(final_allocator, out_buffer.items);
 
     const now_sec = std.time.timestamp();

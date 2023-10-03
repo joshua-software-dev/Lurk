@@ -9,6 +9,7 @@ const state = @import("discord_state.zig");
 const iguana = @import("iguanaTLS");
 const uuid = @import("uuid");
 const ws = @import("ws");
+
 const UnbufferedMessage = @typeInfo
 (
     @typeInfo
@@ -44,7 +45,7 @@ const HTTP_BUFFER_SIZE_IGUANATLS = 1024 * 20;
 const HTTP_BUFFER_SIZE_PROCESS = 1024 * 32;
 const JSON_BUFFER_SIZE = 1024;
 const MSG_BUFFER_SIZE = 1024 * 64;
-const PORT_RANGE: []const u16 = &[_]u16{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
+const PORT_RANGE: []const u16 = &.{ 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, };
 
 const HTTP_API_URI =
     std.Uri.parse(HTTP_API_URL)
@@ -125,7 +126,8 @@ pub const DiscordWsConn = struct
         const msg_backing: *[MSG_BUFFER_SIZE]u8 = try msg_backing_allocator.create([MSG_BUFFER_SIZE]u8);
 
         return .{
-            .access_token = std.BoundedArray(u8, 32).init(0) catch unreachable,
+            .access_token = std.BoundedArray(u8, 32).init(0)
+                catch unreachable,
             .cert_bundle = cert_bundle,
             .conn = try connect(&final_uri),
             .connection_uri = final_uri,
@@ -203,9 +205,7 @@ pub const DiscordWsConn = struct
             .{
                 .cmd = @tagName(msgt.Command.AUTHENTICATE),
                 .args =
-                .{
-                    .access_token = self.access_token.constSlice()
-                },
+                .{ .access_token = self.access_token.constSlice() },
                 .nonce = uuid.urn.serialize(uuid.v4.new())
             },
             .{ .emit_null_optional_fields = true }
@@ -221,7 +221,7 @@ pub const DiscordWsConn = struct
                 .args =
                 .{
                     .client_id = CLIENT_ID,
-                    .scopes = [_][]const u8 { "rpc", "messages.read", "rpc.notifications.read" },
+                    .scopes = &.{ "rpc", "messages.read", "rpc.notifications.read" },
                     .prompt = "none"
                 },
                 .nonce = uuid.urn.serialize(uuid.v4.new())
@@ -238,7 +238,7 @@ pub const DiscordWsConn = struct
             var allocator = fba.allocator();
             const json_code = try std.json.stringifyAlloc(fba.allocator(), .{ .code = auth_code, }, .{});
 
-            const out_buf = try allocator.create([512]u8);
+            const out_buf = try allocator.alloc(u8, 512);
             defer allocator.free(out_buf);
             var message_length: ?usize = null;
 
@@ -251,8 +251,7 @@ pub const DiscordWsConn = struct
                 );
                 defer net_stream.close();
 
-                var random = blk:
-                {
+                var random = blk: {
                     var seed: [std.rand.DefaultCsprng.secret_seed_length]u8 = undefined;
                     try std.os.getrandom(&seed);
                     break :blk std.rand.DefaultCsprng.init(seed);
@@ -269,7 +268,8 @@ pub const DiscordWsConn = struct
                     },
                     HTTP_API_URI.host.?,
                 );
-                defer tls_stream.close_notify() catch {};
+                defer tls_stream.close_notify()
+                    catch {};
 
                 {
                     const write_msg = try std.fmt.allocPrint
@@ -313,7 +313,7 @@ pub const DiscordWsConn = struct
                     }
                 }
 
-                message_length = try tls_stream.read(&out_buf.*);
+                message_length = try tls_stream.read(out_buf);
             }
 
             const token_holder = try std.json.parseFromSlice
@@ -341,8 +341,7 @@ pub const DiscordWsConn = struct
             const json_code = auth_stream.getWritten();
 
             // deinit unnecessary due to client.deinit calling it
-            var temp_bundle = std.crypto.Certificate.Bundle
-            {
+            var temp_bundle: std.crypto.Certificate.Bundle = .{
                 .bytes = try self.cert_bundle.?.bytes.clone(self.http_mode.StdLibraryHttp.http_allocator),
             };
 
@@ -355,15 +354,14 @@ pub const DiscordWsConn = struct
                 }
             }
 
-            var client = std.http.Client
-            {
+            var client: std.http.Client = .{
                 .allocator = self.http_mode.StdLibraryHttp.http_allocator,
                 .ca_bundle = temp_bundle,
                 .next_https_rescan_certs = false,
             };
             defer client.deinit();
 
-            var headers = std.http.Headers{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
+            var headers: std.http.Headers = .{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
             defer headers.deinit();
             try headers.append("Content-Type", "application/json");
 
@@ -554,10 +552,7 @@ pub const DiscordWsConn = struct
             msg,
             .{ .ignore_unknown_fields = true },
         )
-        catch
-        {
-            return null;
-        };
+            catch return null;
         defer channelMsg.deinit();
 
         const guildMsg = std.json.parseFromSlice
@@ -567,10 +562,7 @@ pub const DiscordWsConn = struct
             msg,
             .{ .ignore_unknown_fields = true },
         )
-        catch
-        {
-            return null;
-        };
+            catch return null;
         defer guildMsg.deinit();
 
         if
@@ -580,8 +572,7 @@ pub const DiscordWsConn = struct
             channelMsg.value.data.?.channel_id != null
         )
         {
-            return state.DiscordChannel
-            {
+            return .{
                 .channel_id = try state.ChannelId.fromSlice(channelMsg.value.data.?.channel_id.?),
                 .guild_id =
                     if (guildMsg.value.data.?.guild_id == null)
@@ -653,8 +644,7 @@ pub const DiscordWsConn = struct
         if (channel_id != null and guild_id != null)
         {
             ws_logger.debug("dynamic | channel_id: {s} guild_id: {s}", .{ channel_id.?, guild_id.? });
-            return state.DiscordChannel
-            {
+            return .{
                 .channel_id = try state.ChannelId.fromSlice(channel_id.?),
                 .guild_id =
                     if (std.mem.eql(u8, guild_id.?, "<null>"))
@@ -686,8 +676,7 @@ pub const DiscordWsConn = struct
             }
 
             // deinit unnecessary due to client.deinit calling it
-            var temp_bundle = std.crypto.Certificate.Bundle
-            {
+            var temp_bundle: std.crypto.Certificate.Bundle = .{
                 .bytes = try self.cert_bundle.?.bytes.clone(self.http_mode.StdLibraryHttp.http_allocator),
             };
 
@@ -700,15 +689,14 @@ pub const DiscordWsConn = struct
                 }
             }
 
-            var client = std.http.Client
-            {
+            var client: std.http.Client = .{
                 .allocator = self.http_mode.StdLibraryHttp.http_allocator,
                 .ca_bundle = temp_bundle,
                 .next_https_rescan_certs = false,
             };
             defer client.deinit();
 
-            var headers = std.http.Headers{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
+            var headers: std.http.Headers = .{ .allocator = self.http_mode.StdLibraryHttp.http_allocator, };
             defer headers.deinit();
             try headers.append("Referer", "https://streamkit.discord.com/overlay/voice");
 
@@ -818,7 +806,7 @@ pub const DiscordWsConn = struct
                     },
                     .VOICE_STATE_CREATE, .VOICE_STATE_UPDATE =>
                     {
-                        var new_user: *state.DiscordUser = undefined;
+                        var new_user: ?*state.DiscordUser = null;
 
                         {
                             const dataMsg = try std.json.parseFromSlice
@@ -847,7 +835,8 @@ pub const DiscordWsConn = struct
                         (
                             localMsg.evt.? == .VOICE_STATE_CREATE and
                             self.state.self_user_id.len > 0 and
-                            std.mem.eql(u8, self.state.self_user_id.constSlice(), new_user.user_id.constSlice())
+                            new_user != null and
+                            std.mem.eql(u8, self.state.self_user_id.constSlice(), new_user.?.user_id.constSlice())
                         )
                         {
                             try self.send_get_selected_voice_channel();
