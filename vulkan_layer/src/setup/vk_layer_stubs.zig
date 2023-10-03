@@ -5,7 +5,7 @@ const LayerInstanceLink = extern struct {
     p_next: *LayerInstanceLink,
     pfn_next_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
 };
-const PfnSetInstanceLoaderData = *const fn (vk.Instance, usize) callconv(vk.vulkan_call_conv) vk.Result;
+const PfnSetInstanceLoaderData = *const fn (vk.Instance, u64) callconv(vk.vulkan_call_conv) vk.Result;
 const union_unnamed_1 = extern union {
     p_layer_info: *LayerInstanceLink,
     pfn_set_instance_loader_data: ?PfnSetInstanceLoaderData,
@@ -25,7 +25,7 @@ const LayerDeviceLink = extern struct {
     pfn_next_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     pfn_next_get_device_proc_addr: vk.PfnGetDeviceProcAddr,
 };
-pub const PfnSetDeviceLoaderData = *const fn (vk.Device, usize) callconv(vk.vulkan_call_conv) vk.Result;
+pub const PfnSetDeviceLoaderData = *const fn (vk.Device, u64) callconv(vk.vulkan_call_conv) vk.Result;
 const union_unnamed_2 = extern union {
     p_layer_info: *LayerDeviceLink,
     pfn_set_device_loader_data: ?PfnSetDeviceLoaderData,
