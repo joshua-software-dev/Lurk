@@ -338,7 +338,7 @@ pub fn draw_frame(display_x: u32, display_y: u32) !void
         zimgui.PushStyleVar_Float(.WindowBorderSize, 0);
         defer zimgui.PopStyleVarExt(1);
 
-        const window_size = zimgui.Vec2.init(400, 300);
+        const window_size = zimgui.Vec2.init(400, @floatFromInt(display_y));
         zimgui.SetNextWindowSize(window_size);
         set_window_position
         (
