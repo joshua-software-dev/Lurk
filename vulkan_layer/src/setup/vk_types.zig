@@ -20,20 +20,20 @@ pub const DeviceData = struct
 };
 pub const DrawData = struct
 {
-    command_buffer: vk.CommandBuffer,
+    command_buffer: vk.CommandBuffer = .null_handle,
 
-    cross_engine_semaphore: vk.Semaphore,
+    cross_engine_semaphore: vk.Semaphore = .null_handle,
 
-    semaphore: vk.Semaphore,
-    fence: vk.Fence,
+    semaphore: vk.Semaphore = .null_handle,
+    fence: vk.Fence = .null_handle,
 
-    vertex_buffer: vk.Buffer,
-    vertex_buffer_mem: vk.DeviceMemory,
-    vertex_buffer_size: vk.DeviceSize,
+    vertex_buffer: vk.Buffer = .null_handle,
+    vertex_buffer_mem: vk.DeviceMemory = .null_handle,
+    vertex_buffer_size: vk.DeviceSize = 0,
 
-    index_buffer: vk.Buffer,
-    index_buffer_mem: vk.DeviceMemory,
-    index_buffer_size: vk.DeviceSize,
+    index_buffer: vk.Buffer = .null_handle,
+    index_buffer_mem: vk.DeviceMemory = .null_handle,
+    index_buffer_size: vk.DeviceSize = 0,
 };
 pub const InstanceData = struct
 {

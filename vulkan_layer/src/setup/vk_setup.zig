@@ -33,21 +33,24 @@ void
         catch @panic("Vulkan function call failed: Device.CreateShaderModule | vert shader");
 
     // Font sampler
-    const font_sampler_info = std.mem.zeroInit
-    (
-        vk.SamplerCreateInfo,
-        .{
-            .mag_filter = .linear,
-            .min_filter = .linear,
-            .mipmap_mode = .linear,
-            .address_mode_u = .repeat,
-            .address_mode_v = .repeat,
-            .address_mode_w = .repeat,
-            .min_lod = -1000,
-            .max_lod = 1000,
-            .max_anisotropy = 1,
-        }
-    );
+    const font_sampler_info: vk.SamplerCreateInfo = .{
+        .mag_filter = .linear,
+        .min_filter = .linear,
+        .mipmap_mode = .linear,
+        .address_mode_u = .repeat,
+        .address_mode_v = .repeat,
+        .address_mode_w = .repeat,
+        .min_lod = -1000,
+        .max_lod = 1000,
+        .max_anisotropy = 1,
+        // zero init
+        .anisotropy_enable = 0,
+        .border_color = .float_transparent_black,
+        .compare_enable = 0,
+        .compare_op = .never,
+        .mip_lod_bias = 0,
+        .unnormalized_coordinates = 0,
+    };
 
     swapchain_data.font_sampler = device_wrapper.createSampler(device, &font_sampler_info, null)
         catch @panic("Vulkan function call failed: Device.CreateSampler");
@@ -70,16 +73,14 @@ void
 
     // Descriptor layout
     const binding: [1]vk.DescriptorSetLayoutBinding = .{
-        std.mem.zeroInit
-        (
-            vk.DescriptorSetLayoutBinding,
-            .{
-                .descriptor_type = .combined_image_sampler,
-                .descriptor_count = 1,
-                .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
-                .p_immutable_samplers = &@as([1]vk.Sampler, .{ swapchain_data.font_sampler.?, }),
-            },
-        ),
+        .{
+            .descriptor_type = .combined_image_sampler,
+            .descriptor_count = 1,
+            .stage_flags = vk.ShaderStageFlags{ .fragment_bit = true, },
+            .p_immutable_samplers = &@as([1]vk.Sampler, .{ swapchain_data.font_sampler.?, }),
+            // zero init
+            .binding = 0,
+        },
     };
     const set_layout_info: vk.DescriptorSetLayoutCreateInfo = .{
         .binding_count = 1,
@@ -132,14 +133,12 @@ void
     };
 
     const binding_desc: [1]vk.VertexInputBindingDescription = .{
-        std.mem.zeroInit
-        (
-            vk.VertexInputBindingDescription,
-            .{
-                .input_rate = .vertex,
-                .stride = @sizeOf(overlay_gui.DrawVert),
-            }
-        ),
+        .{
+            .input_rate = .vertex,
+            .stride = @sizeOf(overlay_gui.DrawVert),
+            // zero init
+            .binding = 0,
+        }
     };
     const attribute_desc: [3]vk.VertexInputAttributeDescription = .{
         .{
@@ -169,13 +168,11 @@ void
         .p_vertex_attribute_descriptions = &attribute_desc,
     };
 
-    const ia_info = std.mem.zeroInit
-    (
-        vk.PipelineInputAssemblyStateCreateInfo,
-        .{
-            .topology = .triangle_list,
-        },
-    );
+    const ia_info: vk.PipelineInputAssemblyStateCreateInfo = .{
+        .topology = .triangle_list,
+        // zero init
+        .primitive_restart_enable = 0,
+    };
 
     const viewport_info: vk.PipelineViewportStateCreateInfo = .
     {
@@ -183,24 +180,28 @@ void
         .scissor_count = 1,
     };
 
-    const raster_info = std.mem.zeroInit
-    (
-        vk.PipelineRasterizationStateCreateInfo,
-        .{
-            .polygon_mode = .fill,
-            .cull_mode = .{},
-            .front_face = .counter_clockwise,
-            .line_width = 1.0,
-        },
-    );
+    const raster_info: vk.PipelineRasterizationStateCreateInfo = .{
+        .polygon_mode = .fill,
+        .cull_mode = .{},
+        .front_face = .counter_clockwise,
+        .line_width = 1.0,
+        // zero init
+        .depth_bias_clamp = 0,
+        .depth_bias_constant_factor = 0,
+        .depth_bias_enable = 0,
+        .depth_bias_slope_factor = 0,
+        .depth_clamp_enable = 0,
+        .rasterizer_discard_enable = 0,
+    };
 
-    const ms_info = std.mem.zeroInit
-    (
-        vk.PipelineMultisampleStateCreateInfo,
-        .{
-            .rasterization_samples = .{ .@"1_bit" = true, },
-        }
-    );
+    const ms_info: vk.PipelineMultisampleStateCreateInfo = .{
+        .rasterization_samples = .{ .@"1_bit" = true, },
+        // zero init
+        .alpha_to_coverage_enable = 0,
+        .alpha_to_one_enable = 0,
+        .min_sample_shading = 0,
+        .sample_shading_enable = 0,
+    };
 
     const color_attachment: [1]vk.PipelineColorBlendAttachmentState = .{
         .{
@@ -220,16 +221,43 @@ void
         },
     };
 
-    const depth_info = std.mem.zeroInit(vk.PipelineDepthStencilStateCreateInfo, .{});
+    const depth_info: vk.PipelineDepthStencilStateCreateInfo = .{
+        // zero init
+        .back = .{
+            .compare_mask = 0,
+            .compare_op = .never,
+            .depth_fail_op = .keep,
+            .fail_op = .keep,
+            .pass_op = .keep,
+            .reference = 0,
+            .write_mask = 0,
+        },
+        .depth_bounds_test_enable = 0,
+        .depth_compare_op = .never,
+        .depth_test_enable = 0,
+        .depth_write_enable = 0,
+        .front = .{
+            .compare_mask = 0,
+            .compare_op = .never,
+            .depth_fail_op = .keep,
+            .fail_op = .keep,
+            .pass_op = .keep,
+            .reference = 0,
+            .write_mask = 0,
+        },
+        .min_depth_bounds = 0,
+        .stencil_test_enable = 0,
+        .max_depth_bounds = 0,
+    };
 
-    const blend_info = std.mem.zeroInit
-    (
-        vk.PipelineColorBlendStateCreateInfo,
-        .{
-            .attachment_count = 1,
-            .p_attachments = &color_attachment,
-        }
-    );
+    const blend_info: vk.PipelineColorBlendStateCreateInfo = .{
+        .attachment_count = 1,
+        .p_attachments = &color_attachment,
+        // zero init
+        .blend_constants = .{ 0.0, 0.0, 0.0, 0.0 },
+        .logic_op = .clear,
+        .logic_op_enable = 0,
+    };
 
     const dynamic_states: [2]vk.DynamicState = .{
         .viewport,
@@ -241,24 +269,23 @@ void
     };
 
     const info_container: [1]vk.GraphicsPipelineCreateInfo = .{
-        std.mem.zeroInit
-        (
-            vk.GraphicsPipelineCreateInfo,
-            .{
-                .stage_count = 2,
-                .p_stages = &stage,
-                .p_vertex_input_state = &vertex_info,
-                .p_input_assembly_state = &ia_info,
-                .p_viewport_state = &viewport_info,
-                .p_rasterization_state = &raster_info,
-                .p_multisample_state = &ms_info,
-                .p_depth_stencil_state = &depth_info,
-                .p_color_blend_state = &blend_info,
-                .p_dynamic_state = &dynamic_state,
-                .layout = swapchain_data.pipeline_layout.?,
-                .render_pass = swapchain_data.render_pass.?,
-            }
-        ),
+        .{
+            .stage_count = 2,
+            .p_stages = &stage,
+            .p_vertex_input_state = &vertex_info,
+            .p_input_assembly_state = &ia_info,
+            .p_viewport_state = &viewport_info,
+            .p_rasterization_state = &raster_info,
+            .p_multisample_state = &ms_info,
+            .p_depth_stencil_state = &depth_info,
+            .p_color_blend_state = &blend_info,
+            .p_dynamic_state = &dynamic_state,
+            .layout = swapchain_data.pipeline_layout.?,
+            .render_pass = swapchain_data.render_pass.?,
+            // zero init
+            .base_pipeline_index = 0,
+            .subpass = 0,
+        },
     };
     var pipeline_container: [1]vk.Pipeline = .{ vk.Pipeline.null_handle, };
     _ = device_wrapper.createGraphicsPipelines(device, .null_handle, 1, &info_container, null, &pipeline_container)
@@ -307,24 +334,26 @@ void
         catch @panic("Vulkan function call failed: Device.BindImageMemory");
 
     // Font image view
-    const view_info = std.mem.zeroInit
-    (
-        vk.ImageViewCreateInfo,
-        .{
-            .image = swapchain_data.font_image.?,
-            .view_type = .@"2d",
-            .format = .r8g8b8a8_unorm,
-            .subresource_range = std.mem.zeroInit
-            (
-                vk.ImageSubresourceRange,
-                .{
-                    .aspect_mask = vk.ImageAspectFlags{ .color_bit = true, },
-                    .level_count = 1,
-                    .layer_count = 1,
-                }
-            )
+    const view_info: vk.ImageViewCreateInfo = .{
+        .image = swapchain_data.font_image.?,
+        .view_type = .@"2d",
+        .format = .r8g8b8a8_unorm,
+        .subresource_range = .{
+            .aspect_mask = .{ .color_bit = true, },
+            .level_count = 1,
+            .layer_count = 1,
+            // zero init
+            .base_array_layer = 0,
+            .base_mip_level = 0,
+        },
+        // zero init
+        .components = .{
+            .r = .identity,
+            .g = .identity,
+            .b = .identity,
+            .a = .identity,
         }
-    );
+    };
     swapchain_data.font_image_view = device_wrapper.createImageView(device, &view_info, null)
         catch @panic("Vulkan function call failed: Device.CreateImageView");
 
@@ -337,18 +366,17 @@ void
         },
     };
     const write_desc: [1]vk.WriteDescriptorSet = .{
-        std.mem.zeroInit
-        (
-            vk.WriteDescriptorSet,
-            .{
-                .dst_set = swapchain_data.descriptor_set.?,
-                .descriptor_count = 1,
-                .descriptor_type = .combined_image_sampler,
-                .p_image_info = &desc_image,
-                .p_buffer_info = &@as([1]vk.DescriptorBufferInfo, .{ .{ .offset = 0, .range = 0, } }),
-                .p_texel_buffer_view = &@as([1]vk.BufferView, .{ vk.BufferView.null_handle, }),
-            }
-        ),
+        .{
+            .dst_set = swapchain_data.descriptor_set.?,
+            .descriptor_count = 1,
+            .descriptor_type = .combined_image_sampler,
+            .p_image_info = &desc_image,
+            .p_buffer_info = &@as([1]vk.DescriptorBufferInfo, .{ .{ .offset = 0, .range = 0, } }),
+            .p_texel_buffer_view = &@as([1]vk.BufferView, .{ vk.BufferView.null_handle, }),
+            // zero init
+            .dst_array_element = 0,
+            .dst_binding = 0,
+        },
     };
     device_wrapper.updateDescriptorSets(device, 1, &write_desc, 0, null);
 }
@@ -463,27 +491,25 @@ void
         catch @panic("Vulkan function call failed: Device.GetSwapchainImagesKHR 2");
 
     // Image views
-    var view_info = std.mem.zeroInit
-    (
-        vk.ImageViewCreateInfo,
-        .{
-            .view_type = .@"2d",
-            .format = swapchain_data.format.?,
-            .components = .{
-                .r = .r,
-                .g = .g,
-                .b = .b,
-                .a = .a,
-            },
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true, },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = 1,
-            },
-        }
-    );
+    var view_info: vk.ImageViewCreateInfo = .{
+        .view_type = .@"2d",
+        .format = swapchain_data.format.?,
+        .components = .{
+            .r = .r,
+            .g = .g,
+            .b = .b,
+            .a = .a,
+        },
+        .subresource_range = .{
+            .aspect_mask = .{ .color_bit = true, },
+            .base_mip_level = 0,
+            .level_count = 1,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        // zero init
+        .image = .null_handle,
+    };
 
     {
         var i: u32 = 0;
@@ -786,7 +812,7 @@ vkt.DrawData
         }
     }
 
-    var draw_data = std.mem.zeroInit(vkt.DrawData, .{});
+    var draw_data: vkt.DrawData = .{};
 
     const cmd_buffer_info: vk.CommandBufferAllocateInfo = .{
         .command_pool = swapchain_data.command_pool.?,
@@ -915,41 +941,36 @@ void
 
     @memcpy(map[0..upload_size], pixels[0..upload_size]);
     const range: [1]vk.MappedMemoryRange = .{
-        std.mem.zeroInit
-        (
-            vk.MappedMemoryRange,
-            .{
-                .memory = swapchain_data.upload_font_buffer_mem.?,
-                .size = upload_size,
-            },
-        ),
+        .{
+            .memory = swapchain_data.upload_font_buffer_mem.?,
+            .size = upload_size,
+            // zero init
+            .offset = 0,
+        },
     };
     device_wrapper.flushMappedMemoryRanges(device, 1, &range)
         catch @panic("Vulkan function call failed: Device.FlushMappedMemoryRanges");
     device_wrapper.unmapMemory(device, swapchain_data.upload_font_buffer_mem.?);
 
     const copy_barrier: [1]vk.ImageMemoryBarrier = .{
-        std.mem.zeroInit
-        (
-            vk.ImageMemoryBarrier,
-            .{
-                .dst_access_mask = .{ .transfer_write_bit = true, },
-                .old_layout = .undefined,
-                .new_layout = .transfer_dst_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = swapchain_data.font_image.?,
-                .subresource_range = std.mem.zeroInit
-                (
-                    vk.ImageSubresourceRange,
-                    .{
-                        .aspect_mask = .{ .color_bit = true, },
-                        .level_count = 1,
-                        .layer_count = 1,
-                    }
-                ),
+        .{
+            .dst_access_mask = .{ .transfer_write_bit = true, },
+            .old_layout = .undefined,
+            .new_layout = .transfer_dst_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = swapchain_data.font_image.?,
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true, },
+                .level_count = 1,
+                .layer_count = 1,
+                // zero init
+                .base_array_layer = 0,
+                .base_mip_level = 0,
             },
-        ),
+            // zero init
+            .src_access_mask = .{},
+        },
     };
     device_wrapper.cmdPipelineBarrier
     (
@@ -966,25 +987,29 @@ void
     );
 
     const region: [1]vk.BufferImageCopy = .{
-        std.mem.zeroInit
-        (
-            vk.BufferImageCopy,
-            .{
-                .image_subresource = std.mem.zeroInit
-                (
-                    vk.ImageSubresourceLayers,
-                    .{
-                        .aspect_mask = .{ .color_bit = true, },
-                        .layer_count = 1,
-                    },
-                ),
-                .image_extent = .{
-                    .width = @as(u32, @intCast(w)),
-                    .height = @as(u32, @intCast(h)),
-                    .depth = @as(u32, 1),
-                },
+        .{
+            .image_subresource = .{
+                .aspect_mask = .{ .color_bit = true, },
+                .layer_count = 1,
+                // zero init
+                .mip_level = 0,
+                .base_array_layer = 0,
             },
-        ),
+            .image_extent = .{
+                .width = @as(u32, @intCast(w)),
+                .height = @as(u32, @intCast(h)),
+                .depth = @as(u32, 1),
+            },
+            // zero init
+            .buffer_image_height = 0,
+            .buffer_offset = 0,
+            .buffer_row_length = 0,
+            .image_offset = .{
+                .x = 0,
+                .y = 0,
+                .z = 0,
+            },
+        },
     };
 
     device_wrapper.cmdCopyBufferToImage
@@ -998,28 +1023,23 @@ void
     );
 
     const use_barrier: [1]vk.ImageMemoryBarrier = .{
-        std.mem.zeroInit
-        (
-            vk.ImageMemoryBarrier,
-            .{
-                .src_access_mask = .{ .transfer_write_bit = true, },
-                .dst_access_mask = .{ .shader_read_bit = true, },
-                .old_layout = .transfer_dst_optimal,
-                .new_layout = .shader_read_only_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = swapchain_data.font_image.?,
-                .subresource_range = std.mem.zeroInit
-                (
-                    vk.ImageSubresourceRange,
-                    .{
-                        .aspect_mask = .{ .color_bit = true, },
-                        .level_count = 1,
-                        .layer_count = 1,
-                    }
-                ),
+        .{
+            .src_access_mask = .{ .transfer_write_bit = true, },
+            .dst_access_mask = .{ .shader_read_bit = true, },
+            .old_layout = .transfer_dst_optimal,
+            .new_layout = .shader_read_only_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = swapchain_data.font_image.?,
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true, },
+                .level_count = 1,
+                .layer_count = 1,
+                // zero init
+                .base_array_layer = 0,
+                .base_mip_level = 0,
             },
-        ),
+        },
     };
     device_wrapper.cmdPipelineBarrier
     (
@@ -1133,16 +1153,17 @@ fn render_swapchain_display
     const render_pass_info: vk.RenderPassBeginInfo = .{
         .render_pass = swapchain_data.render_pass.?,
         .framebuffer = swapchain_data.framebuffers.get(image_index),
-        .render_area = std.mem.zeroInit
-        (
-            vk.Rect2D,
-            .{
-                .extent = .{
-                    .width = @as(u32, @intCast(swapchain_data.width.?)),
-                    .height = @as(u32, @intCast(swapchain_data.height.?)),
-                }
+        .render_area = .{
+            .extent = .{
+                .width = swapchain_data.width.?,
+                .height = swapchain_data.height.?,
             },
-        ),
+            // zero init
+            .offset = .{
+                .x = 0,
+                .y = 0,
+            },
+        },
     };
 
     const buffer_begin_info: vk.CommandBufferBeginInfo = .{};
@@ -1267,22 +1288,18 @@ fn render_swapchain_display
     }
 
     const range: [2]vk.MappedMemoryRange = .{
-        std.mem.zeroInit
-        (
-            vk.MappedMemoryRange,
-            .{
-                .memory = draw_data.vertex_buffer_mem,
-                .size = vk.WHOLE_SIZE,
-            },
-        ),
-        std.mem.zeroInit
-        (
-            vk.MappedMemoryRange,
-            .{
-                .memory = draw_data.index_buffer_mem,
-                .size = vk.WHOLE_SIZE,
-            },
-        ),
+        .{
+            .memory = draw_data.vertex_buffer_mem,
+            .size = vk.WHOLE_SIZE,
+            // zero init
+            .offset = 0,
+        },
+        .{
+            .memory = draw_data.index_buffer_mem,
+            .size = vk.WHOLE_SIZE,
+            // zero init
+            .offset = 0,
+        },
     };
 
     device_wrapper.flushMappedMemoryRanges(device, 2, &range)
