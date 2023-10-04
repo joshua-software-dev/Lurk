@@ -6,6 +6,20 @@ const state = @import("overlay_state.zig");
 
 const zimgui = @import("Zig-ImGui");
 
+
+const emoji_font_uri = std.Uri.parse
+(
+    "https://github.com/joshua-software-dev/Lurk/releases/download/DefaultFonts/Twemoji.Mozilla.v0.7.0.woff2"
+)
+    catch unreachable;
+const emoji_font_sha256sum = sha256sum_to_array("de10ef1cca0407b83048536b9e27294099df00bf8deb6e429f30aae6011629c4");
+const primary_font_uri = std.Uri.parse
+(
+    "https://github.com/joshua-software-dev/Lurk/releases/download/DefaultFonts/GoNotoKurrent-Regular_v7.0.woff2"
+)
+    catch unreachable;
+const primary_font_sha256sum = sha256sum_to_array("7707f03fdac86c686e715d5e9ec03f4ce38a897ec05fcb973ae84f5d67ffe406");
+
 pub const font_cache = struct
 {
     TexUvWhitePixel: zimgui.Vec2,
@@ -15,6 +29,15 @@ pub const font_cache = struct
     TextureY: u32,
     TextureData: []const u8,
 };
+
+fn sha256sum_to_array(comptime sha256sum: []const u8) [32]u8
+{
+    var expected_bytes: [sha256sum.len / 2]u8 = undefined;
+    for (&expected_bytes, 0..) |*r, i| {
+        r.* = std.fmt.parseInt(u8, sha256sum[2 * i .. 2 * i + 2], 16) catch unreachable;
+    }
+    return expected_bytes;
+}
 
 fn load_shared_font_from_font_cache() void
 {
@@ -104,9 +127,86 @@ fn load_shared_font_from_font_cache() void
     std.log.scoped(.OVERLAY).debug("Cached font loading complete.", .{});
 }
 
-pub fn load_shared_font() void
+fn start_0110(req: *std.http.Client.Request, args: anytype) !void
 {
-    state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
+    _ = args;
+    try req.start();
+}
+
+fn start_0120(req: *std.http.Client.Request, args: anytype) !void
+{
+    try req.start(args);
+}
+
+const start_func =
+    if (builtin.zig_version.order(std.SemanticVersion.parse("0.11.0") catch unreachable) == .gt)
+        start_0120
+    else
+        start_0110;
+
+fn download_font
+(
+    allocator: std.mem.Allocator,
+    uri: std.Uri,
+    out_path: []const u8,
+    expected_hash: [32]u8,
+)
+!void
+{
+    var hash = std.crypto.hash.sha2.Sha256.init(.{});
+
+    {
+        const out_fd = try std.fs.createFileAbsolute(out_path, .{ .read = true, });
+        defer out_fd.close();
+
+        var client: std.http.Client = .{ .allocator = allocator, };
+        defer client.deinit();
+
+        var headers: std.http.Headers = .{ .allocator = allocator, };
+        defer headers.deinit();
+
+        var req = try client.request
+        (
+            .GET,
+            uri,
+            headers,
+            .{ .max_redirects = 10 },
+        );
+        defer req.deinit();
+
+        try start_func(&req, .{});
+        try req.finish();
+        try req.wait();
+
+        if (req.response.status != .ok)
+        {
+            return error.DownloadFailed;
+        }
+
+        {
+            var buf: [1024]u8 = undefined;
+            var reader = req.reader();
+            var writer = out_fd.writer();
+            while (true)
+            {
+                const bytes_read = try reader.read(&buf);
+                if (bytes_read == 0) break;
+
+                _ = try writer.write(buf[0..bytes_read]);
+                hash.update(buf[0..bytes_read]);
+            }
+            try out_fd.sync();
+        }
+    }
+
+    var out: [32]u8 = undefined;
+    hash.final(out[0..]);
+
+    if (!std.mem.eql(u8, &out, &expected_hash)) return error.DownloadHashCheckFailed;
+}
+
+pub fn load_shared_font(allocator: std.mem.Allocator) void
+{
     if (state.config.?.english_only)
     {
         _ = state.shared_font_atlas.?.AddFontDefault();
@@ -115,6 +215,55 @@ pub fn load_shared_font() void
         @atomicStore(bool, &state.font_thread_finished, true, .Release);
         @atomicStore(bool, &state.font_load_complete, true, .Release);
         return;
+    }
+
+    if (state.config.?.download_missing_fonts)
+    {
+        const primary_font_exists = blk: {
+            std.fs.accessAbsolute(state.config.?.primary_font_path.constSlice(), .{})
+                catch break :blk false;
+            break :blk true;
+        };
+        if (!primary_font_exists)
+        {
+            std.log.scoped(.OVERLAY).warn
+            (
+                "Primary font not found: {s}",
+                .{ state.config.?.primary_font_path.constSlice() }
+            );
+            std.log.scoped(.OVERLAY).warn("Downloading primary font from: {+/}", .{ primary_font_uri });
+            download_font
+            (
+                allocator,
+                primary_font_uri,
+                state.config.?.primary_font_path.constSlice(),
+                primary_font_sha256sum,
+            )
+                catch |err| std.debug.panic("Failed to download primary font: {any}", .{ err });
+        }
+
+        const emoji_font_exists = blk: {
+            std.fs.accessAbsolute(state.config.?.emoji_font_path.constSlice(), .{})
+                catch break :blk false;
+            break :blk true;
+        };
+        if (!emoji_font_exists)
+        {
+            std.log.scoped(.OVERLAY).warn
+            (
+                "Emoji font not found: {s}",
+                .{ state.config.?.emoji_font_path.constSlice() }
+            );
+            std.log.scoped(.OVERLAY).warn("Downloading emoji font from: {+/}", .{ emoji_font_uri });
+            download_font
+            (
+                allocator,
+                emoji_font_uri,
+                state.config.?.emoji_font_path.constSlice(),
+                emoji_font_sha256sum,
+            )
+                catch |err| std.debug.panic("Failed to download emoji font: {any}", .{ err });
+        }
     }
 
     var primary_font_config = zimgui.FontConfig.init_ImFontConfig();
@@ -196,8 +345,11 @@ pub fn load_shared_font() void
     std.log.scoped(.OVERLAY).info("Font loading complete", .{});
 }
 
-pub fn load_shared_font_background() !void
+pub fn load_shared_font_background(allocator: std.mem.Allocator) !void
 {
-    std.log.scoped(.OVERLAY).info("Started background font loading thread", .{});
-    state.font_thread = try std.Thread.spawn(.{}, load_shared_font, .{});
+    if (state.font_thread == null)
+    {
+        std.log.scoped(.OVERLAY).info("Started background font loading thread", .{});
+        state.font_thread = try std.Thread.spawn(.{}, load_shared_font, .{ allocator });
+    }
 }

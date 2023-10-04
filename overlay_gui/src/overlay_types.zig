@@ -15,6 +15,7 @@ pub const overlay_config = struct
     screen_margin: u32,
     window_position: window_position,
     english_only: bool,
+    download_missing_fonts: bool,
     load_fonts_in_background_thread: bool,
     primary_font_path: std.BoundedArray(u8, std.fs.MAX_PATH_BYTES - 1),
     primary_font_size: f32,

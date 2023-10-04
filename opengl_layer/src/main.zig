@@ -126,7 +126,7 @@ fn create_imgui_context() void
         _ = overlay_gui.make_or_fetch_config(allocator)
             catch @panic("Failed to load config file.");
 
-        overlay_gui.load_fonts();
+        overlay_gui.load_fonts(state.get_font_allocator());
 
         // Internal logic makes connecting multiple times idempotent
         overlay_gui.disch.start_discord_conn(allocator, null)
@@ -157,6 +157,7 @@ fn do_imgui_swap() void
             error.FontNotLoaded => return,
             error.FontTextureRequiresReload =>
             {
+                state.free_font_allocator();
                 _ = gl_load.ImGui_ImplOpenGL3_Init(null);
                 return;
             },

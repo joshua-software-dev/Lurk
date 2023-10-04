@@ -1532,6 +1532,7 @@ pub fn before_present
     g_graphic_queue: *const vkt.VkQueueData,
     g_previous_draw_data: *?vkt.DrawData,
     swapchain_data: *vkt.SwapchainData,
+    free_font_allocator_fn: *const fn () void,
 )
 !?vkt.DrawData
 {
@@ -1553,6 +1554,7 @@ pub fn before_present
                 error.FontNotLoaded => return null,
                 error.FontTextureRequiresReload =>
                 {
+                    free_font_allocator_fn();
                     setup_swapchain_data_pipeline(device, device_wrapper, swapchain_data);
                     swapchain_data.font_uploaded = false;
                 },

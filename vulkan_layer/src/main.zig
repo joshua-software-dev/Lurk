@@ -170,7 +170,7 @@ callconv(vk.vulkan_call_conv) vk.Result
                 _ = overlay_gui.make_or_fetch_config(allocator)
                     catch @panic("Failed to load config file.");
 
-                overlay_gui.load_fonts();
+                overlay_gui.load_fonts(vk_global_state.get_font_allocator());
 
                 vk_global_state.device_backing = vkt.DeviceDataHashMap.init(allocator);
                 vk_global_state.device_backing.ensureTotalCapacity(8)
@@ -552,7 +552,8 @@ callconv(vk.vulkan_call_conv) vk.Result
                     p_present_info.p_image_indices[i],
                     device_data.graphic_queue.?,
                     &device_data.previous_draw_data,
-                    swapchain_data.?
+                    swapchain_data.?,
+                    &vk_global_state.free_font_allocator,
                 )
                     catch |err|
                     {

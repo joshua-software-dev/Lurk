@@ -18,18 +18,20 @@ pub const DrawVert = zimgui.DrawVert;
 pub const make_or_fetch_config = config.make_or_fetch_config;
 pub const set_allocator_for_imgui = state.set_allocator_for_imgui;
 
-pub fn load_fonts() void
+pub fn load_fonts(font_allocator: std.mem.Allocator) void
 {
     if (state.shared_font_atlas == null)
     {
+        state.shared_font_atlas = zimgui.FontAtlas.init_ImFontAtlas();
+
         if (state.config.?.load_fonts_in_background_thread)
         {
-            font.load_shared_font_background()
+            font.load_shared_font_background(font_allocator)
                 catch @panic("Failed to start font loading thread");
             return;
         }
 
-        font.load_shared_font();
+        font.load_shared_font(font_allocator);
     }
 }
 

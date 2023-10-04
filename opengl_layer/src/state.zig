@@ -16,9 +16,11 @@ const gpa_type = std.heap.GeneralPurposeAllocator
         .verbose_log = false,
     }
 );
+var font_gpa: ?gpa_type = null;
 var gpa: ?gpa_type = null;
 var heap_buf: ?[]u8 = null;
 var heap_fba: ?std.heap.FixedBufferAllocator = null;
+
 pub fn get_default_allocator() std.mem.Allocator
 {
     switch (builtin.mode)
@@ -53,7 +55,11 @@ pub fn free_default_allocator() void
     {
         .Debug =>
         {
-            if (gpa != null) _ = gpa.?.deinit();
+            if (gpa != null)
+            {
+                _ = gpa.?.deinit();
+                gpa = null;
+            }
         },
         else =>
         {
@@ -64,5 +70,25 @@ pub fn free_default_allocator() void
                 heap_fba = null;
             }
         },
+    }
+}
+
+pub fn get_font_allocator() std.mem.Allocator
+{
+    if (font_gpa == null)
+    {
+        font_gpa = .{};
+        font_gpa.?.setRequestedMemoryLimit(MAX_MEMORY_ALLOCATION);
+    }
+
+    return font_gpa.?.allocator();
+}
+
+pub fn free_font_allocator() void
+{
+    if (font_gpa != null)
+    {
+        _ = font_gpa.?.deinit();
+        font_gpa = null;
     }
 }

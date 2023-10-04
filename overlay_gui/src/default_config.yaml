@@ -5,17 +5,19 @@ config_version: 1
 screen_margin: 20
 # Valid values are: "TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", and "BOTTOM_RIGHT"
 window_position: "TOP_RIGHT"
-# Do not download/load non english fonts. Disables emoji support as well.
+# Do not download/load non-english fonts. Disables emoji support as well.
 english_only: false
-# Use a background thread to load fonts instead of delaying the application
-# from drawing frames until fonts finish loading.
+# Use a background thread to download/load fonts instead of delaying the
+# application from drawing frames until fonts finish loading.
 load_fonts_in_background_thread: true
+# Download missing fonts if not found at the configured paths
+download_missing_fonts: true
 # Must be an absolute path
-primary_font_path: "~/.config/lurk/GoNotoKurrent-Regular_v7.0.woff2"
+primary_font_path: "~/.cache/lurk/GoNotoKurrent-Regular_v7.0.woff2"
 # Must be a value equal to or greater than 0.0
 primary_font_size: 20.0
 # Must be an absolute path
-emoji_font_path: "~/.config/lurk/Twemoji.Mozilla.v0.7.0.woff2"
+emoji_font_path: "~/.cache/lurk/Twemoji.Mozilla.v0.7.0.woff2"
 # Must be a value equal to or greater than 0.0
 emoji_font_size: 15.0
 # Run messaging necessary to communicate with discord in a background thread,
