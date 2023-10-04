@@ -702,7 +702,7 @@ pub const DiscordWsConn = struct
 
             var req = try client.request
             (
-                .POST,
+                .GET,
                 try std.Uri.parse
                 (
                     try std.fmt.bufPrint
